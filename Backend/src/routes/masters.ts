@@ -15,13 +15,28 @@ const refresh = (q: unknown) => q === "true" || q === "1";
 const CUSTOMER_TAB = "CUSTOMER MASTER T1";
 const CUSTOMER_HEADER_ROW = 2;
 
+// T1 is ~280 columns wide (KYC docs, five ship-to blocks, four director-detail blocks…).
+// The picker only needs a handful of them — returning full rows for 577 customers is a
+// 50MB+ response that hangs the dropdown, so the list endpoint projects down to this set.
+const CUSTOMER_LIST_FIELDS = [
+  "CUST ID",
+  "CUSTOMER NAME",
+  "Company GSTIN NO.",
+  "Status Of Customer Manual",
+  "Billing STATE",
+  "REGISTERED MOBILE NO.",
+];
+
 mastersRouter.get("/customers", async (req, res, next) => {
   try {
     const rows = await readTable(env.sheets.customerBilling, CUSTOMER_TAB, {
       refresh: refresh(req.query.refresh),
       headerRow: CUSTOMER_HEADER_ROW,
     });
-    res.json(rows);
+    const slim = rows
+      .filter((r) => r["CUST ID"])
+      .map((r) => Object.fromEntries(CUSTOMER_LIST_FIELDS.map((f) => [f, r[f] ?? ""])));
+    res.json(slim);
   } catch (err) {
     next(err);
   }
