@@ -21,8 +21,15 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="card"
-        style={{ width: 480, maxHeight: "85vh", overflowY: "auto", padding: 24, background: "#fff" }}
+        className="card slide-in-panel"
+        style={{
+          width: 480,
+          maxHeight: "85vh",
+          overflowY: "auto",
+          padding: "var(--space)",
+          background: "#fff",
+          boxShadow: "var(--shadow-lg)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { Modal } from "../../../components/Modal";
 import { TextField } from "../../../components/form/TextField";
 import { createPart } from "../../../lib/mastersApi";
@@ -44,8 +45,9 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
         price: form.price ? Number(form.price) : undefined,
       });
       onCreated(result);
-    } catch {
-      setError("Could not save — check that the FG Inventory sheet is shared with the service account (Editor)");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ? `Could not save — ${detail}` : "Could not save the product");
     } finally {
       setSaving(false);
     }
@@ -59,7 +61,7 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
       <TextField label="Category" value={form.category} onChange={set("category")} />
       <TextField label="Unit" value={form.unit} onChange={set("unit")} />
       <TextField label="Price" type="number" value={form.price} onChange={set("price")} />
-      {error && <p style={{ color: "var(--color-error)", fontSize: 13 }}>{error}</p>}
+      {error && <p className="field-error">{error}</p>}
       <button className="btn btn-primary" style={{ width: "100%" }} disabled={saving} onClick={handleSave}>
         {saving ? "Saving…" : "Save & Select"}
       </button>

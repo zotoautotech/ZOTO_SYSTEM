@@ -24,9 +24,7 @@ export function TextField({ label, required, error, style, ...rest }: TextFieldP
           ...style,
         }}
       />
-      {error && (
-        <p style={{ color: "var(--color-error)", fontSize: 12, marginTop: 4 }}>⚠ {error}</p>
-      )}
+      {error && <p className="field-error">⚠ {error}</p>}
     </div>
   );
 }

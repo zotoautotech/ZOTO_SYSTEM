@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { createOrder } from "../../lib/ordersApi";
 import { emptyOrderForm, type OrderFormState } from "./form/types";
 import { Tab1PurchaseOrder } from "./form/Tab1PurchaseOrder";
@@ -95,8 +96,9 @@ export function OrderPunchForm() {
         })),
       });
       navigate(`/modules/punch-order/${result.orderId}`);
-    } catch {
-      setError("Could not save the order — please check required fields and try again");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ? `Could not save the order — ${detail}` : "Could not save the order");
     } finally {
       setSaving(false);
     }
@@ -113,13 +115,23 @@ export function OrderPunchForm() {
         zIndex: 50,
       }}
     >
-      <div style={{ width: "55%", minWidth: 480, background: "#fff", height: "100%", overflowY: "auto" }}>
+      <div
+        className="slide-in-panel"
+        style={{
+          width: "55%",
+          minWidth: 480,
+          background: "#fff",
+          height: "100%",
+          overflowY: "auto",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "16px 24px",
+            padding: "16px var(--space)",
             borderBottom: "1px solid var(--color-border)",
           }}
         >
@@ -153,7 +165,7 @@ export function OrderPunchForm() {
           </div>
         </div>
 
-        <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", padding: "0 24px" }}>
+        <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
           {TABS.map((t, i) => (
             <div
               key={t}
@@ -163,6 +175,7 @@ export function OrderPunchForm() {
                 color: i === tab ? "var(--color-text)" : "var(--color-text-muted)",
                 borderBottom: i === tab ? "3px solid var(--color-primary)" : "3px solid transparent",
                 fontWeight: i === tab ? 500 : 400,
+                transition: "color 0.15s ease",
               }}
             >
               {t}
@@ -170,18 +183,9 @@ export function OrderPunchForm() {
           ))}
         </div>
 
-        <div style={{ padding: 24 }}>
+        <div style={{ padding: "var(--space)" }}>
           {error && (
-            <div
-              style={{
-                background: "#FFEBEE",
-                color: "var(--color-error)",
-                padding: "10px 14px",
-                borderRadius: "var(--radius)",
-                marginBottom: 16,
-                fontSize: 13,
-              }}
-            >
+            <div className="error-banner" style={{ marginBottom: 16 }}>
               ⚠ {error}
             </div>
           )}

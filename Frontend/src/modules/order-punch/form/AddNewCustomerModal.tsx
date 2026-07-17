@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { Modal } from "../../../components/Modal";
 import { TextField } from "../../../components/form/TextField";
 import { createCustomer } from "../../../lib/mastersApi";
@@ -42,8 +43,9 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
     try {
       const result = await createCustomer(form);
       onCreated(result);
-    } catch {
-      setError("Could not save — check that the Customer Master sheet is shared with the service account (Editor)");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ? `Could not save — ${detail}` : "Could not save the customer");
     } finally {
       setSaving(false);
     }
@@ -59,7 +61,7 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
       <TextField label="Contact Person Name" value={form.contactPersonName} onChange={set("contactPersonName")} />
       <TextField label="Contact No." value={form.contactNo} onChange={set("contactNo")} />
       <TextField label="Email" value={form.email} onChange={set("email")} />
-      {error && <p style={{ color: "var(--color-error)", fontSize: 13 }}>{error}</p>}
+      {error && <p className="field-error">{error}</p>}
       <button className="btn btn-primary" style={{ width: "100%" }} disabled={saving} onClick={handleSave}>
         {saving ? "Saving…" : "Save & Select"}
       </button>

@@ -31,11 +31,7 @@ export function PercentInput({ label, required, value, onChange }: PercentInputP
           style={{ flex: 1, border: "none", outline: "none", padding: "12px 0", fontSize: 14 }}
         />
       </div>
-      {invalid && (
-        <p style={{ color: "var(--color-error)", fontSize: 12, marginTop: 4 }}>
-          ⚠ This entry is invalid
-        </p>
-      )}
+      {invalid && <p className="field-error">⚠ This entry is invalid</p>}
     </div>
   );
 }

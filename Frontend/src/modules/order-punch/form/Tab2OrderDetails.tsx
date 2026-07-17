@@ -64,8 +64,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
         />
       )}
 
-      <TextField label="Tally Book" value="Tally 1 (Registered)" disabled />
-
       <h3 style={{ fontSize: 15, marginTop: 24 }}>Buyer Details</h3>
       <ToggleGroup
         label="Customer Type"
