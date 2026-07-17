@@ -109,50 +109,150 @@ export function OrderPunchForm() {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.3)",
+        background: "rgba(17, 17, 20, 0.5)",
         display: "flex",
-        justifyContent: "flex-end",
+        alignItems: "center",
+        justifyContent: "center",
         zIndex: 50,
+        padding: 24,
       }}
+      onClick={() => navigate("/modules/punch-order")}
     >
       <div
-        className="slide-in-panel"
+        className="card modal-in"
         style={{
-          width: "55%",
-          minWidth: 480,
+          width: "min(880px, 100%)",
+          maxHeight: "90vh",
           background: "#fff",
-          height: "100%",
-          overflowY: "auto",
+          borderRadius: 18,
           boxShadow: "var(--shadow-lg)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "16px var(--space)",
-            borderBottom: "1px solid var(--color-border)",
+            padding: "22px var(--space) 4px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={() => navigate("/modules/punch-order")}
-              style={{ border: "none", background: "none", fontSize: 20, cursor: "pointer" }}
-            >
-              ✕
-            </button>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>Order Punch Form</h2>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Order Punch Form</h2>
+            <span className="text-muted" style={{ fontSize: 13 }}>
+              Step {tab + 1} of {TABS.length} — {TABS[tab]}
+            </span>
           </div>
+          <button
+            onClick={() => navigate("/modules/punch-order")}
+            aria-label="Close"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              border: "none",
+              background: "var(--color-bg-page)",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-start", padding: "18px var(--space) 8px" }}>
+          {TABS.map((t, i) => (
+            <div
+              key={t}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flex: i < TABS.length - 1 ? 1 : "0 0 auto",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 76 }}>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: i <= tab ? "var(--color-primary)" : "#fff",
+                    color: i <= tab ? "#fff" : "var(--color-text-muted)",
+                    border: i <= tab ? "none" : "1px solid var(--color-border)",
+                    transition: "background 0.15s ease, color 0.15s ease",
+                  }}
+                >
+                  {i < tab ? "✓" : i + 1}
+                </div>
+                <span
+                  style={{
+                    fontSize: 11,
+                    textAlign: "center",
+                    color: i === tab ? "var(--color-text)" : "var(--color-text-muted)",
+                    fontWeight: i === tab ? 600 : 400,
+                  }}
+                >
+                  {t}
+                </span>
+              </div>
+              {i < TABS.length - 1 && (
+                <div
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    background: i < tab ? "var(--color-primary)" : "var(--color-border)",
+                    margin: "0 4px 20px",
+                    transition: "background 0.15s ease",
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: "8px var(--space)", overflowY: "auto", flex: 1 }}>
+          {error && (
+            <div className="error-banner" style={{ marginBottom: 16 }}>
+              ⚠ {error}
+            </div>
+          )}
+          {tab === 0 && <Tab1PurchaseOrder form={form} update={update} />}
+          {tab === 1 && <Tab2OrderDetails form={form} update={update} />}
+          {tab === 2 && <Tab3BillingAddress form={form} update={update} />}
+          {tab === 3 && <Tab4LogisticsDetails form={form} update={update} />}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "14px var(--space)",
+            borderTop: "1px solid var(--color-border)",
+            background: "var(--color-bg-page)",
+          }}
+        >
+          <button className="btn" onClick={() => navigate("/modules/punch-order")}>
+            Cancel
+          </button>
           <div style={{ display: "flex", gap: 8 }}>
             {tab > 0 && (
               <button className="btn" onClick={goPrev}>
                 ‹ Prev
               </button>
             )}
-            <button className="btn" onClick={() => navigate("/modules/punch-order")}>
-              Cancel
-            </button>
             {tab < TABS.length - 1 ? (
               <button className="btn btn-primary" onClick={goNext}>
                 Next ›
@@ -163,36 +263,6 @@ export function OrderPunchForm() {
               </button>
             )}
           </div>
-        </div>
-
-        <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
-          {TABS.map((t, i) => (
-            <div
-              key={t}
-              style={{
-                padding: "12px 16px",
-                fontSize: 14,
-                color: i === tab ? "var(--color-text)" : "var(--color-text-muted)",
-                borderBottom: i === tab ? "3px solid var(--color-primary)" : "3px solid transparent",
-                fontWeight: i === tab ? 500 : 400,
-                transition: "color 0.15s ease",
-              }}
-            >
-              {t}
-            </div>
-          ))}
-        </div>
-
-        <div style={{ padding: "var(--space)" }}>
-          {error && (
-            <div className="error-banner" style={{ marginBottom: 16 }}>
-              ⚠ {error}
-            </div>
-          )}
-          {tab === 0 && <Tab1PurchaseOrder form={form} update={update} />}
-          {tab === 1 && <Tab2OrderDetails form={form} update={update} />}
-          {tab === 2 && <Tab3BillingAddress form={form} update={update} />}
-          {tab === 3 && <Tab4LogisticsDetails form={form} update={update} />}
         </div>
       </div>
     </div>

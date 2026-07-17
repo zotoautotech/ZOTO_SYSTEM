@@ -12,7 +12,7 @@
   --color-error-tint: #fdecea;
 
   --radius: 10px;
-  --rail-width: 64px;
+  --rail-width: 208px;
   --topbar-height: 56px;
   --filter-width: 260px;
   --space: 24px;
@@ -146,6 +146,21 @@ textarea:focus {
   }
   to {
     transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.modal-in {
+  animation: modal-in 0.2s ease-out;
+}
+
+@keyframes modal-in {
+  from {
+    transform: scale(0.97) translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
     opacity: 1;
   }
 }
