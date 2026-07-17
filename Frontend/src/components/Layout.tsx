@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 
@@ -14,10 +14,18 @@ export function Layout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const crumbs = location.pathname
-    .split("/")
-    .filter(Boolean)
-    .map((seg) => seg.replace(/-/g, " "));
+  // "modules" is folded into the "SALES CRR" crumb (both point at /modules) so it
+  // isn't shown twice. Every crumb but the current page is a clickable link, so
+  // you can jump back to any step — not just the immediate parent.
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const crumbs: { label: string; to: string }[] = [{ label: "SALES CRR", to: "/modules" }];
+  pathSegments.forEach((seg, i) => {
+    if (seg === "modules") return;
+    crumbs.push({
+      label: seg.replace(/-/g, " "),
+      to: "/" + pathSegments.slice(0, i + 1).join("/"),
+    });
+  });
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
@@ -183,8 +191,30 @@ export function Layout() {
           </button>
         </header>
 
-        <div style={{ padding: "10px 24px", fontSize: 13 }} className="text-muted">
-          {["SALES CRR", ...crumbs].join("  >  ")}
+        <div
+          style={{ padding: "10px 24px", fontSize: 13, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}
+        >
+          {crumbs.map((crumb, i) => {
+            const isLast = i === crumbs.length - 1;
+            return (
+              <span key={crumb.to} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {isLast ? (
+                  <span style={{ color: "var(--color-text)", fontWeight: 500, textTransform: "capitalize" }}>
+                    {crumb.label}
+                  </span>
+                ) : (
+                  <Link
+                    to={crumb.to}
+                    className="text-muted"
+                    style={{ textDecoration: "none", textTransform: "capitalize" }}
+                  >
+                    {crumb.label}
+                  </Link>
+                )}
+                {!isLast && <span className="text-muted">›</span>}
+              </span>
+            );
+          })}
         </div>
 
         <main style={{ flex: 1, overflow: "auto", padding: "0 24px 24px" }}>
