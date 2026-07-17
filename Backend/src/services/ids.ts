@@ -12,9 +12,10 @@ export async function nextSequentialId(
   tab: string,
   idColumn: string,
   prefix: string,
-  pad = 4
+  pad = 4,
+  headerRow = 1
 ): Promise<string> {
-  const rows = await readTable(spreadsheetId, tab, { refresh: true });
+  const rows = await readTable(spreadsheetId, tab, { refresh: true, headerRow });
   let max = 0;
   for (const row of rows) {
     const raw = row[idColumn];

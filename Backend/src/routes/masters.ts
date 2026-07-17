@@ -10,10 +10,16 @@ mastersRouter.use(requireAuth);
 
 const refresh = (q: unknown) => q === "true" || q === "1";
 
+// CUSTOMER MASTER T1 is the real customer master (577+ live customers, migrated from the
+// old ADC system). Its field names sit on row 2 — row 1 is a group-header/summary row.
+const CUSTOMER_TAB = "CUSTOMER MASTER T1";
+const CUSTOMER_HEADER_ROW = 2;
+
 mastersRouter.get("/customers", async (req, res, next) => {
   try {
-    const rows = await readTable(env.sheets.customerBilling, "CUSTOMER MASTER V2", {
+    const rows = await readTable(env.sheets.customerBilling, CUSTOMER_TAB, {
       refresh: refresh(req.query.refresh),
+      headerRow: CUSTOMER_HEADER_ROW,
     });
     res.json(rows);
   } catch (err) {
@@ -26,19 +32,37 @@ mastersRouter.get("/customers/:custId", async (req, res, next) => {
   try {
     const { custId } = req.params;
     const [customers, addresses, contacts] = await Promise.all([
-      readTable(env.sheets.customerBilling, "CUSTOMER MASTER V2"),
+      readTable(env.sheets.customerBilling, CUSTOMER_TAB, { headerRow: CUSTOMER_HEADER_ROW }),
       readTable(env.sheets.customerBilling, "Customer Addresses"),
       readTable(env.sheets.customerBilling, "Customer Contacts"),
     ]);
 
-    const customer = customers.find((c) => c["Customer Code"] === custId);
+    const customer = customers.find((c) => c["CUST ID"] === custId);
     if (!customer) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Customer not found" } });
     }
 
+    // The clean "Customer Addresses"/"Customer Contacts" tabs only cover customers created
+    // through this app. For T1's legacy customers, fall back to the billing columns already
+    // present on their own row so the Billing Address tab can still auto-fill.
+    let matchedAddresses = addresses.filter((a) => a["Customer ID"] === custId);
+    if (matchedAddresses.length === 0 && customer["BILLING ADDRESS"]) {
+      matchedAddresses = [
+        {
+          "Customer ID": custId,
+          "Address Type": "Billing",
+          "Full Address": customer["BILLING ADDRESS"] || "",
+          "Address Line 1": customer["BILLING ADDRESS"] || "",
+          State: customer["Billing STATE"] || "",
+          "Pin Code": customer["Billing PIN CODE"] || "",
+          Country: customer["Billing Contry"] || "India",
+        },
+      ];
+    }
+
     res.json({
       customer,
-      addresses: addresses.filter((a) => a["Customer ID"] === custId),
+      addresses: matchedAddresses,
       contacts: contacts.filter((c) => c["Customer ID"] === custId),
     });
   } catch (err) {
@@ -70,23 +94,39 @@ mastersRouter.post("/customers", async (req, res, next) => {
     const now = new Date().toISOString();
     const custId = await nextSequentialId(
       env.sheets.customerBilling,
-      "CUSTOMER MASTER V2",
-      "Customer Code",
-      "CUST-"
+      CUSTOMER_TAB,
+      "CUST ID",
+      "CUST-",
+      4,
+      CUSTOMER_HEADER_ROW
     );
 
-    await appendRow(env.sheets.customerBilling, "CUSTOMER MASTER V2", {
-      Timestamp: now,
-      Useremail: req.user!.email,
-      "Customer Code": custId,
-      "Customer Name": body.customerName,
-      "Payment Terms With Days": body.paymentTermsDays !== undefined ? `${body.paymentTermsDays} DAYS` : "",
-      "Company GSTIN NO.": body.gstin,
-      "Company PAN NO.": body.panNo,
-      "Registered Email ID": body.email,
-      "Registered Contact No.": body.contactNo,
-      "Joining Date": now,
-    });
+    const joinDate = new Date(now);
+    const joinDateStr = [
+      String(joinDate.getDate()).padStart(2, "0"),
+      String(joinDate.getMonth() + 1).padStart(2, "0"),
+      joinDate.getFullYear(),
+    ].join("-");
+
+    await appendRow(
+      env.sheets.customerBilling,
+      CUSTOMER_TAB,
+      {
+        "DATE OF JOINING ADC": joinDateStr,
+        "CUST ID": custId,
+        "CUSTOMER NAME": body.customerName,
+        "Payment Terms With Days": body.paymentTermsDays !== undefined ? String(body.paymentTermsDays) : "",
+        "Company GSTIN NO.": body.gstin,
+        "Company PAN NO.": body.panNo,
+        "REGISTERED EMAIL ID": body.email,
+        "REGISTERED MOBILE NO.": body.contactNo,
+        "BILLING ADDRESS": [body.billingAddressLine1, body.billingAddressLine2].filter(Boolean).join(", "),
+        "Billing STATE": body.billingState,
+        "Billing PIN CODE": body.billingPincode,
+        "Billing Contry": body.billingCountry,
+      },
+      CUSTOMER_HEADER_ROW
+    );
 
     await appendRow(env.sheets.customerBilling, "Customer Addresses", {
       Timestamp: now,

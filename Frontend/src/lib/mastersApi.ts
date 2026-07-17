@@ -2,8 +2,8 @@ import { api } from "./api";
 import type { SelectOption } from "../components/form/SearchableSelect";
 
 export interface CustomerRow {
-  "Customer Code": string;
-  "Customer Name": string;
+  "CUST ID": string;
+  "CUSTOMER NAME": string;
   "Company GSTIN NO.": string;
   [key: string]: string;
 }
@@ -43,11 +43,11 @@ export async function listCustomers(): Promise<CustomerRow[]> {
 
 export function customersToOptions(customers: CustomerRow[]): SelectOption[] {
   return customers
-    .filter((c) => c["Customer Code"])
+    .filter((c) => c["CUST ID"])
     .map((c) => ({
-      value: c["Customer Code"],
-      label: c["Customer Name"] || c["Customer Code"],
-      subtitle: c["Customer Code"],
+      value: c["CUST ID"],
+      label: c["CUSTOMER NAME"] || c["CUST ID"],
+      subtitle: c["CUST ID"],
     }));
 }
 
