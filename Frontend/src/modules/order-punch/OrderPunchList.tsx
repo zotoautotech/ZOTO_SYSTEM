@@ -51,7 +51,26 @@ export function OrderPunchList() {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "20px 0" }}>
-        <h2 style={{ fontWeight: 500, margin: 0 }}>Pending Order Punch</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={() => navigate("/modules")}
+            aria-label="Back"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 15,
+            }}
+          >
+            ‹
+          </button>
+          <h2 style={{ fontWeight: 500, margin: 0 }}>Pending Order Punch</h2>
+        </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button
             className={showCompleted ? "btn btn-primary" : "btn"}

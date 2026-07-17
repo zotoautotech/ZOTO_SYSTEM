@@ -41,16 +41,31 @@ export function OrderDetail() {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <button
+          onClick={() => navigate("/modules/punch-order")}
+          aria-label="Back"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 15,
+            flexShrink: 0,
+          }}
+        >
+          ‹
+        </button>
         <div>
           <h2 style={{ margin: 0, fontWeight: 500 }}>{order.ORDER_ID}</h2>
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
         </div>
-        <button className="btn" onClick={() => navigate(-1)}>
-          ← Back to list
-        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>

@@ -137,15 +137,10 @@ export function OrderPunchForm() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "22px var(--space) 4px",
+            padding: "22px var(--space) 12px",
           }}
         >
-          <div>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Order Punch Form</h2>
-            <span className="text-muted" style={{ fontSize: 13 }}>
-              Step {tab + 1} of {TABS.length} — {TABS[tab]}
-            </span>
-          </div>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Order Punch Form</h2>
           <button
             onClick={() => navigate("/modules/punch-order")}
             aria-label="Close"

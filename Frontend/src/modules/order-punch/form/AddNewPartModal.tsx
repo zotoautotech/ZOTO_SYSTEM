@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { isAxiosError } from "axios";
+import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "../../../components/Modal";
 import { TextField } from "../../../components/form/TextField";
 import { createPart } from "../../../lib/mastersApi";
@@ -18,6 +19,7 @@ interface AddNewPartModalProps {
 }
 
 export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -44,6 +46,7 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
         ...form,
         price: form.price ? Number(form.price) : undefined,
       });
+      await queryClient.invalidateQueries({ queryKey: ["masters", "goods"] });
       onCreated(result);
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
