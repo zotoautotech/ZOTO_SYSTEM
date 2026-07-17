@@ -25,18 +25,36 @@
   -webkit-font-smoothing: antialiased;
 }
 
+:root[data-theme="dark"] {
+  --color-primary: #ef5350;
+  --color-primary-tint: rgba(239, 83, 80, 0.16);
+  --color-bg: #1b1d24;
+  --color-bg-page: #121319;
+  --color-text: #f0f0f2;
+  --color-text-muted: #9698a3;
+  --color-border: #2f3139;
+  --color-error: #ef5350;
+  --color-error-tint: rgba(239, 83, 80, 0.16);
+}
+
 * {
   box-sizing: border-box;
+}
+
+html {
+  transition: background 0.15s ease;
 }
 
 body {
   margin: 0;
   background: var(--color-bg-page);
   color: var(--color-text);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 button {
   font-family: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
@@ -48,7 +66,9 @@ select {
 input,
 select,
 textarea {
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 input:focus,

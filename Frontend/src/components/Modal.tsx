@@ -27,7 +27,7 @@ export function Modal({
           maxHeight: "85vh",
           overflowY: "auto",
           padding: "var(--space)",
-          background: "#fff",
+          background: "var(--color-bg)",
           boxShadow: "var(--shadow-lg)",
         }}
         onClick={(e) => e.stopPropagation()}

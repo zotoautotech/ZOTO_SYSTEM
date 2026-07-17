@@ -123,7 +123,7 @@ export function OrderPunchForm() {
         style={{
           width: "min(880px, 100%)",
           maxHeight: "90vh",
-          background: "#fff",
+          background: "var(--color-bg)",
           borderRadius: 18,
           boxShadow: "var(--shadow-lg)",
           display: "flex",
@@ -188,7 +188,7 @@ export function OrderPunchForm() {
                     justifyContent: "center",
                     fontSize: 13,
                     fontWeight: 600,
-                    background: i <= tab ? "var(--color-primary)" : "#fff",
+                    background: i <= tab ? "var(--color-primary)" : "var(--color-bg)",
                     color: i <= tab ? "#fff" : "var(--color-text-muted)",
                     border: i <= tab ? "none" : "1px solid var(--color-border)",
                     transition: "background 0.15s ease, color 0.15s ease",

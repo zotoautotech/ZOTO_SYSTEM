@@ -63,7 +63,7 @@ export function SearchableSelect({
           padding: "12px 14px",
           borderRadius: "var(--radius)",
           border: "1px solid var(--color-border)",
-          background: "#fff",
+          background: "var(--color-bg)",
           fontSize: 14,
           display: "flex",
           justifyContent: "space-between",
@@ -146,7 +146,7 @@ export function SearchableSelect({
                 textAlign: "left",
                 padding: "10px 14px",
                 border: "none",
-                background: opt.value === value ? "var(--color-primary-tint)" : "#fff",
+                background: opt.value === value ? "var(--color-primary-tint)" : "var(--color-bg)",
                 fontSize: 14,
                 cursor: "pointer",
               }}

@@ -39,7 +39,7 @@ export function ToggleGroup<T extends string>({
                 fontWeight: 500,
                 border: "1px solid var(--color-border)",
                 borderLeft: i === 0 ? "1px solid var(--color-border)" : "none",
-                background: active ? "var(--color-primary)" : "#fff",
+                background: active ? "var(--color-primary)" : "var(--color-bg)",
                 color: active ? "#fff" : "var(--color-text)",
                 cursor: "pointer",
               }}

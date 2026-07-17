@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { useTheme } from "../lib/theme";
 
 const NAV_ITEMS = [
   { to: "/", icon: "🏠", label: "Home", end: true },
-  { to: "/modules/punch-order", icon: "🧾", label: "Sales CRR", end: false },
+  { to: "/modules", icon: "🧾", label: "Sales CRR", end: false },
 ];
 
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
 
   const crumbs = location.pathname
     .split("/")
@@ -19,54 +23,104 @@ export function Layout() {
     <div style={{ display: "flex", height: "100vh" }}>
       <nav
         style={{
-          width: "var(--rail-width)",
+          width: collapsed ? 72 : "var(--rail-width)",
           flexShrink: 0,
-          background: "#fff",
+          background: "var(--color-bg)",
           borderRight: "1px solid var(--color-border)",
           display: "flex",
           flexDirection: "column",
           padding: "20px 12px",
           gap: 4,
+          transition: "width 0.18s ease",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: collapsed ? "center" : "space-between",
             gap: 8,
-            padding: "0 8px",
+            padding: "0 4px",
             marginBottom: 24,
           }}
         >
-          <span
+          <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+            <span
+              style={{
+                width: 32,
+                height: 32,
+                flexShrink: 0,
+                borderRadius: 8,
+                background: "var(--color-primary)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: 15,
+              }}
+            >
+              Z
+            </span>
+            {!collapsed && <strong style={{ fontSize: 15, letterSpacing: 0.2, whiteSpace: "nowrap" }}>ZOTO</strong>}
+          </div>
+          {!collapsed && (
+            <button
+              onClick={() => setCollapsed(true)}
+              aria-label="Collapse sidebar"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg)",
+                fontSize: 13,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ‹
+            </button>
+          )}
+        </div>
+
+        {collapsed && (
+          <button
+            onClick={() => setCollapsed(false)}
+            aria-label="Expand sidebar"
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: "var(--color-primary)",
-              color: "#fff",
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg)",
+              fontSize: 13,
+              alignSelf: "center",
+              marginBottom: 12,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontWeight: 700,
-              fontSize: 15,
             }}
           >
-            Z
-          </span>
-          <strong style={{ fontSize: 15, letterSpacing: 0.2 }}>ZOTO</strong>
-        </div>
+            ›
+          </button>
+        )}
 
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
+            title={item.label}
             style={({ isActive }) => ({
               display: "flex",
               alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
               gap: 12,
-              padding: "10px 14px",
+              padding: collapsed ? "10px 0" : "10px 14px",
               borderRadius: 999,
               textDecoration: "none",
               fontSize: 14,
@@ -77,7 +131,7 @@ export function Layout() {
             })}
           >
             <span style={{ fontSize: 17, lineHeight: 1 }}>{item.icon}</span>
-            <span>{item.label}</span>
+            {!collapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
           </NavLink>
         ))}
       </nav>
@@ -87,7 +141,7 @@ export function Layout() {
           style={{
             height: "var(--topbar-height)",
             borderBottom: "1px solid var(--color-border)",
-            background: "#fff",
+            background: "var(--color-bg)",
             display: "flex",
             alignItems: "center",
             padding: "0 24px",
@@ -106,17 +160,27 @@ export function Layout() {
               background: "var(--color-bg-page)",
             }}
           />
-          <span className="text-muted" style={{ fontSize: 13 }}>
-            Sync complete
-          </span>
-          {user && (
-            <>
-              <span style={{ fontSize: 13 }}>{user.name}</span>
-              <button className="btn" onClick={logout}>
-                Log out
-              </button>
-            </>
-          )}
+          <button
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title="Toggle light / dark theme"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-page)",
+              fontSize: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
+          <button className="btn" onClick={logout}>
+            Log out
+          </button>
         </header>
 
         <div style={{ padding: "10px 24px", fontSize: 13 }} className="text-muted">
