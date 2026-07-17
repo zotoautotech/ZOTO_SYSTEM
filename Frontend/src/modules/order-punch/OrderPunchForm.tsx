@@ -9,39 +9,11 @@ import { Tab4LogisticsDetails } from "./form/Tab4LogisticsDetails";
 
 const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
 
-function validateTab(tab: number, form: OrderFormState): string | null {
-  if (tab === 0) {
-    if (!form.poNo) return "Purchase Order No. is required";
-    if (!form.poDate) return "Purchase Order Date is required";
-  }
-  if (tab === 1) {
-    if (!form.orderType) return "Order Type is required";
-    if (!form.paymentType) return "Payment Type is required";
-    if (form.paymentType === "Advance" && (form.advancePct === undefined || form.advancePct < 0 || form.advancePct > 100)) {
-      return "Advance Payment (%) must be between 0 and 100";
-    }
-    if (!form.customerType) return "Customer Type is required";
-    if (!form.custId) return "Select or add a customer";
-    if (!form.clientClassification) return "Client Classification is required";
-    for (const item of form.items) {
-      if (!item.partType) return "Every item needs a Part Type";
-      if (!item.fgId) return "Select or add a part for every item";
-      if (!item.qty) return "Quantity is required for every item";
-      if (!item.price) return "Price is required for every item";
-    }
-  }
-  if (tab === 2) {
-    if (!form.billingAddress) return "Billing Address is required";
-    if (!form.billingState) return "Billing State is required";
-    if (!form.billingPincode) return "Billing Pin Code is required";
-    if (!form.shippingSame) return "Is Shipping Address Same is required";
-  }
-  if (tab === 3) {
-    if (!form.preferredTransportMode) return "Preferred Transportation Mode is required";
-    if (!form.freightPaidBy) return "Freight Paid by is required";
-    if (form.preferredDeliveryMode === "Transporter" && !form.preferredTptId) {
-      return "Select a Preferred Transporter";
-    }
+// No field on this form is mandatory to advance or save — validation removed at the
+// user's request so the team can punch partial orders and fill gaps in later.
+function validateTab(_tab: number, form: OrderFormState): string | null {
+  if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
+    return "Advance Payment (%) must be between 0 and 100";
   }
   return null;
 }
@@ -93,11 +65,14 @@ export function OrderPunchForm() {
         custId: form.custId,
         customerName: form.customerName,
         buyerGstin: form.buyerGstin,
-        clientClassification: form.clientClassification as "Existing" | "New" | "Prospective",
+        clientClassification: form.clientClassification || undefined,
         billingAddress: form.billingAddress,
         billingState: form.billingState,
         billingPincode: form.billingPincode,
-        shippingSame: form.shippingSame === "Same as Previous Order" ? "Yes" : (form.shippingSame as "Yes" | "No"),
+        shippingSame:
+          form.shippingSame === "Same as Previous Order" || form.shippingSame === ""
+            ? undefined
+            : form.shippingSame,
         shippingAddress: form.shippingAddress,
         shippingState: form.shippingState,
         shippingPincode: form.shippingPincode,
@@ -112,8 +87,8 @@ export function OrderPunchForm() {
           partName: it.partName,
           segment: it.segment,
           category: it.category,
-          price: it.price!,
-          qty: it.qty!,
+          price: it.price ?? 0,
+          qty: it.qty ?? 0,
           uom: it.uom,
           gstSlabPct: it.gstSlabPct,
           remarks: it.remarks,

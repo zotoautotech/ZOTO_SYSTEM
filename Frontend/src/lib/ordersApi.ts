@@ -69,18 +69,18 @@ export interface NewOrderItem {
 }
 
 export interface NewOrderPayload {
-  poNo: string;
-  poDate: string;
+  poNo?: string;
+  poDate?: string;
   poAttachmentUrl?: string;
   otherAttachmentUrl?: string;
   poRemarks?: string;
-  orderType: "Order Incoming" | "Order Outgoing";
-  paymentType: "Credit" | "Advance";
+  orderType?: "Order Incoming" | "Order Outgoing";
+  paymentType?: "Credit" | "Advance";
   advancePct?: number;
-  custId: string;
+  custId?: string;
   customerName?: string;
   buyerGstin?: string;
-  clientClassification: "Existing" | "New" | "Prospective";
+  clientClassification?: "Existing" | "New" | "Prospective";
   billingAddress?: string;
   billingState?: string;
   billingPincode?: string;
@@ -93,7 +93,7 @@ export interface NewOrderPayload {
   freightPaidBy?: string;
   freightOnInvoice?: "Yes" | "No";
   preferredTptId?: string;
-  items: NewOrderItem[];
+  items?: NewOrderItem[];
 }
 
 export async function createOrder(payload: NewOrderPayload) {

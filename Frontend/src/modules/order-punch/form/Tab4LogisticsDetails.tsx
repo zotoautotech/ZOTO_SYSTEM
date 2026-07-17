@@ -45,7 +45,6 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
       />
       <ToggleGroup
         label="Preferred Transportation Mode"
-        required
         value={form.preferredTransportMode}
         onChange={(v) => update({ preferredTransportMode: v })}
         options={[
@@ -56,7 +55,6 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
       />
       <ToggleGroup
         label="Freight Paid by"
-        required
         value={form.freightPaidBy}
         onChange={(v) => update({ freightPaidBy: v })}
         options={[
@@ -69,7 +67,6 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
         <>
           <SearchableSelect
             label="Preferred Transporter ID"
-            required
             value={form.preferredTptId}
             onChange={handleTransporterSelect}
             options={options}

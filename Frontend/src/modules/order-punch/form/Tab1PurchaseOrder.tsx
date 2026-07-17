@@ -12,13 +12,11 @@ export function Tab1PurchaseOrder({ form, update }: Props) {
     <div>
       <TextField
         label="Purchase Order No."
-        required
         value={form.poNo}
         onChange={(e) => update({ poNo: e.target.value })}
       />
       <TextField
         label="Purchase Order Date"
-        required
         type="date"
         value={form.poDate}
         onChange={(e) => update({ poDate: e.target.value })}

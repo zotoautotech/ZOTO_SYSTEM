@@ -8,16 +8,18 @@ import { requireAuth } from "../middleware/auth.js";
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
 
+// Nothing on Order Punch is mandatory (removed at the user's request so the team can
+// punch partial orders and fill gaps in later) — every field here is optional/defaulted.
 const itemSchema = z.object({
-  fgId: z.string(),
+  fgId: z.string().optional().default(""),
   partNo: z.string().optional().default(""),
   partName: z.string().optional().default(""),
   segment: z.string().optional().default(""),
   category: z.string().optional().default(""),
   strategyId: z.string().optional().default(""),
-  price: z.number(),
-  qty: z.number().positive(),
-  uom: z.string().default("NOS"),
+  price: z.number().optional().default(0),
+  qty: z.number().min(0).optional().default(0),
+  uom: z.string().optional().default("NOS"),
   discountOn: z.enum(["Percentage", "Rupees"]).optional().default("Percentage"),
   discountRs: z.number().optional().default(0),
   discountPct: z.number().optional().default(0),
@@ -35,19 +37,19 @@ const dispatchPlanLineSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  poNo: z.string(),
-  poDate: z.string(),
+  poNo: z.string().optional().default(""),
+  poDate: z.string().optional().default(""),
   poAttachmentUrl: z.string().optional().default(""),
   otherAttachmentUrl: z.string().optional().default(""),
   poRemarks: z.string().optional().default(""),
-  orderType: z.enum(["Order Incoming", "Order Outgoing"]),
+  orderType: z.enum(["Order Incoming", "Order Outgoing"]).optional().default("Order Incoming"),
   saleType: z.enum(["Regular", "Sample"]).optional().default("Regular"),
-  paymentType: z.enum(["Credit", "Advance"]),
+  paymentType: z.enum(["Credit", "Advance"]).optional().default("Credit"),
   advancePct: z.number().min(0).max(100).optional(),
-  custId: z.string(),
+  custId: z.string().optional().default(""),
   customerName: z.string().optional().default(""),
   buyerGstin: z.string().optional().default(""),
-  clientClassification: z.enum(["Existing", "New", "Prospective"]),
+  clientClassification: z.enum(["Existing", "New", "Prospective"]).optional(),
   thisOrderPaymentTerms: z.string().optional().default(""),
   contactPerson: z.string().optional().default(""),
   contactNo: z.string().optional().default(""),
@@ -56,7 +58,7 @@ const createOrderSchema = z.object({
   billingAddress: z.string().optional().default(""),
   billingState: z.string().optional().default(""),
   billingPincode: z.string().optional().default(""),
-  shippingSame: z.enum(["Yes", "No"]).optional().default("Yes"),
+  shippingSame: z.enum(["Yes", "No"]).optional(),
   shippingAddress: z.string().optional().default(""),
   shippingState: z.string().optional().default(""),
   shippingPincode: z.string().optional().default(""),
@@ -65,11 +67,8 @@ const createOrderSchema = z.object({
   freightPaidBy: z.string().optional().default(""),
   freightOnInvoice: z.enum(["Yes", "No"]).optional().default("No"),
   preferredTptId: z.string().optional().default(""),
-  items: z.array(itemSchema).min(1),
+  items: z.array(itemSchema).optional().default([]),
   dispatchPlan: z.array(dispatchPlanLineSchema).optional().default([]),
-}).refine((d) => d.paymentType !== "Advance" || typeof d.advancePct === "number", {
-  message: "advancePct is required when paymentType is Advance",
-  path: ["advancePct"],
 });
 
 function money(n: number) {
@@ -222,7 +221,7 @@ ordersRouter.post("/", async (req, res, next) => {
       CUST_ID: body.custId,
       CUSTOMER_NAME: body.customerName,
       BUYER_GSTIN: body.buyerGstin,
-      CLIENT_CLASSIFICATION: body.clientClassification,
+      CLIENT_CLASSIFICATION: body.clientClassification ?? "",
       THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
       CONTACT_PERSON: body.contactPerson,
       CONTACT_NO: body.contactNo,
@@ -231,7 +230,7 @@ ordersRouter.post("/", async (req, res, next) => {
       BILLING_ADDRESS: body.billingAddress,
       BILLING_STATE: body.billingState,
       BILLING_PINCODE: body.billingPincode,
-      SHIPPING_SAME: body.shippingSame,
+      SHIPPING_SAME: body.shippingSame ?? "",
       SHIPPING_ADDRESS: body.shippingAddress,
       SHIPPING_STATE: body.shippingState,
       SHIPPING_PINCODE: body.shippingPincode,

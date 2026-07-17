@@ -40,7 +40,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
     <div>
       <ToggleGroup
         label="Order Type"
-        required
         value={form.orderType}
         onChange={(v) => update({ orderType: v })}
         options={[
@@ -50,7 +49,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
       />
       <ToggleGroup
         label="Payment Type"
-        required
         value={form.paymentType}
         onChange={(v) => update({ paymentType: v })}
         options={[
@@ -61,7 +59,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
       {form.paymentType === "Advance" && (
         <PercentInput
           label="Advance Payment (%)"
-          required
           value={form.advancePct}
           onChange={(v) => update({ advancePct: v })}
         />
@@ -72,7 +69,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
       <h3 style={{ fontSize: 15, marginTop: 24 }}>Buyer Details</h3>
       <ToggleGroup
         label="Customer Type"
-        required
         value={form.customerType}
         onChange={(v) => update({ customerType: v, custId: "", customerName: "", buyerGstin: "" })}
         options={[
@@ -83,7 +79,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
       {form.customerType === "Existing" && (
         <SearchableSelect
           label="Customer ID"
-          required
           value={form.custId}
           onChange={(_v, option) =>
             update({ custId: option?.value ?? "", customerName: option?.label ?? "" })
@@ -124,7 +119,6 @@ export function Tab2OrderDetails({ form, update }: Props) {
 
       <ToggleGroup
         label="Client Classification"
-        required
         value={form.clientClassification}
         onChange={(v) => update({ clientClassification: v })}
         options={[
@@ -176,7 +170,6 @@ function ItemBlock({
       )}
       <ToggleGroup
         label="Part Type"
-        required
         value={item.partType}
         onChange={(v) => onChange({ partType: v, fgId: "", partName: "" })}
         options={[
@@ -187,7 +180,6 @@ function ItemBlock({
       {item.partType === "Existing" && !item.fgId && (
         <SearchableSelect
           label="Part (ID)"
-          required
           value={item.fgId}
           onChange={(_v, option) =>
             onChange({ fgId: option?.value ?? "", partName: option?.label ?? "", partNo: option?.subtitle ?? "" })
@@ -231,11 +223,11 @@ function ItemBlock({
         />
       )}
 
-      <QuantityStepper label="Quantity" required value={item.qty} onChange={(v) => onChange({ qty: v })} />
+      <QuantityStepper label="Quantity" value={item.qty} onChange={(v) => onChange({ qty: v })} />
 
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
-          UOM <span style={{ color: "var(--color-error)" }}>*</span>
+          UOM
         </label>
         <select
           value={item.uom}
