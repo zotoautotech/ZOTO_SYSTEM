@@ -94,6 +94,9 @@ Base: `/api/v1`. JSON everywhere. > DRAFT — final field names follow schema re
 |----------|--------|---------|
 | `/auth/login` | POST | Email (+ Google Sign-In token, see §6) → JWT with role |
 | `/masters/customers` (also `transports`, `goods`, `billing-strategies`) | GET | Cached master lists for dropdowns |
+| `/masters/customers` | POST | Inline "Add New Customer" from Order Punch — writes directly into the Customer Master sheet, no approval step (§03-APP-FLOW.md §4 Tab 2) |
+| `/masters/goods` | POST | Inline "Add New Part" from Order Punch — writes directly into the FG Master sheet |
+| `/orders/latest?custId=` | GET | Returns the most recent order for a customer, for the "Shipping = Same as Previous Order" autofill (§03-APP-FLOW.md §4 Tab 3) |
 | `/orders` | POST | Create order (Punch) |
 | `/orders?stage=PDI&status=PENDING` | GET | Stage queues (powers every module list) |
 | `/orders/:id` | GET | Full order + all stage records (timeline) |

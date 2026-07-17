@@ -74,8 +74,8 @@ Cross-cutting modules (not in the pipeline):
 
 | # | Stage / Module | Actor | What happens | Key data captured |
 |---|----------------|-------|--------------|-------------------|
-| 1 | **Punch Order** ✅ confirmed | Sales Ops | Customer's purchase order is entered via 4-tab form | PO No., PO Date, PO attachment (PDF), remarks; Order Type (Incoming/Outgoing); Payment Type (Credit/Advance + Advance %); Tally book (Tally 1 Registered / Tally 2 Unregistered); CUST ID; Client Classification (Existing/New/Prospective); Billing Address; Logistics Details; Buyer GSTIN |
-| 2 | **Sale Order** | Sales Ops | Internal Sale Order created against the punched PO with product line items | SO No., SO Date, line items (FG code, qty, rate, UoM, GST %), billing strategy |
+| 1 | **Punch Order** ✅ confirmed | Sales Ops | Customer's purchase order is entered via 4-tab form, **including the full item list** (advanced redesign — see [03-APP-FLOW.md](03-APP-FLOW.md) §4) | PO No., PO Date, PO attachment (PDF), remarks; Order Type (Incoming/Outgoing); Payment Type (Credit/Advance + Advance %); Tally book (fixed: Tally 1 Registered — this system is Tally 1 only); Customer (Existing search or inline New → writes to Customer Master); Client Classification; line items (Part Existing search or inline New → writes to FG Master, Qty, UOM); Billing Address (auto-filled, editable); Shipping Address (Yes/No/Same-as-Previous-Order); Logistics Details (auto-filled from Transport Master) |
+| 2 | **Sale Order** | Sales Ops / Accounts | **Review & pricing step** on the items already captured at Punch (not item entry) | SO No. (auto), SO Date, billing strategy (← Billing Strategy Master, applies contracted rate/discount per item), confirm/adjust pricing |
 | 3 | **SO Confirmation** | Sales Manager | Sale Order reviewed & confirmed/rejected | Confirmation status, confirmed by, remarks |
 | 4 | **Dispatch Approval** | Sales Manager | Approval to proceed to dispatch (credit check etc.) | Approval status, approved by, credit remarks |
 | 5 | **PDI** (Pre-Dispatch Inspection) | Quality | Goods inspected before dispatch | Inspection result (Pass/Fail), report attachment, inspector |
