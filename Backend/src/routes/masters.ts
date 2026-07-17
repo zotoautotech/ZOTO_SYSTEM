@@ -33,8 +33,11 @@ mastersRouter.get("/customers", async (req, res, next) => {
       refresh: refresh(req.query.refresh),
       headerRow: CUSTOMER_HEADER_ROW,
     });
+    // Row 4 of the sheet ("ASHOKA PACKWELL INDUSTRIES", CUST ID "SD") predates the
+    // CUST-#### numbering and isn't a real pickable customer — exclude anything
+    // that doesn't follow the CUST-#### id format used from CUST-0001 onward.
     const slim = rows
-      .filter((r) => r["CUST ID"])
+      .filter((r) => /^CUST-\d+$/.test(r["CUST ID"] ?? ""))
       .map((r) => Object.fromEntries(CUSTOMER_LIST_FIELDS.map((f) => [f, r[f] ?? ""])));
     res.json(slim);
   } catch (err) {
