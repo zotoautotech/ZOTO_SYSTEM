@@ -25,6 +25,16 @@ export interface GoodsRow {
   [key: string]: string;
 }
 
+export interface BillingStrategyRow {
+  "Strategy ID": string;
+  "CUST ID": string;
+  "Customer Name": string;
+  "Part Code": string;
+  "Part Name": string;
+  "Default Rate T1": string;
+  [key: string]: string;
+}
+
 export interface TransporterRow {
   "Transporter ID": string;
   Name: string;
@@ -105,6 +115,11 @@ export interface NewPartPayload {
 export async function createPart(payload: NewPartPayload) {
   const res = await api.post("/masters/goods", payload);
   return res.data as { fgId: string; partName: string; partNo?: string; segment?: string; category?: string; unit?: string; price?: number };
+}
+
+export async function listBillingStrategies(): Promise<BillingStrategyRow[]> {
+  const res = await api.get<BillingStrategyRow[]>("/masters/billing-strategies");
+  return res.data;
 }
 
 export async function listTransporters(): Promise<TransporterRow[]> {

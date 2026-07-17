@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ToggleGroup } from "../../../components/form/ToggleGroup";
 import { PercentInput } from "../../../components/form/PercentInput";
 import { TextField } from "../../../components/form/TextField";
 import { SearchableSelect } from "../../../components/form/SearchableSelect";
 import { QuantityStepper } from "../../../components/form/QuantityStepper";
-import { listCustomers, listGoods, customersToOptions, goodsToOptions } from "../../../lib/mastersApi";
+import {
+  listCustomers,
+  listGoods,
+  listBillingStrategies,
+  customersToOptions,
+  goodsToOptions,
+} from "../../../lib/mastersApi";
 import { UOM_OPTIONS } from "../../../lib/modules";
 import { AddNewCustomerModal } from "./AddNewCustomerModal";
 import { AddNewPartModal } from "./AddNewPartModal";
@@ -115,22 +121,12 @@ export function Tab2OrderDetails({ form, update }: Props) {
         />
       )}
 
-      <ToggleGroup
-        label="Client Classification"
-        value={form.clientClassification}
-        onChange={(v) => update({ clientClassification: v })}
-        options={[
-          { value: "Existing", label: "Existing" },
-          { value: "New", label: "New" },
-          { value: "Prospective", label: "Prospective" },
-        ]}
-      />
-
       <h3 style={{ fontSize: 15, marginTop: 24 }}>Items</h3>
       {form.items.map((item, i) => (
         <ItemBlock
           key={i}
           item={item}
+          custId={form.custId}
           onChange={(patch) => updateItem(i, patch)}
           onRemove={form.items.length > 1 ? () => removeItem(i) : undefined}
         />
@@ -144,16 +140,36 @@ export function Tab2OrderDetails({ form, update }: Props) {
 
 function ItemBlock({
   item,
+  custId,
   onChange,
   onRemove,
 }: {
   item: ItemFormState;
+  custId: string;
   onChange: (patch: Partial<ItemFormState>) => void;
   onRemove?: () => void;
 }) {
   const [showAddPart, setShowAddPart] = useState(false);
   const { data: goods = [] } = useQuery({ queryKey: ["masters", "goods"], queryFn: listGoods });
   const goodsOptions = goodsToOptions(goods);
+  const { data: billingStrategies = [] } = useQuery({
+    queryKey: ["masters", "billing-strategies"],
+    queryFn: listBillingStrategies,
+  });
+
+  useEffect(() => {
+    if (!custId || !item.partName) return;
+    const match = billingStrategies.find(
+      (s) =>
+        s["CUST ID"] === custId &&
+        (s["Part Code"] && item.partNo ? s["Part Code"] === item.partNo : s["Part Name"] === item.partName) &&
+        s["Default Rate T1"]
+    );
+    if (match) {
+      onChange({ price: Number(match["Default Rate T1"]) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custId, item.fgId, item.partName, billingStrategies]);
 
   return (
     <div className="card" style={{ padding: 16, marginBottom: 16, position: "relative" }}>
