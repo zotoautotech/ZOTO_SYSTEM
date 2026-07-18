@@ -191,6 +191,17 @@ mastersRouter.post("/customers", async (req, res, next) => {
   }
 });
 
+mastersRouter.get("/dropdowns", async (req, res, next) => {
+  try {
+    const rows = await readTable(env.sheets.transactions, "DROPDOWNS", {
+      refresh: refresh(req.query.refresh),
+    });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 mastersRouter.get("/billing-strategies", async (req, res, next) => {
   try {
     const rows = await readTable(env.sheets.customerBilling, "BILLING STRATEGY MASTER", {
