@@ -346,7 +346,8 @@ export function Layout() {
             }}
           />
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative", justifySelf: "end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, justifySelf: "end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
             <span className="text-muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
               {isFetching ? "Syncing…" : "Sync complete"}
             </span>
@@ -577,6 +578,7 @@ export function Layout() {
                 </div>
               </>
             )}
+          </div>
           </div>
         </header>
 
