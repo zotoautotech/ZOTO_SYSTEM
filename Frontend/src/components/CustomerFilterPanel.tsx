@@ -2,11 +2,12 @@ interface CustomerFilterPanelProps {
   customers: { name: string; count: number }[];
   active: string | null;
   onSelect: (name: string | null) => void;
+  width?: number;
 }
 
-export function CustomerFilterPanel({ customers, active, onSelect }: CustomerFilterPanelProps) {
+export function CustomerFilterPanel({ customers, active, onSelect, width }: CustomerFilterPanelProps) {
   return (
-    <div style={{ width: "var(--filter-width)", flexShrink: 0, padding: "8px 8px 8px 0" }}>
+    <div style={{ width: width ?? "var(--filter-width)", flexShrink: 0, padding: "8px 8px 8px 0" }}>
       <FilterRow label="All" active={active === null} onClick={() => onSelect(null)} />
       {customers.map((c) => (
         <FilterRow

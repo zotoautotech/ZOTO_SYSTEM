@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listOrders, type OrderRecord } from "../../lib/ordersApi";
@@ -14,6 +14,31 @@ export function OrderPunchList() {
   const { query } = useSearch();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
+  const [filterWidth, setFilterWidth] = useState(260);
+  const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const onDividerMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragState.current) return;
+    const next = dragState.current.startWidth + (e.clientX - dragState.current.startX);
+    setFilterWidth(Math.min(480, Math.max(160, next)));
+  }, []);
+
+  const onDividerMouseUp = useCallback(() => {
+    dragState.current = null;
+    document.body.style.cursor = "";
+    window.removeEventListener("mousemove", onDividerMouseMove);
+    window.removeEventListener("mouseup", onDividerMouseUp);
+  }, [onDividerMouseMove]);
+
+  const onDividerMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      dragState.current = { startX: e.clientX, startWidth: filterWidth };
+      document.body.style.cursor = "col-resize";
+      window.addEventListener("mousemove", onDividerMouseMove);
+      window.addEventListener("mouseup", onDividerMouseUp);
+    },
+    [filterWidth, onDividerMouseMove, onDividerMouseUp]
+  );
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders", "all"],
@@ -132,8 +157,28 @@ export function OrderPunchList() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 128px)" }}>
       <div style={{ display: "flex", alignItems: "stretch", flex: 1, minHeight: 0 }}>
-        <CustomerFilterPanel customers={customerCounts} active={activeCustomer} onSelect={setActiveCustomer} />
-        <div style={{ width: 1, background: "var(--color-border)", flexShrink: 0 }} />
+        <CustomerFilterPanel
+          customers={customerCounts}
+          active={activeCustomer}
+          onSelect={setActiveCustomer}
+          width={filterWidth}
+        />
+        <div
+          onMouseDown={onDividerMouseDown}
+          onDoubleClick={() => setFilterWidth(260)}
+          title="Drag to resize"
+          style={{
+            width: 5,
+            marginLeft: -2,
+            marginRight: -2,
+            cursor: "col-resize",
+            flexShrink: 0,
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <div style={{ width: 1, height: "100%", background: "var(--color-border)", margin: "0 auto" }} />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <DataTable
             columns={columns}
