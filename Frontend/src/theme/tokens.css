@@ -185,6 +185,17 @@ textarea:focus {
   }
 }
 
+/*
+ * Responsive breakpoints (mirrors Frontend/src/lib/responsive.ts):
+ *   Desktop (locked, unchanged): >= 1024px
+ *   Compact (drawer sidebar, reflowed chrome): <= 1023px
+ *   Mobile (icon-only header, stacked fields, chip rows): <= 599px
+ */
+
+.sheet-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
 .sheet-scroll::-webkit-scrollbar {
   height: 12px;
 }

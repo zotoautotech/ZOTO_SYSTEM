@@ -8,10 +8,12 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { formatTimestamp } from "../../lib/format";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions } from "../../lib/headerActions";
+import { useIsMobile } from "../../lib/responsive";
 
 export function OrderPunchList() {
   const navigate = useNavigate();
   const { query } = useSearch();
+  const isMobile = useIsMobile();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
   const [filterWidth, setFilterWidth] = useState(260);
@@ -156,29 +158,39 @@ export function OrderPunchList() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 128px)" }}>
-      <div style={{ display: "flex", alignItems: "stretch", flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "stretch" : "stretch",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         <CustomerFilterPanel
           customers={customerCounts}
           active={activeCustomer}
           onSelect={setActiveCustomer}
           width={filterWidth}
         />
-        <div
-          onMouseDown={onDividerMouseDown}
-          onDoubleClick={() => setFilterWidth(260)}
-          title="Drag to resize"
-          style={{
-            width: 5,
-            marginLeft: -2,
-            marginRight: -2,
-            cursor: "col-resize",
-            flexShrink: 0,
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <div style={{ width: 1, height: "100%", background: "var(--color-border)", margin: "0 auto" }} />
-        </div>
+        {!isMobile && (
+          <div
+            onMouseDown={onDividerMouseDown}
+            onDoubleClick={() => setFilterWidth(260)}
+            title="Drag to resize"
+            style={{
+              width: 5,
+              marginLeft: -2,
+              marginRight: -2,
+              cursor: "col-resize",
+              flexShrink: 0,
+              position: "relative",
+              zIndex: 1,
+            }}
+          >
+            <div style={{ width: 1, height: "100%", background: "var(--color-border)", margin: "0 auto" }} />
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <DataTable
             columns={columns}

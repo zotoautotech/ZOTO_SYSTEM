@@ -7,6 +7,7 @@ import { Tab1PurchaseOrder } from "./form/Tab1PurchaseOrder";
 import { Tab2OrderDetails } from "./form/Tab2OrderDetails";
 import { Tab3BillingAddress } from "./form/Tab3BillingAddress";
 import { Tab4LogisticsDetails } from "./form/Tab4LogisticsDetails";
+import { useIsMobile } from "../../lib/responsive";
 
 const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
 
@@ -21,6 +22,7 @@ function validateTab(_tab: number, form: OrderFormState): string | null {
 
 export function OrderPunchForm() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
   const [error, setError] = useState("");
@@ -114,7 +116,7 @@ export function OrderPunchForm() {
         alignItems: "center",
         justifyContent: "center",
         zIndex: 50,
-        padding: 24,
+        padding: isMobile ? 0 : 24,
       }}
       onClick={() => navigate("/modules/punch-order")}
     >
@@ -122,9 +124,10 @@ export function OrderPunchForm() {
         className="card modal-in"
         style={{
           width: "min(880px, 100%)",
-          maxHeight: "90vh",
+          height: isMobile ? "100vh" : undefined,
+          maxHeight: isMobile ? "100vh" : "90vh",
           background: "var(--color-bg)",
-          borderRadius: 18,
+          borderRadius: isMobile ? 0 : 18,
           boxShadow: "var(--shadow-lg)",
           display: "flex",
           flexDirection: "column",
@@ -162,7 +165,18 @@ export function OrderPunchForm() {
           </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", padding: "18px var(--space) 8px" }}>
+        {isMobile && (
+          <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, padding: "0 var(--space)" }}>
+            {TABS[tab]}
+          </div>
+        )}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            padding: isMobile ? "10px 12px 6px" : "18px var(--space) 8px",
+          }}
+        >
           {TABS.map((t, i) => (
             <div
               key={t}
@@ -172,7 +186,15 @@ export function OrderPunchForm() {
                 flex: i < TABS.length - 1 ? 1 : "0 0 auto",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 76 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                  minWidth: isMobile ? "auto" : 76,
+                }}
+              >
                 <div
                   style={{
                     width: 30,
@@ -191,16 +213,18 @@ export function OrderPunchForm() {
                 >
                   {i < tab ? "✓" : i + 1}
                 </div>
-                <span
-                  style={{
-                    fontSize: 11,
-                    textAlign: "center",
-                    color: i === tab ? "var(--color-text)" : "var(--color-text-muted)",
-                    fontWeight: i === tab ? 600 : 400,
-                  }}
-                >
-                  {t}
-                </span>
+                {!isMobile && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      textAlign: "center",
+                      color: i === tab ? "var(--color-text)" : "var(--color-text-muted)",
+                      fontWeight: i === tab ? 600 : 400,
+                    }}
+                  >
+                    {t}
+                  </span>
+                )}
               </div>
               {i < TABS.length - 1 && (
                 <div
@@ -208,7 +232,7 @@ export function OrderPunchForm() {
                     flex: 1,
                     height: 2,
                     background: i < tab ? "var(--color-primary)" : "var(--color-border)",
-                    margin: "0 4px 20px",
+                    margin: isMobile ? "0 4px" : "0 4px 20px",
                     transition: "background 0.15s ease",
                   }}
                 />

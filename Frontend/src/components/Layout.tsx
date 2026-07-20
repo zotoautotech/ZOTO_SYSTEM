@@ -6,6 +6,7 @@ import { useTheme } from "../lib/theme";
 import { useSearch } from "../lib/search";
 import { useSync } from "../lib/sync";
 import { useHeaderActions } from "../lib/headerActions";
+import { useIsCompact, useIsMobile } from "../lib/responsive";
 
 function HomeIcon() {
   return (
@@ -86,6 +87,14 @@ function SyncIcon({ spinning }: { spinning?: boolean }) {
   );
 }
 
+function HamburgerIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  );
+}
+
 function timeAgo(ts: number | null): string {
   if (!ts) return "just now";
   const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
@@ -122,6 +131,12 @@ export function Layout() {
   const [, forceTick] = useState(0);
   const [railWidth, setRailWidth] = useState(208);
   const railDrag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const isCompact = useIsCompact();
+  const isMobile = useIsMobile();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer (compact/mobile) is always shown "expanded" — the collapse toggle is a
+  // desktop-only affordance, so ignore `collapsed` while the drawer is in play.
+  const effectivelyCollapsed = collapsed && !isCompact;
 
   const onRailMouseMove = useCallback((e: MouseEvent) => {
     if (!railDrag.current) return;
@@ -151,6 +166,12 @@ export function Layout() {
   // filter a page the user didn't mean to search.
   useEffect(() => {
     setQuery("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  // Close the mobile/tablet drawer on navigation so it doesn't stay open over the new page.
+  useEffect(() => {
+    setDrawerOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
@@ -192,24 +213,49 @@ export function Layout() {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
+      {isCompact && drawerOpen && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.4)" }}
+        />
+      )}
       <nav
-        style={{
-          width: collapsed ? 72 : railWidth,
-          flexShrink: 0,
-          background: "var(--color-bg)",
-          display: "flex",
-          flexDirection: "column",
-          padding: "20px 12px",
-          gap: 4,
-          transition: railDrag.current ? "none" : "width 0.18s ease",
-          overflow: "hidden",
-        }}
+        style={
+          isCompact
+            ? {
+                position: "fixed",
+                top: 0,
+                left: 0,
+                height: "100vh",
+                width: 260,
+                zIndex: 41,
+                background: "var(--color-bg)",
+                display: "flex",
+                flexDirection: "column",
+                padding: "20px 12px",
+                gap: 4,
+                transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+                transition: "transform 0.2s ease",
+                boxShadow: drawerOpen ? "var(--shadow-lg)" : "none",
+              }
+            : {
+                width: collapsed ? 72 : railWidth,
+                flexShrink: 0,
+                background: "var(--color-bg)",
+                display: "flex",
+                flexDirection: "column",
+                padding: "20px 12px",
+                gap: 4,
+                transition: railDrag.current ? "none" : "width 0.18s ease",
+                overflow: "hidden",
+              }
+        }
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: collapsed ? "center" : "space-between",
+            justifyContent: effectivelyCollapsed ? "center" : "space-between",
             gap: 8,
             padding: "0 4px",
             marginBottom: 24,
@@ -233,13 +279,13 @@ export function Layout() {
             >
               Z
             </span>
-            {!collapsed && (
+            {!effectivelyCollapsed && (
               <strong style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.3, whiteSpace: "nowrap" }}>
                 ZOTO
               </strong>
             )}
           </div>
-          {!collapsed && (
+          {!collapsed && !isCompact && (
             <button
               onClick={() => setCollapsed(true)}
               aria-label="Collapse sidebar"
@@ -259,9 +305,29 @@ export function Layout() {
               ‹
             </button>
           )}
+          {isCompact && (
+            <button
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Close menu"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg)",
+                fontSize: 13,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
-        {collapsed && (
+        {collapsed && !isCompact && (
           <button
             onClick={() => setCollapsed(false)}
             aria-label="Expand sidebar"
@@ -291,10 +357,10 @@ export function Layout() {
               to={item.to}
               end={item.end}
               title={item.label}
-              style={({ isActive }) => navItemStyle(collapsed, isActive)}
+              style={({ isActive }) => navItemStyle(effectivelyCollapsed, isActive)}
             >
               <Icon />
-              {!collapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+              {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
             </NavLink>
           );
         })}
@@ -317,10 +383,10 @@ export function Layout() {
                 key={item.to}
                 to={item.to}
                 title={item.label}
-                style={({ isActive }) => navItemStyle(collapsed, isActive)}
+                style={({ isActive }) => navItemStyle(effectivelyCollapsed, isActive)}
               >
                 <Icon />
-                {!collapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+                {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
               </NavLink>
             );
           })}
@@ -328,7 +394,7 @@ export function Layout() {
             onClick={logout}
             title="Log out"
             style={{
-              ...navItemStyle(collapsed, false),
+              ...navItemStyle(effectivelyCollapsed, false),
               border: "none",
               cursor: "pointer",
               width: "100%",
@@ -336,12 +402,12 @@ export function Layout() {
             }}
           >
             <LogoutIcon />
-            {!collapsed && <span style={{ whiteSpace: "nowrap" }}>Log Out</span>}
+            {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>Log Out</span>}
           </button>
         </div>
       </nav>
 
-      {!collapsed && (
+      {!collapsed && !isCompact && (
         <div
           onMouseDown={onRailMouseDown}
           onDoubleClick={() => setRailWidth(208)}
@@ -359,7 +425,7 @@ export function Layout() {
           <div style={{ width: 1, height: "100%", background: "var(--color-border)", margin: "0 auto" }} />
         </div>
       )}
-      {collapsed && <div style={{ width: 1, background: "var(--color-border)", flexShrink: 0 }} />}
+      {collapsed && !isCompact && <div style={{ width: 1, background: "var(--color-border)", flexShrink: 0 }} />}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <header
@@ -368,21 +434,41 @@ export function Layout() {
             borderBottom: "1px solid var(--color-border)",
             background: "var(--color-bg)",
             display: "grid",
-            gridTemplateColumns: "1fr auto 1fr",
+            gridTemplateColumns: isCompact ? "auto 1fr auto" : "1fr auto 1fr",
             alignItems: "center",
-            padding: "0 24px",
-            gap: 16,
+            padding: isCompact ? "0 12px" : "0 24px",
+            gap: isCompact ? 8 : 16,
           }}
         >
-          <span />
+          {isCompact ? (
+            <button
+              onClick={() => setDrawerOpen((o) => !o)}
+              aria-label="Toggle menu"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 8,
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <HamburgerIcon />
+            </button>
+          ) : (
+            <span />
+          )}
           <input
             placeholder={`Search ${crumbs[crumbs.length - 1]?.label ?? "SALES CRR"}`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
-              width: 480,
+              width: isCompact ? "100%" : 480,
               maxWidth: "100%",
-              justifySelf: "center",
+              justifySelf: isCompact ? "stretch" : "center",
               padding: "8px 14px",
               borderRadius: 20,
               border: "1px solid var(--color-border)",
@@ -391,11 +477,13 @@ export function Layout() {
             }}
           />
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, justifySelf: "end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 6 : 12, justifySelf: "end" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
-            <span className="text-muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
-              {isFetching ? "Syncing…" : "Sync complete"}
-            </span>
+            {!isMobile && (
+              <span className="text-muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+                {isFetching ? "Syncing…" : "Sync complete"}
+              </span>
+            )}
             <div
               style={{
                 display: "flex",
@@ -418,11 +506,12 @@ export function Layout() {
                   justifyContent: "center",
                   cursor: "pointer",
                   color: "var(--color-text)",
-                  borderRight: "1px solid var(--color-border)",
+                  borderRight: isMobile ? "none" : "1px solid var(--color-border)",
                 }}
               >
                 <SyncIcon spinning={isFetching} />
               </button>
+              {!isMobile && (
               <button
                 onClick={() => setSyncMenuOpen((o) => !o)}
                 aria-label="Sync details"
@@ -442,6 +531,7 @@ export function Layout() {
               >
                 ▾
               </button>
+              )}
             </div>
 
             {syncMenuOpen && (
@@ -529,7 +619,7 @@ export function Layout() {
                 border: "1px solid var(--color-border)",
                 background: "var(--color-bg-page)",
                 borderRadius: 999,
-                padding: "4px 12px 4px 4px",
+                padding: isMobile ? "4px" : "4px 12px 4px 4px",
                 cursor: "pointer",
               }}
             >
@@ -550,7 +640,9 @@ export function Layout() {
               >
                 {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{user?.name ?? "Account"}</span>
+              {!isMobile && (
+                <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{user?.name ?? "Account"}</span>
+              )}
               <span className="text-muted" style={{ fontSize: 11 }}>
                 ▾
               </span>
@@ -629,11 +721,12 @@ export function Layout() {
 
         <div
           style={{
-            padding: "12px 24px",
+            padding: isCompact ? "10px 12px" : "12px 24px",
             fontSize: 16,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: isCompact ? "wrap" : "nowrap",
             gap: 12,
             borderBottom: "1px solid var(--color-border)",
           }}
@@ -664,7 +757,7 @@ export function Layout() {
           {actions && <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>{actions}</div>}
         </div>
 
-        <main style={{ flex: 1, overflow: "auto", padding: "0 24px 24px" }}>
+        <main style={{ flex: 1, overflow: "auto", padding: isCompact ? "0 12px 16px" : "0 24px 24px" }}>
           <Outlet />
         </main>
       </div>

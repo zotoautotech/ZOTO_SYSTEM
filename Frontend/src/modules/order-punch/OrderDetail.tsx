@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
+import { useIsCompact, useIsMobile } from "../../lib/responsive";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -13,10 +14,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, value }: { label: string; value?: string }) {
+  const isMobile = useIsMobile();
   if (!value) return null;
   return (
-    <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-      <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 2 : 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: isMobile ? "0 0 auto" : "0 0 140px" }}>
         {label}
       </div>
       <div style={{ fontSize: 14, flex: 1 }}>{value}</div>
@@ -27,6 +29,7 @@ function Field({ label, value }: { label: string; value?: string }) {
 export function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const isCompact = useIsCompact();
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -147,8 +150,8 @@ export function OrderDetail() {
 
   return (
     <div style={{ marginTop: 20, paddingBottom: 24 }}>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <div style={{ flex: "0 0 260px" }}>
+      <div style={{ display: "flex", flexWrap: isCompact ? "wrap" : "nowrap", gap: 16, alignItems: "flex-start" }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : "0 0 260px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
             <button
               onClick={() => navigate("/modules/punch-order")}
@@ -175,7 +178,7 @@ export function OrderDetail() {
           </span>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
           <Section title="Purchase Order Details">
             <Field label="Purchase Order No." value={order.PO_NO} />
             <Field label="Purchase Order Date" value={order.PO_DATE} />
@@ -202,7 +205,7 @@ export function OrderDetail() {
           </Section>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
           <Section title="Order Details">
             <Field label="Tally" value="Tally 1 (Registered)" />
             <Field label="Order Type" value={order.ORDER_TYPE} />

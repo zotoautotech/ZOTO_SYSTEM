@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { useAuth } from "../lib/auth";
+import { useIsCompact, useIsMobile } from "../lib/responsive";
 
 const zotoLogo = "/zoto-logo.png";
 
@@ -30,6 +31,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const isCompact = useIsCompact();
+  const isMobile = useIsMobile();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -49,7 +52,7 @@ export function Login() {
   return (
     <div
       style={{
-        height: "100vh",
+        minHeight: "100vh",
         width: "100vw",
         position: "relative",
         display: "flex",
@@ -73,11 +76,13 @@ export function Login() {
         style={{
           flex: 1,
           display: "flex",
-          alignItems: "center",
+          alignItems: isCompact ? "flex-start" : "center",
+          flexWrap: isCompact ? "wrap" : "nowrap",
           position: "relative",
           maxWidth: 1180,
           width: "100%",
           margin: "0 auto",
+          padding: isCompact ? "32px 20px" : undefined,
         }}
       >
         <div
@@ -86,15 +91,39 @@ export function Login() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            paddingLeft: 24,
-            minWidth: 0,
+            paddingLeft: isCompact ? 0 : 24,
+            minWidth: isCompact ? "100%" : 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "nowrap" }}>
-            <h1 style={{ margin: 0, fontSize: 56, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "flex-start" : "center",
+              gap: 14,
+              flexWrap: "nowrap",
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "clamp(28px, 9vw, 56px)",
+                fontWeight: 800,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
               Welcome to
             </h1>
-            <img src={zotoLogo} alt="ZOTO" style={{ height: 140, width: "auto", marginTop: -90 }} />
+            <img
+              src={zotoLogo}
+              alt="ZOTO"
+              style={{
+                height: "clamp(60px, 20vw, 140px)",
+                width: "auto",
+                marginTop: isMobile ? 0 : "clamp(-90px, -12vw, -38px)",
+              }}
+            />
           </div>
           <div style={{ borderTop: "1px solid #e6e6e9", margin: "24px 0", maxWidth: 560 }} />
           <p style={{ margin: 0, color: "#5c5f6a", fontSize: 18, maxWidth: 560 }}>
@@ -104,13 +133,15 @@ export function Login() {
 
         <div
           style={{
-            flex: "0 0 460px",
-            marginLeft: 24,
+            flex: isCompact ? "1 1 auto" : "0 0 460px",
+            width: isCompact ? "100%" : undefined,
+            maxWidth: isCompact ? 460 : undefined,
+            margin: isCompact ? "24px auto 0" : "0 0 0 24px",
             background: "#ffffff",
             border: "1px solid #e6e6e9",
             boxShadow: "0 12px 32px rgba(16,24,40,0.08)",
             borderRadius: 24,
-            padding: "40px 44px",
+            padding: isMobile ? "28px 24px" : "40px 44px",
           }}
         >
           <h2 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 700 }}>Login</h2>
@@ -249,6 +280,9 @@ export function Login() {
           fontSize: 11,
           color: "#8a8d98",
           display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-start" : undefined,
+          gap: isMobile ? 8 : 0,
           justifyContent: "space-between",
         }}
       >

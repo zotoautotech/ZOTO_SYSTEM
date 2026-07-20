@@ -23,7 +23,7 @@ export function Modal({
       <div
         className="card slide-in-panel"
         style={{
-          width: 480,
+          width: "min(480px, calc(100vw - 32px))",
           maxHeight: "85vh",
           overflowY: "auto",
           padding: "var(--space)",

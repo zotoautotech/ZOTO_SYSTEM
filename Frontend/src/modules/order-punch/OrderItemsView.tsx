@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatCurrency } from "../../lib/format";
+import { useIsCompact, useIsMobile } from "../../lib/responsive";
 
 function pick(row: GoodsRow | undefined, ...keys: string[]): string {
   if (!row) return "";
@@ -36,6 +37,8 @@ const COLUMNS = [
 export function OrderItemsView() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const isCompact = useIsCompact();
+  const isMobile = useIsMobile();
   const [colWidths, setColWidths] = useState(() => COLUMNS.map((c) => c.width));
   const dragState = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
 
@@ -87,6 +90,7 @@ export function OrderItemsView() {
     overflow: "hidden",
     textOverflow: "ellipsis",
   };
+  const firstColPad = isCompact ? 12 : 24;
 
   return (
     <div
@@ -94,7 +98,7 @@ export function OrderItemsView() {
         display: "flex",
         flexDirection: "column",
         minHeight: "calc(100vh - 128px)",
-        margin: "0 -24px",
+        margin: isCompact ? "0 -12px" : "0 -24px",
       }}
     >
       <div className="sheet-scroll" style={{ flex: 1, overflow: "auto" }}>
@@ -112,7 +116,7 @@ export function OrderItemsView() {
                   style={{
                     textAlign: "left",
                     padding: "10px 14px",
-                    paddingLeft: i === 0 ? 24 : 14,
+                    paddingLeft: i === 0 ? firstColPad : 14,
                     borderBottom: "1px solid var(--color-border)",
                     borderRight: i === COLUMNS.length - 1 ? "none" : "1px solid var(--color-border)",
                     position: "relative",
@@ -121,23 +125,25 @@ export function OrderItemsView() {
                   }}
                 >
                   {c.label}
-                  <div
-                    onMouseDown={onColMouseDown(i)}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      setColWidths((w) => w.map((v, idx) => (idx === i ? COLUMNS[i].width : v)));
-                    }}
-                    title="Drag to resize column"
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      right: -3,
-                      width: 6,
-                      height: "100%",
-                      cursor: "col-resize",
-                      zIndex: 1,
-                    }}
-                  />
+                  {!isMobile && (
+                    <div
+                      onMouseDown={onColMouseDown(i)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setColWidths((w) => w.map((v, idx) => (idx === i ? COLUMNS[i].width : v)));
+                      }}
+                      title="Drag to resize column"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        right: -3,
+                        width: 6,
+                        height: "100%",
+                        cursor: "col-resize",
+                        zIndex: 1,
+                      }}
+                    />
+                  )}
                 </th>
               ))}
             </tr>
@@ -153,7 +159,7 @@ export function OrderItemsView() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td style={{ ...cell, paddingLeft: 24 }}>{it.PART_NO}</td>
+                  <td style={{ ...cell, paddingLeft: firstColPad }}>{it.PART_NO}</td>
                   <td style={cell}>{pick(g, "Old Part No.", "OLD PART NO.", "Old Part No")}</td>
                   <td style={{ ...cell, fontWeight: 500 }}>{it.PART_NAME}</td>
                   <td style={cell}>{pick(g, "Part Description", "Description", "PART DESCRIPTION")}</td>

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
+import { useIsCompact, useIsMobile } from "../../lib/responsive";
 
 function pick(row: GoodsRow | undefined, ...keys: string[]): string {
   if (!row) return "";
@@ -14,10 +15,11 @@ function pick(row: GoodsRow | undefined, ...keys: string[]): string {
 }
 
 function Field({ label, value }: { label: string; value?: string }) {
+  const isMobile = useIsMobile();
   if (!value) return null;
   return (
-    <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-      <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 2 : 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: isMobile ? "0 0 auto" : "0 0 140px" }}>
         {label}
       </div>
       <div style={{ fontSize: 14, flex: 1 }}>{value}</div>
@@ -28,6 +30,8 @@ function Field({ label, value }: { label: string; value?: string }) {
 export function OrderItemDetail() {
   const { orderId, itemId } = useParams();
   const navigate = useNavigate();
+  const isCompact = useIsCompact();
+  const isMobile = useIsMobile();
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -51,8 +55,8 @@ export function OrderItemDetail() {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <div style={{ flex: "0 0 260px" }}>
+      <div style={{ display: "flex", flexWrap: isCompact ? "wrap" : "nowrap", gap: 16, alignItems: "flex-start" }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : "0 0 260px" }}>
           <button
             onClick={() => navigate(`/modules/punch-order/${orderId}/items`)}
             aria-label="Back"
@@ -78,7 +82,7 @@ export function OrderItemDetail() {
           </span>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
           <div className="card" style={{ padding: 20, marginBottom: 16 }}>
             <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 600 }}>Goods Details</h3>
             <Field label="Part No." value={item.PART_NO || pick(g, "PART NO.")} />
@@ -94,8 +98,15 @@ export function OrderItemDetail() {
             <Field label="Paint" value={pick(g, "Paint", "PAINT")} />
             <Field label="Standard Part" value={pick(g, "Standard Part", "Standard", "STANDARD PART")} />
             {productPdf && (
-              <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-                <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: isMobile ? 2 : 16,
+                  marginBottom: 12,
+                }}
+              >
+                <div className="text-muted" style={{ fontSize: 12, flex: isMobile ? "0 0 auto" : "0 0 140px" }}>
                   Product PDF
                 </div>
                 <a href={productPdf} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
@@ -106,7 +117,7 @@ export function OrderItemDetail() {
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
           <div className="card" style={{ padding: 20, marginBottom: 16 }}>
             <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 600 }}>GST Details</h3>
             <Field label="Price" value={formatCurrency(item.PRICE)} />

@@ -4,3 +4,6 @@ dist/
 *.log
 secrets/
 *.json.key
+
+.vercel
+.env*
