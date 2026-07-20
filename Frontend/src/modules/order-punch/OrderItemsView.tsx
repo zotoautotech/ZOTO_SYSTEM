@@ -53,16 +53,35 @@ export function OrderItemsView() {
     "Remarks",
   ];
 
+  const cell: React.CSSProperties = {
+    padding: "10px 14px",
+    borderBottom: "1px solid var(--color-border)",
+    borderRight: "1px solid var(--color-border)",
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 128px)" }}>
-      <div className="card sheet-scroll" style={{ flex: 1, overflow: "auto" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "calc(100vh - 128px)",
+        margin: "0 -24px",
+      }}
+    >
+      <div className="sheet-scroll" style={{ flex: 1, overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
           <thead>
             <tr>
-              {columns.map((h) => (
+              {columns.map((h, i) => (
                 <th
                   key={h}
-                  style={{ textAlign: "left", padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}
+                  style={{
+                    textAlign: "left",
+                    padding: "10px 14px",
+                    paddingLeft: i === 0 ? 24 : 14,
+                    borderBottom: "1px solid var(--color-border)",
+                    borderRight: "1px solid var(--color-border)",
+                  }}
                 >
                   {h}
                 </th>
@@ -80,44 +99,22 @@ export function OrderItemsView() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>{it.PART_NO}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {pick(g, "Old Part No.", "OLD PART NO.", "Old Part No")}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)", fontWeight: 500 }}>
-                    {it.PART_NAME}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {pick(g, "Part Description", "Description", "PART DESCRIPTION")}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>{it.SEGMENT}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>{it.CATEGORY}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {pick(g, "Sub Category", "SUB CATEGORY")}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {pick(g, "Paint", "PAINT")}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {pick(g, "Standard Packing", "Standard", "STANDARD PACKING")}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>{it.QTY}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>{it.UOM}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {formatCurrency(it.PRICE)}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {formatCurrency(it.BASIC_AMOUNT)}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {formatCurrency(it.TAX_AMOUNT)}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)" }}>
-                    {formatCurrency(it.TOTAL_AMOUNT)}
-                  </td>
-                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)", whiteSpace: "normal" }}>
-                    {it.NOTES}
-                  </td>
+                  <td style={{ ...cell, paddingLeft: 24 }}>{it.PART_NO}</td>
+                  <td style={cell}>{pick(g, "Old Part No.", "OLD PART NO.", "Old Part No")}</td>
+                  <td style={{ ...cell, fontWeight: 500 }}>{it.PART_NAME}</td>
+                  <td style={cell}>{pick(g, "Part Description", "Description", "PART DESCRIPTION")}</td>
+                  <td style={cell}>{it.SEGMENT}</td>
+                  <td style={cell}>{it.CATEGORY}</td>
+                  <td style={cell}>{pick(g, "Sub Category", "SUB CATEGORY")}</td>
+                  <td style={cell}>{pick(g, "Paint", "PAINT")}</td>
+                  <td style={cell}>{pick(g, "Standard Packing", "Standard", "STANDARD PACKING")}</td>
+                  <td style={cell}>{it.QTY}</td>
+                  <td style={cell}>{it.UOM}</td>
+                  <td style={cell}>{formatCurrency(it.PRICE)}</td>
+                  <td style={cell}>{formatCurrency(it.BASIC_AMOUNT)}</td>
+                  <td style={cell}>{formatCurrency(it.TAX_AMOUNT)}</td>
+                  <td style={cell}>{formatCurrency(it.TOTAL_AMOUNT)}</td>
+                  <td style={{ ...cell, whiteSpace: "normal", borderRight: "none" }}>{it.NOTES}</td>
                 </tr>
               );
             })}
