@@ -24,7 +24,10 @@ const CUSTOMER_LIST_FIELDS = [
   "CUSTOMER NAME",
   "Company GSTIN NO.",
   "Status Of Customer Manual",
+  "BILLING ADDRESS",
   "Billing STATE",
+  "Billing PIN CODE",
+  "Billing Contry",
   "REGISTERED MOBILE NO.",
 ];
 

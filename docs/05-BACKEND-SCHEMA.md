@@ -20,6 +20,9 @@
 ## 1. Master Sheets
 
 ### 1.1 `CUSTOMER_MASTER`
+
+Order Punch loads each selectable customer's billing address, state, PIN code and country directly from `CUSTOMER MASTER T1`; selecting the customer fills Tab 3 immediately.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | CUST_ID | id | `CUST-0001`; shown in Order Punch dropdown ✅ |

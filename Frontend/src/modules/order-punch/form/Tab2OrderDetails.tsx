@@ -10,6 +10,7 @@ import {
   listGoods,
   listBillingStrategies,
   listDropdowns,
+  getCustomerDetail,
   dropdownValues,
   customersToOptions,
   goodsToOptions,
@@ -32,6 +33,34 @@ export function Tab2OrderDetails({ form, update }: Props) {
     queryFn: listCustomers,
   });
   const customerOptions = customersToOptions(customers);
+
+  async function selectExistingCustomer(custId: string, customerName: string) {
+    const selectedCustomer = customers.find((customer) => customer["CUST ID"] === custId);
+    update({
+      custId,
+      customerName,
+      billingAddress: selectedCustomer?.["BILLING ADDRESS"] || "",
+      billingState: selectedCustomer?.["Billing STATE"] || "",
+      billingPincode: selectedCustomer?.["Billing PIN CODE"] || "",
+      billingCountry: selectedCustomer?.["Billing Contry"] || "India",
+    });
+    if (!custId) return;
+    try {
+      const detail = await getCustomerDetail(custId);
+      const billing = detail.addresses.find((address) => address["Address Type"] === "Billing") ?? detail.addresses[0];
+      if (!billing) return;
+      update({
+        custId,
+        customerName,
+        billingAddress: billing["Full Address"] || billing["Address Line 1"] || "",
+        billingState: billing.State || "",
+        billingPincode: billing["Pin Code"] || "",
+        billingCountry: billing.Country || "India",
+      });
+    } catch {
+      // Step 3 retains its existing retry/fallback lookup if the first request is unavailable.
+    }
+  }
 
   function updateItem(index: number, patch: Partial<ItemFormState>) {
     const items = form.items.slice();
@@ -89,9 +118,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
         <SearchableSelect
           label="Customer ID"
           value={form.custId}
-          onChange={(_v, option) =>
-            update({ custId: option?.value ?? "", customerName: option?.label ?? "" })
-          }
+          onChange={(_v, option) => selectExistingCustomer(option?.value ?? "", option?.label ?? "")}
           options={customerOptions}
           loading={customersLoading}
           placeholder="Search customer…"

@@ -5,6 +5,10 @@ export interface CustomerRow {
   "CUST ID": string;
   "CUSTOMER NAME": string;
   "Company GSTIN NO.": string;
+  "BILLING ADDRESS": string;
+  "Billing STATE": string;
+  "Billing PIN CODE": string;
+  "Billing Contry": string;
   [key: string]: string;
 }
 
