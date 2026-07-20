@@ -114,6 +114,7 @@ export function OrderItemsView() {
                     padding: "10px 14px",
                     paddingLeft: i === 0 ? 24 : 14,
                     borderBottom: "1px solid var(--color-border)",
+                    borderRight: i === COLUMNS.length - 1 ? "none" : "1px solid var(--color-border)",
                     position: "relative",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
