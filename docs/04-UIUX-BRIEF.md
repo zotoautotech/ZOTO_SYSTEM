@@ -95,5 +95,12 @@ The **Punch Order list page** (`Frontend/src/modules/order-punch/OrderPunchList.
 - **Table scroll**: whole list area (`filter panel + divider + table`) is wrapped in a flex column with `minHeight: calc(100vh - 128px)`, and the table's own scroll container (`DataTable.tsx`, class `sheet-scroll`) stretches `height: 100%` so its horizontal scrollbar sits pinned at the very bottom of the viewport, not immediately under the last row.
 - **Custom scrollbar look**: `.sheet-scroll` class in `theme/tokens.css` gives a thick (12px), rounded, gray spreadsheet-style scrollbar. WebKit-only (Chrome/Edge); Firefox falls back to native thin scrollbar — acceptable since the team tests in Chrome.
 - Applied consistently to: Punch Order list, Order Detail's Parts table, Order Items View table (all three use `sheet-scroll`).
+- **Drag-resizable dividers** (2026-07-20 addendum): both structural dividers are draggable, matching the legacy app.
+  - **Sidebar rail ↔ content** (`Layout.tsx`): the 1px border right of the icon rail is a 5px-wide invisible drag handle (`cursor: col-resize`). Drag to resize the rail 160–320px (default 208px = `--rail-width`); double-click resets. Only active when the sidebar is expanded (disabled while `collapsed`).
+  - **Customer filter panel ↔ table** (`OrderPunchList.tsx` + `CustomerFilterPanel.tsx`): same drag-handle pattern, resizes the filter column 160–480px (default 260px); double-click resets. `CustomerFilterPanel` takes an optional `width` prop that overrides the `--filter-width` CSS var default.
+  - Both use the same implementation shape: a `useRef` drag-state (`{ startX, startWidth }`), `window` `mousemove`/`mouseup` listeners added on `mousedown` and torn down on `mouseup`, `document.body.style.cursor = "col-resize"` while dragging. Copy this pattern for any other resizable split (e.g. a future Order Items View filter column) rather than reinventing it.
 
 **When building/fixing any other page**: match this file's tokens and structure first; only diverge with an explicit user instruction to do otherwise.
+
+---
+*This file is kept in sync with the live UI by the assistant on every relevant change — no need to ask before updating it.*
