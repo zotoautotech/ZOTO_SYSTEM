@@ -77,12 +77,13 @@ export function Login() {
           flex: 1,
           display: "flex",
           alignItems: isCompact ? "flex-start" : "center",
+          alignContent: isCompact ? "flex-start" : undefined,
           flexWrap: isCompact ? "wrap" : "nowrap",
           position: "relative",
           maxWidth: 1180,
           width: "100%",
           margin: "0 auto",
-          padding: isMobile ? "54px 34px 28px" : isCompact ? "32px 20px" : undefined,
+          padding: isMobile ? "118px 34px 28px" : isCompact ? "32px 20px" : undefined,
         }}
       >
         <div
