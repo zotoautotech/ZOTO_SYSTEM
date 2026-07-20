@@ -54,30 +54,8 @@ export function OrderItemsView() {
   ];
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <button
-          onClick={() => navigate(`/modules/punch-order/${orderId}`)}
-          aria-label="Back"
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            border: "1px solid var(--color-border)",
-            background: "var(--color-bg)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 15,
-            flexShrink: 0,
-          }}
-        >
-          ‹
-        </button>
-        <h2 style={{ fontWeight: 500, margin: 0 }}>Order Punch Items View</h2>
-      </div>
-
-      <div className="card sheet-scroll" style={{ overflowX: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 128px)" }}>
+      <div className="card sheet-scroll" style={{ flex: 1, overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
           <thead>
             <tr>
