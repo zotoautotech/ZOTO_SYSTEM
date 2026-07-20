@@ -21,7 +21,7 @@
 
 ### 1.1 `CUSTOMER_MASTER`
 
-Order Punch loads each selectable customer's billing address, state, PIN code and country directly from `CUSTOMER MASTER T1`; selecting the customer fills Tab 3 immediately.
+Order Punch loads each selectable customer's billing address, state, PIN code and country directly from `CUSTOMER MASTER T1`; selecting the customer fills Tab 3 immediately. Legacy address/contact tabs are optional and never block the T1 lookup.
 
 | Column | Type | Notes |
 |--------|------|-------|

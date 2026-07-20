@@ -57,10 +57,10 @@ mastersRouter.get("/customers", async (req, res, next) => {
 mastersRouter.get("/customers/:custId", async (req, res, next) => {
   try {
     const { custId } = req.params;
-    const [customers, addresses, contacts] = await Promise.all([
-      readTable(env.sheets.customerBilling, CUSTOMER_TAB, { headerRow: CUSTOMER_HEADER_ROW }),
-      readTable(env.sheets.customerBilling, "Customer Addresses"),
-      readTable(env.sheets.customerBilling, "Customer Contacts"),
+    const customers = await readTable(env.sheets.customerBilling, CUSTOMER_TAB, { headerRow: CUSTOMER_HEADER_ROW });
+    const [addresses, contacts] = await Promise.all([
+      readTable(env.sheets.customerBilling, "Customer Addresses").catch(() => []),
+      readTable(env.sheets.customerBilling, "Customer Contacts").catch(() => []),
     ]);
 
     const customer = customers.find((c) => c["CUST ID"] === custId);
@@ -72,16 +72,25 @@ mastersRouter.get("/customers/:custId", async (req, res, next) => {
     // through this app. For T1's legacy customers, fall back to the billing columns already
     // present on their own row so the Billing Address tab can still auto-fill.
     let matchedAddresses = addresses.filter((a) => a["Customer ID"] === custId);
-    if (matchedAddresses.length === 0 && customer["BILLING ADDRESS"]) {
+    const customerValue = (...keys: string[]) => {
+      const normalized = new Map(Object.entries(customer).map(([key, value]) => [key.replace(/[^a-z0-9]/gi, "").toLowerCase(), value]));
+      for (const key of keys) {
+        const value = normalized.get(key.replace(/[^a-z0-9]/gi, "").toLowerCase());
+        if (value) return value;
+      }
+      return "";
+    };
+    const legacyBillingAddress = customerValue("BILLING ADDRESS", "BILLING ADDRESS LINE 1", "Billing Address");
+    if (matchedAddresses.length === 0 && legacyBillingAddress) {
       matchedAddresses = [
         {
           "Customer ID": custId,
           "Address Type": "Billing",
-          "Full Address": customer["BILLING ADDRESS"] || "",
-          "Address Line 1": customer["BILLING ADDRESS"] || "",
-          State: customer["Billing STATE"] || "",
-          "Pin Code": customer["Billing PIN CODE"] || "",
-          Country: customer["Billing Contry"] || "India",
+          "Full Address": legacyBillingAddress,
+          "Address Line 1": legacyBillingAddress,
+          State: customerValue("Billing STATE", "Billing State", "BILLING STATE"),
+          "Pin Code": customerValue("Billing PIN CODE", "Billing Pin Code", "BILLING PINCODE"),
+          Country: customerValue("Billing Contry", "Billing Country", "BILLING COUNTRY") || "India",
         },
       ];
     }
