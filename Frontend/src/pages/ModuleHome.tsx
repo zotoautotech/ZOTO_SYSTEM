@@ -2,11 +2,18 @@ import { MODULES } from "../lib/modules";
 import { NavCard } from "../components/Layout";
 import { useSearch } from "../lib/search";
 import { useSetHeaderActions } from "../lib/headerActions";
+import { useAuth } from "../lib/auth";
 
 export function ModuleHome() {
   const { query } = useSearch();
+  const { user } = useAuth();
 
-  const filtered = MODULES.filter((m) => m.label.toLowerCase().includes(query.trim().toLowerCase()));
+  // Blank/missing MODULES claim defaults to "ALL" (see Backend/src/routes/auth.ts) so
+  // nobody is locked out until an admin deliberately restricts their USERS sheet row.
+  const allowedModules = user?.modules ?? "ALL";
+  const visible =
+    allowedModules === "ALL" ? MODULES : MODULES.filter((m) => allowedModules.includes(m.key));
+  const filtered = visible.filter((m) => m.label.toLowerCase().includes(query.trim().toLowerCase()));
 
   useSetHeaderActions(
     <button

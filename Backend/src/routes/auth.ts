@@ -34,7 +34,13 @@ authRouter.post("/login", async (req, res, next) => {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Incorrect password" } });
     }
 
-    const payload = { email: user.EMAIL, name: user.NAME, role: user.ROLE };
+    const payload = {
+      email: user.EMAIL,
+      name: user.NAME,
+      role: user.ROLE,
+      modules: parseModules(user.MODULES),
+      canDelete: parseBool(user.CAN_DELETE),
+    };
     const token = jwt.sign(payload, env.jwtSecret, { expiresIn: "7d" });
 
     res.json({ token, user: payload });
@@ -110,6 +116,26 @@ authRouter.post("/set-password", async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * USERS.MODULES: comma-separated module keys (e.g. "punch-order,sale-order"), or
+ * blank/"ALL" for unrestricted access — blank defaults to ALL so existing rows
+ * aren't locked out until an admin deliberately restricts them.
+ */
+function parseModules(raw: string | undefined): string[] | "ALL" {
+  const value = (raw ?? "").trim();
+  if (!value || value.toUpperCase() === "ALL") return "ALL";
+  return value
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+/** USERS.CAN_DELETE: "Yes"/"TRUE"/"1" grants it; blank or anything else defaults to false. */
+function parseBool(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "yes" || value === "true" || value === "1";
+}
 
 function columnLetter(index: number): string {
   let n = index;

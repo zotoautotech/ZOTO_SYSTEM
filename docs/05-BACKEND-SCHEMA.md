@@ -75,6 +75,11 @@
 | NAME | text |
 | ROLE | enum SALES_OPS / SALES_MANAGER / QUALITY / LOGISTICS / ACCOUNTS / ADMIN |
 | ACTIVE | bool |
+| PASSWORD | text — plain text, internal MVP only. Login rejects a row until this is set (`Backend/src/routes/auth.ts`). |
+| MODULES | text — comma-separated module keys this doer can see (e.g. `punch-order,sale-order`, matching `Frontend/src/lib/modules.ts` `key`s). **Blank or `ALL` = unrestricted** (fail-open default, so existing rows aren't locked out). Read into the JWT at login (`modules: string[] \| "ALL"`), enforced server-side by `requireModule()` on `ordersRouter` and filtered client-side on the Module Home grid (`ModuleHome.tsx`). |
+| CAN_DELETE | text — `Yes`/`TRUE`/`1` grants permission to bulk-delete orders via the Punch Order list's Select mode; **blank/anything else = no delete access** (fail-closed default, since this guards an irreversible action). Enforced server-side by `requireCanDelete` on `DELETE /orders` (`Backend/src/routes/orders.ts`) and gates whether the "Select" button even renders client-side. |
+
+**Admin note (2026-07-20):** MODULES/CAN_DELETE are managed directly in this sheet, not through an in-app admin UI, per explicit user decision — add/edit these two columns per doer row as needed. A user must log out and back in for a sheet change to these two columns to take effect (the values are baked into their JWT at login, not re-checked live).
 
 ### 1.6 `COUNTERS`
 `COUNTER_KEY | LAST_VALUE` — API-managed ID sequences (e.g., `ORD-202607 → 27`).

@@ -3,14 +3,19 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 interface HeaderActionsContextValue {
   actions: ReactNode;
   setActions: (node: ReactNode) => void;
+  left: ReactNode;
+  setLeft: (node: ReactNode) => void;
 }
 
 const HeaderActionsContext = createContext<HeaderActionsContextValue | null>(null);
 
 export function HeaderActionsProvider({ children }: { children: ReactNode }) {
   const [actions, setActions] = useState<ReactNode>(null);
+  const [left, setLeft] = useState<ReactNode>(null);
   return (
-    <HeaderActionsContext.Provider value={{ actions, setActions }}>{children}</HeaderActionsContext.Provider>
+    <HeaderActionsContext.Provider value={{ actions, setActions, left, setLeft }}>
+      {children}
+    </HeaderActionsContext.Provider>
   );
 }
 
@@ -26,6 +31,16 @@ export function useSetHeaderActions(node: ReactNode) {
   useEffect(() => {
     setActions(node);
     return () => setActions(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node]);
+}
+
+/** Page-local hook: replaces the top-left breadcrumb trail with `node` while mounted and truthy. */
+export function useSetHeaderLeft(node: ReactNode) {
+  const { setLeft } = useHeaderActions();
+  useEffect(() => {
+    setLeft(node);
+    return () => setLeft(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node]);
 }

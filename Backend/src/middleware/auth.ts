@@ -6,6 +6,8 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+  modules: string[] | "ALL";
+  canDelete: boolean;
 }
 
 declare global {
@@ -42,4 +44,36 @@ export function requireRole(...roles: string[]) {
     }
     next();
   };
+}
+
+/**
+ * Gates a route by USERS.MODULES. Tokens issued before this claim existed have
+ * `modules === undefined` — treated as "ALL" (fail open) so already-logged-in users
+ * aren't locked out until their 7-day token naturally expires and they log in again.
+ */
+export function requireModule(moduleKey: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
+    }
+    const modules = req.user.modules ?? "ALL";
+    if (modules !== "ALL" && !modules.includes(moduleKey)) {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "No access to this module" } });
+    }
+    next();
+  };
+}
+
+/**
+ * Gates a destructive route by USERS.CAN_DELETE. Unlike requireModule, this fails
+ * closed (missing claim = no delete access) since it guards an irreversible action.
+ */
+export function requireCanDelete(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
+  }
+  if (!req.user.canDelete) {
+    return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not permitted to delete orders" } });
+  }
+  next();
 }

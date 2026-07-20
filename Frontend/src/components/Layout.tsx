@@ -121,7 +121,7 @@ export function Layout() {
   const { theme, toggleTheme } = useTheme();
   const { query, setQuery } = useSearch();
   const { lastSyncAt, sync } = useSync();
-  const { actions } = useHeaderActions();
+  const { actions, left: headerLeft } = useHeaderActions();
   const isFetching = useIsFetching() > 0;
   const location = useLocation();
   const navigate = useNavigate();
@@ -731,29 +731,31 @@ export function Layout() {
             borderBottom: "1px solid var(--color-border)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-            {crumbs.map((crumb, i) => {
-              const isLast = i === crumbs.length - 1;
-              return (
-                <span key={crumb.to} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {isLast ? (
-                    <span style={{ color: "var(--color-text)", fontWeight: 700, textTransform: "capitalize" }}>
-                      {crumb.label}
-                    </span>
-                  ) : (
-                    <Link
-                      to={crumb.to}
-                      className="text-muted"
-                      style={{ textDecoration: "none", textTransform: "capitalize" }}
-                    >
-                      {crumb.label}
-                    </Link>
-                  )}
-                  {!isLast && <span className="text-muted">›</span>}
-                </span>
-              );
-            })}
-          </div>
+          {headerLeft ?? (
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+              {crumbs.map((crumb, i) => {
+                const isLast = i === crumbs.length - 1;
+                return (
+                  <span key={crumb.to} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {isLast ? (
+                      <span style={{ color: "var(--color-text)", fontWeight: 700, textTransform: "capitalize" }}>
+                        {crumb.label}
+                      </span>
+                    ) : (
+                      <Link
+                        to={crumb.to}
+                        className="text-muted"
+                        style={{ textDecoration: "none", textTransform: "capitalize" }}
+                      >
+                        {crumb.label}
+                      </Link>
+                    )}
+                    {!isLast && <span className="text-muted">›</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           {actions && <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>{actions}</div>}
         </div>
 

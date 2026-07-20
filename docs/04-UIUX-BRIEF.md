@@ -104,6 +104,12 @@ The **Punch Order list page** (`Frontend/src/modules/order-punch/OrderPunchList.
   - **Per-column drag-resize**: `OrderItemsView.tsx` extends the same drag pattern to individual table columns, spreadsheet-style. `table-layout: fixed` + `<colgroup>` driven by a `colWidths` state array (defaults in the `COLUMNS` const, e.g. Part No. 120px, Part Name 220px). Each `<th>` has an invisible 6px drag handle on its right edge; double-click resets that column to its default width. Cell text gets `overflow: hidden; text-overflow: ellipsis` so a narrowed column truncates instead of breaking layout.
 - **Header-only vertical dividers apply to every parts table, not just Order Items View**: `OrderDetail.tsx`'s inline "Order Punch Parts" card table uses the same `borderRight: 1px solid var(--color-border)` on every `<th>` except the last (body `<td>` stays borderBottom-only). Any other card-embedded data table added later should follow this same header-divider rule for consistency.
 
+- **Select mode + bulk delete** (2026-07-20 addendum, `OrderPunchList.tsx`): the "Select" header-action icon button (previously a no-op placeholder) is now only rendered for users with the `CAN_DELETE` permission (see `docs/05-BACKEND-SCHEMA.md` §1.5), and clicking it enters select mode:
+  - The breadcrumb trail's left slot is swapped for `✕ {N} Selected` via a new `useSetHeaderLeft()` hook (mirrors `useSetHeaderActions()`, same `lib/headerActions.tsx` context) — the `✕` exits select mode and clears the selection.
+  - The right-side action button group swaps to a single red "Delete" button (disabled until at least one row is checked).
+  - `DataTable.tsx` gained a `selectable`/`getRowKey`/`selectedKeys`/`onToggleRow` prop set: a checkbox column appears, row clicks toggle selection instead of navigating, and checked rows get a `--color-primary-tint` background. This is a generic addition — any other list page can opt into the same select-mode pattern by wiring the same props plus a `useSetHeaderLeft`/`useSetHeaderActions` pair, rather than reinventing it.
+  - Delete itself opens a confirm `Modal` ("Delete N orders? … can't be undone") before calling the backend; see §1.5 in the schema doc and `Backend/src/routes/orders.ts`'s `DELETE /orders` for the actual cascade-delete logic.
+
 **When building/fixing any other page**: match this file's tokens and structure first; only diverge with an explicit user instruction to do otherwise.
 
 ## 8. Mobile/Responsive Pass (Locked Additive Layer — 2026-07-20)

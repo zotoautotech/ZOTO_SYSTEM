@@ -1,23 +1,54 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { listOrders, type OrderRecord } from "../../lib/ordersApi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { deleteOrders, listOrders, type OrderRecord } from "../../lib/ordersApi";
 import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
+import { Modal } from "../../components/Modal";
 import { formatTimestamp } from "../../lib/format";
 import { useSearch } from "../../lib/search";
-import { useSetHeaderActions } from "../../lib/headerActions";
+import { useSetHeaderActions, useSetHeaderLeft } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
+import { useAuth } from "../../lib/auth";
 
 export function OrderPunchList() {
   const navigate = useNavigate();
   const { query } = useSearch();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const canDelete = user?.canDelete ?? false;
+  const queryClient = useQueryClient();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
   const [filterWidth, setFilterWidth] = useState(260);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteOrders(Array.from(selectedIds)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      setConfirmingDelete(false);
+      exitSelectMode();
+    },
+  });
 
   const onDividerMouseMove = useCallback((e: MouseEvent) => {
     if (!dragState.current) return;
@@ -87,73 +118,123 @@ export function OrderPunchList() {
     { key: "total", header: "Total Amount", render: (o) => `₹${Number(o.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}` },
   ];
 
+  useSetHeaderLeft(
+    selectMode ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={exitSelectMode}
+          aria-label="Cancel selection"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 15,
+          }}
+        >
+          ✕
+        </button>
+        <span style={{ fontWeight: 700 }}>{selectedIds.size} Selected</span>
+      </div>
+    ) : null
+  );
+
   useSetHeaderActions(
-    <>
+    selectMode ? (
       <button
-        aria-label="New"
-        onClick={() => navigate("/modules/punch-order/new")}
+        className="btn"
+        onClick={() => setConfirmingDelete(true)}
+        disabled={selectedIds.size === 0}
         style={{
-          width: 38,
-          height: 38,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-          background: "var(--color-bg)",
-          color: "var(--color-primary)",
-          fontSize: 18,
-          fontWeight: 600,
+          gap: 6,
+          background: "var(--color-error)",
+          color: "#fff",
+          border: "none",
+          opacity: selectedIds.size === 0 ? 0.5 : 1,
         }}
       >
-        +
-      </button>
-      <button
-        className="btn btn-primary"
-        onClick={() => setShowCompleted((s) => !s)}
-        style={{ display: "flex", alignItems: "center", gap: 6 }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-          <path d="M20 6 9 17l-5-5" />
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" />
         </svg>
-        {showCompleted ? "Showing Completed" : "Completed…"}
+        Delete
       </button>
-      <button
-        aria-label="Filter"
-        style={{
-          width: 38,
-          height: 38,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-          background: "var(--color-bg)",
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M4 5h16M7 12h10M10 19h4" />
-        </svg>
-      </button>
-      <button
-        aria-label="Select"
-        style={{
-          width: 38,
-          height: 38,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-          background: "var(--color-bg)",
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="4" y="4" width="16" height="16" rx="3" />
-          <path d="m8.5 12 2.5 2.5 4.5-5" />
-        </svg>
-      </button>
-    </>
+    ) : (
+      <>
+        <button
+          aria-label="New"
+          onClick={() => navigate("/modules/punch-order/new")}
+          style={{
+            width: 38,
+            height: 38,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid var(--color-border)",
+            borderRadius: 8,
+            background: "var(--color-bg)",
+            color: "var(--color-primary)",
+            fontSize: 18,
+            fontWeight: 600,
+          }}
+        >
+          +
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={() => setShowCompleted((s) => !s)}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          {showCompleted ? "Showing Completed" : "Completed…"}
+        </button>
+        <button
+          aria-label="Filter"
+          style={{
+            width: 38,
+            height: 38,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid var(--color-border)",
+            borderRadius: 8,
+            background: "var(--color-bg)",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M4 5h16M7 12h10M10 19h4" />
+          </svg>
+        </button>
+        {canDelete && (
+          <button
+            aria-label="Select"
+            onClick={() => setSelectMode(true)}
+            style={{
+              width: 38,
+              height: 38,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              background: "var(--color-bg)",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="4" y="4" width="16" height="16" rx="3" />
+              <path d="m8.5 12 2.5 2.5 4.5-5" />
+            </svg>
+          </button>
+        )}
+      </>
+    )
   );
 
   return (
@@ -197,9 +278,40 @@ export function OrderPunchList() {
             rows={filtered}
             onRowClick={(o) => navigate(`/modules/punch-order/${o.ORDER_ID}`)}
             emptyMessage={isLoading ? "Loading…" : q ? `No orders match "${query}"` : "No records"}
+            selectable={selectMode}
+            getRowKey={(o) => o.ORDER_ID}
+            selectedKeys={selectedIds}
+            onToggleRow={toggleRow}
           />
         </div>
       </div>
+
+      {confirmingDelete && (
+        <Modal title="Delete orders" onClose={() => setConfirmingDelete(false)}>
+          <p style={{ marginTop: 0 }}>
+            Delete {selectedIds.size} order{selectedIds.size === 1 ? "" : "s"}? This permanently removes the
+            order{selectedIds.size === 1 ? "" : "s"} and their line items — this can't be undone.
+          </p>
+          {deleteMutation.isError && (
+            <div className="error-banner" style={{ marginBottom: 16 }}>
+              ⚠ Could not delete — try again
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button className="btn" onClick={() => setConfirmingDelete(false)} disabled={deleteMutation.isPending}>
+              Cancel
+            </button>
+            <button
+              className="btn"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              style={{ background: "var(--color-error)", color: "#fff", border: "none" }}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

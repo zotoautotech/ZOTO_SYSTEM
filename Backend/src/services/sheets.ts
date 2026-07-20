@@ -127,6 +127,56 @@ export async function updateRow(
   cache.delete(cacheKey(spreadsheetId, tab, 1));
 }
 
+/** Deletes every row whose idColumn value is in idValues. Returns how many rows were removed. */
+export async function deleteRows(
+  spreadsheetId: string,
+  tab: string,
+  idColumn: string,
+  idValues: string[]
+): Promise<number> {
+  if (idValues.length === 0) return 0;
+  const idSet = new Set(idValues);
+  const sheets = await getSheetsClient();
+
+  const [valuesRes, metaRes] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A1:ZZ` }),
+    sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties" }),
+  ]);
+
+  const rows = valuesRes.data.values ?? [];
+  if (rows.length === 0) return 0;
+
+  const headers = rows[0].map((h) => String(h ?? "").trim());
+  const idColIndex = headers.indexOf(idColumn);
+  if (idColIndex === -1) throw new Error(`Column "${idColumn}" not found in tab "${tab}"`);
+
+  const sheetId = metaRes.data.sheets?.find((s) => s.properties?.title === tab)?.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) throw new Error(`Tab "${tab}" not found`);
+
+  // 0-indexed sheet row numbers (matches the Sheets API's deleteDimension range), descending
+  // so deleting one row doesn't shift the index of the next one still to be deleted.
+  const rowIndices = rows
+    .map((r, i) => (i > 0 && idSet.has(r[idColIndex]) ? i : -1))
+    .filter((i) => i !== -1)
+    .sort((a, b) => b - a);
+
+  if (rowIndices.length === 0) return 0;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: rowIndices.map((rowIndex) => ({
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowIndex, endIndex: rowIndex + 1 },
+        },
+      })),
+    },
+  });
+
+  cache.delete(cacheKey(spreadsheetId, tab, 1));
+  return rowIndices.length;
+}
+
 export function clearCache() {
   cache.clear();
 }

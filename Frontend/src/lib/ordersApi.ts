@@ -46,6 +46,11 @@ export async function getOrder(orderId: string) {
   return res.data;
 }
 
+export async function deleteOrders(orderIds: string[]) {
+  const res = await api.delete<{ deleted: number }>("/orders", { data: { orderIds } });
+  return res.data;
+}
+
 export async function getLatestOrderForCustomer(custId: string) {
   try {
     const res = await api.get<OrderRecord>("/orders/latest", { params: { custId } });

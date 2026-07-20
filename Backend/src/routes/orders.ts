@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, readTable, updateRow, type SheetRow } from "../services/sheets.js";
+import { appendRow, deleteRows, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId } from "../services/ids.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
+ordersRouter.use(requireModule("punch-order"));
 
 // Nothing on Order Punch is mandatory (removed at the user's request so the team can
 // punch partial orders and fill gaps in later) — every field here is optional/defaulted.
@@ -125,6 +126,21 @@ ordersRouter.get("/:id", async (req, res, next) => {
       items: items.filter((i) => i.ORDER_ID === req.params.id),
       dispatchPlan: dispatchPlan.filter((d) => d.ORDER_ID === req.params.id),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const deleteOrdersSchema = z.object({ orderIds: z.array(z.string().min(1)).min(1) });
+
+/** Permanently deletes the given orders and their line items / dispatch plan rows. */
+ordersRouter.delete("/", requireCanDelete, async (req, res, next) => {
+  try {
+    const { orderIds } = deleteOrdersSchema.parse(req.body);
+    await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", orderIds);
+    await deleteRows(env.sheets.transactions, "DISPATCH_PLAN", "ORDER_ID", orderIds);
+    const deleted = await deleteRows(env.sheets.transactions, "ORDERS", "ORDER_ID", orderIds);
+    res.json({ deleted });
   } catch (err) {
     next(err);
   }

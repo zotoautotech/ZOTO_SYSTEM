@@ -5,6 +5,8 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+  modules: string[] | "ALL";
+  canDelete: boolean;
 }
 
 interface AuthContextValue {
