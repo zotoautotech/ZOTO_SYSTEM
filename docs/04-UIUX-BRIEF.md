@@ -114,6 +114,10 @@ The **Punch Order list page** (`Frontend/src/modules/order-punch/OrderPunchList.
 
 ## 8. Mobile/Responsive Pass (Locked Additive Layer — 2026-07-20)
 
+### Header naming
+
+- On the Home route (`/`), the header breadcrumb and search placeholder use **HOME**. Sales CRR remains the label only for Sales CRR routes.
+
 The whole app (11 routed pages behind `Layout`, plus the standalone `Login`/`Privacy`/`Terms` pages) went from desktop-only (zero `@media` queries anywhere in `src`, several hard-coded fixed pixel widths) to responsive across phone/tablet, **without changing desktop rendering at all**. This section is additive on top of everything above — §1–§7 describe the ≥1024px experience, which remains byte-identical; this section describes what happens below that.
 
 ### Breakpoints
@@ -135,6 +139,7 @@ Defined once in `Frontend/src/lib/responsive.ts` (`useMediaQuery`, `useIsCompact
 - **Order Punch phone list:** use full-width tap cards, not a clipped horizontal spreadsheet. Each card shows status, timestamp, customer, order ID and PO number; Select mode taps select cards for deletion. Desktop retains the full table.
 - **Order Punch form on phones:** use `100dvh` and a protected top header gap so the title and close button never hide behind browser chrome.
 - **Order Punch form footer on phones:** reserve a 34px bottom safe area and add bottom padding to the action bar. Cancel, Prev and Next/Save remain completely above Android browser navigation; the fields area scrolls independently.
+- **Customer selection:** selecting an existing customer immediately fetches and fills Billing Address, State, PIN and Country from Customer Master. Step 3 keeps a fallback lookup, so the data remains resilient if the initial request is delayed.
 - **`OrderItemsView.tsx`**: the full-bleed `margin:"0 -24px"` / first-column `paddingLeft:24` trick is coupled to `Layout.tsx`'s `main` padding value — tracks it exactly (`isCompact ? "0 -12px" : "0 -24px"`, `paddingLeft: isCompact ? 12 : 24`) so the cancellation math stays correct at every breakpoint, not just desktop. Per-column drag-resize handles are simply not rendered on `isMobile` — columns keep their `COLUMNS`-authored default widths, reachable via the existing (now touch-scrollable, see below) horizontal `sheet-scroll` wrapper. No card/list reflow redesign attempted; a 16-column spreadsheet stays a scrollable spreadsheet on phones too, per the "usable, not redesigned" scope for this pass.
 - **`theme/tokens.css`**: `.sheet-scroll` gained `-webkit-overflow-scrolling: touch` for iOS momentum scrolling on every table that uses the class.
 - **`ModuleHome.tsx` / `Settings.tsx`**: needed zero code changes — `ModuleHome`'s `repeat(auto-fill, minmax(220px,1fr))` grid already auto-reflows to one column below ~460px, and `Settings`'s `maxWidth:680` + already-`flexWrap:"wrap"` header row already worked. Verified only, not touched.

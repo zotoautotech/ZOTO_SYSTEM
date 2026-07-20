@@ -185,7 +185,8 @@ export function Layout() {
   // isn't shown twice. Every crumb but the current page is a clickable link, so
   // you can jump back to any step — not just the immediate parent.
   const pathSegments = location.pathname.split("/").filter(Boolean);
-  const crumbs: { label: string; to: string }[] = [{ label: "SALES CRR", to: "/modules" }];
+  const crumbs: { label: string; to: string }[] =
+    location.pathname === "/" ? [{ label: "HOME", to: "/" }] : [{ label: "SALES CRR", to: "/modules" }];
   pathSegments.forEach((seg, i) => {
     if (seg === "modules") return;
     crumbs.push({
