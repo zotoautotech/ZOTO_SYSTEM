@@ -4,6 +4,8 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { readTable, clearCache } from "../services/sheets.js";
 import { getSheetsClient } from "../services/googleAuth.js";
+import { getPermissions, parseBool, parseModules } from "../services/permissions.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export const authRouter = Router();
 
@@ -118,24 +120,27 @@ authRouter.post("/set-password", async (req, res, next) => {
 });
 
 /**
- * USERS.MODULES: comma-separated module keys (e.g. "punch-order,sale-order"), or
- * blank/"ALL" for unrestricted access — blank defaults to ALL so existing rows
- * aren't locked out until an admin deliberately restricts them.
+ * Live permission refresh, AppSheet-style: the frontend polls this so an admin
+ * editing MODULES/CAN_DELETE (or flipping ACTIVE) in the USERS sheet takes effect
+ * within seconds for already-logged-in users — no re-login needed.
  */
-function parseModules(raw: string | undefined): string[] | "ALL" {
-  const value = (raw ?? "").trim();
-  if (!value || value.toUpperCase() === "ALL") return "ALL";
-  return value
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-}
-
-/** USERS.CAN_DELETE: "Yes"/"TRUE"/"1" grants it; blank or anything else defaults to false. */
-function parseBool(raw: string | undefined): boolean {
-  const value = (raw ?? "").trim().toLowerCase();
-  return value === "yes" || value === "true" || value === "1";
-}
+authRouter.get("/me", requireAuth, async (req, res, next) => {
+  try {
+    const perms = await getPermissions(req.user!.email);
+    if (!perms) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
+    }
+    res.json({
+      email: req.user!.email,
+      name: req.user!.name,
+      role: req.user!.role,
+      modules: perms.modules,
+      canDelete: perms.canDelete,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 function columnLetter(index: number): string {
   let n = index;

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
+import { getPermissions } from "../services/permissions.js";
 
 export interface AuthUser {
   email: string;
@@ -47,33 +48,49 @@ export function requireRole(...roles: string[]) {
 }
 
 /**
- * Gates a route by USERS.MODULES. Tokens issued before this claim existed have
- * `modules === undefined` — treated as "ALL" (fail open) so already-logged-in users
- * aren't locked out until their 7-day token naturally expires and they log in again.
+ * Gates a route by USERS.MODULES, AppSheet-style: permissions are read LIVE from
+ * the sheet (15s cache) on every request rather than trusted from the JWT, so an
+ * admin editing the MODULES cell takes effect within seconds — no re-login needed.
+ * A missing/inactive USERS row means access was revoked entirely.
  */
 export function requireModule(moduleKey: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
     }
-    const modules = req.user.modules ?? "ALL";
-    if (modules !== "ALL" && !modules.includes(moduleKey)) {
-      return res.status(403).json({ error: { code: "FORBIDDEN", message: "No access to this module" } });
+    try {
+      const perms = await getPermissions(req.user.email);
+      if (!perms) {
+        return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
+      }
+      if (perms.modules !== "ALL" && !perms.modules.includes(moduleKey)) {
+        return res.status(403).json({ error: { code: "FORBIDDEN", message: "No access to this module" } });
+      }
+      // Refresh req.user with the live values so downstream handlers see current permissions.
+      req.user = { ...req.user, ...perms };
+      next();
+    } catch (err) {
+      next(err);
     }
-    next();
   };
 }
 
 /**
- * Gates a destructive route by USERS.CAN_DELETE. Unlike requireModule, this fails
- * closed (missing claim = no delete access) since it guards an irreversible action.
+ * Gates a destructive route by USERS.CAN_DELETE — also read live from the sheet.
+ * Fails closed (missing row/blank cell = no delete access) since it guards an
+ * irreversible action.
  */
-export function requireCanDelete(req: Request, res: Response, next: NextFunction) {
+export async function requireCanDelete(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
   }
-  if (!req.user.canDelete) {
-    return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not permitted to delete orders" } });
+  try {
+    const perms = await getPermissions(req.user.email);
+    if (!perms?.canDelete) {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not permitted to delete orders" } });
+    }
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 }
