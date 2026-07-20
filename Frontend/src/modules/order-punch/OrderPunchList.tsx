@@ -118,6 +118,29 @@ export function OrderPunchList() {
     { key: "total", header: "Total Amount", render: (o) => `₹${Number(o.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}` },
   ];
 
+  const mobileOrders = (
+    <div style={{ padding: "8px 0 24px" }}>
+      {filtered.map((order) => (
+        <button
+          key={order.ORDER_ID}
+          onClick={() => (selectMode ? toggleRow(order.ORDER_ID) : navigate(`/modules/punch-order/${order.ORDER_ID}`))}
+          style={{ width: "100%", textAlign: "left", display: "block", border: "1px solid var(--color-border)", borderRadius: 12, background: selectedIds.has(order.ORDER_ID) ? "var(--color-primary-tint)" : "var(--color-bg)", padding: "14px 16px", marginBottom: 10, color: "var(--color-text)" }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+            <StatusBadge status={order.STATUS} />
+            <span className="text-muted" style={{ fontSize: 12 }}>{formatTimestamp(order.CREATED_AT)}</span>
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginTop: 10 }}>{order.CUSTOMER_NAME || "Customer not set"}</div>
+          <div className="text-muted" style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 5, fontSize: 12 }}>
+            <span>{order.ORDER_ID}</span><span>{order.PO_NO || "No PO number"}</span>
+          </div>
+        </button>
+      ))}
+      {!isLoading && filtered.length === 0 && <div className="text-muted" style={{ padding: "22px 4px" }}>No records</div>}
+      {isLoading && <div className="text-muted" style={{ padding: "22px 4px" }}>Loading…</div>}
+    </div>
+  );
+
   useSetHeaderLeft(
     selectMode ? (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -273,7 +296,7 @@ export function OrderPunchList() {
           </div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <DataTable
+          {isMobile ? mobileOrders : <DataTable
             columns={columns}
             rows={filtered}
             onRowClick={(o) => navigate(`/modules/punch-order/${o.ORDER_ID}`)}
@@ -282,7 +305,7 @@ export function OrderPunchList() {
             getRowKey={(o) => o.ORDER_ID}
             selectedKeys={selectedIds}
             onToggleRow={toggleRow}
-          />
+          />}
         </div>
       </div>
 

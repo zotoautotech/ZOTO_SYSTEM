@@ -124,8 +124,8 @@ export function OrderPunchForm() {
         className="card modal-in"
         style={{
           width: "min(880px, 100%)",
-          height: isMobile ? "100vh" : undefined,
-          maxHeight: isMobile ? "100vh" : "90vh",
+          height: isMobile ? "100dvh" : undefined,
+          maxHeight: isMobile ? "100dvh" : "90vh",
           background: "var(--color-bg)",
           borderRadius: isMobile ? 0 : 18,
           boxShadow: "var(--shadow-lg)",
@@ -140,7 +140,7 @@ export function OrderPunchForm() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "22px var(--space) 12px",
+            padding: isMobile ? "28px var(--space) 12px" : "22px var(--space) 12px",
           }}
         >
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Order Punch Form</h2>
