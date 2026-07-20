@@ -56,7 +56,6 @@ export function OrderItemsView() {
   const cell: React.CSSProperties = {
     padding: "10px 14px",
     borderBottom: "1px solid var(--color-border)",
-    borderRight: "1px solid var(--color-border)",
   };
 
   return (
@@ -80,7 +79,6 @@ export function OrderItemsView() {
                     padding: "10px 14px",
                     paddingLeft: i === 0 ? 24 : 14,
                     borderBottom: "1px solid var(--color-border)",
-                    borderRight: "1px solid var(--color-border)",
                   }}
                 >
                   {h}
@@ -114,7 +112,7 @@ export function OrderItemsView() {
                   <td style={cell}>{formatCurrency(it.BASIC_AMOUNT)}</td>
                   <td style={cell}>{formatCurrency(it.TAX_AMOUNT)}</td>
                   <td style={cell}>{formatCurrency(it.TOTAL_AMOUNT)}</td>
-                  <td style={{ ...cell, whiteSpace: "normal", borderRight: "none" }}>{it.NOTES}</td>
+                  <td style={{ ...cell, whiteSpace: "normal" }}>{it.NOTES}</td>
                 </tr>
               );
             })}
