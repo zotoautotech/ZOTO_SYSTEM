@@ -53,12 +53,14 @@ export function Login() {
     <div
       style={{
         minHeight: "100vh",
+        height: isMobile ? "100dvh" : undefined,
         width: "100vw",
         position: "relative",
         display: "flex",
         flexDirection: "column",
         background: "#fbfbfc",
         color: "#171717",
+        overflow: isMobile ? "hidden" : undefined,
       }}
     >
       {/* concentric ring background, matching the reference layout */}
