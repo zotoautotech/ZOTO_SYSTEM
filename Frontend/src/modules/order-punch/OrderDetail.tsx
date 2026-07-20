@@ -90,10 +90,15 @@ export function OrderDetail() {
                 "Tax Amount",
                 "Total Amount",
                 "Remarks",
-              ].map((h) => (
+              ].map((h, i, arr) => (
                 <th
                   key={h}
-                  style={{ textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    borderBottom: "1px solid var(--color-border)",
+                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--color-border)",
+                  }}
                 >
                   {h}
                 </th>
