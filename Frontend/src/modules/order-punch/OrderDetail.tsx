@@ -15,11 +15,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div className="text-muted" style={{ fontSize: 12 }}>
+    <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
         {label}
       </div>
-      <div style={{ fontSize: 14 }}>{value}</div>
+      <div style={{ fontSize: 14, flex: 1 }}>{value}</div>
     </div>
   );
 }
@@ -39,37 +39,138 @@ export function OrderDetail() {
 
   const { order, items } = data;
 
-  return (
-    <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+  const partsCard = (
+    <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Order Punch Parts</h3>
+          <span
+            style={{
+              background: "var(--color-bg-page)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 999,
+              padding: "1px 9px",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--color-text-muted)",
+            }}
+          >
+            {items.length}
+          </span>
+        </div>
         <button
-          onClick={() => navigate("/modules/punch-order")}
-          aria-label="Back"
+          onClick={() => navigate(`/modules/punch-order/${orderId}/items`)}
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            border: "1px solid var(--color-border)",
-            background: "var(--color-bg)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 15,
-            flexShrink: 0,
+            border: "none",
+            background: "none",
+            color: "var(--color-primary)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            padding: 4,
           }}
         >
-          ‹
+          Expand
         </button>
-        <div>
-          <h2 style={{ margin: 0, fontWeight: 500 }}>{order.ORDER_ID}</h2>
+      </div>
+
+      <div className="sheet-scroll" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
+          <thead>
+            <tr>
+              {[
+                "Part No.",
+                "Part Name",
+                "Segment",
+                "Category",
+                "Qty",
+                "UOM",
+                "Price",
+                "Basic Amount",
+                "Tax Amount",
+                "Total Amount",
+                "Remarks",
+              ].map((h) => (
+                <th
+                  key={h}
+                  style={{ textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr
+                key={it.ITEM_ID}
+                onClick={() => navigate(`/modules/punch-order/${orderId}/items/${it.ITEM_ID}`)}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.PART_NO}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)", fontWeight: 500 }}>
+                  {it.PART_NAME}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.SEGMENT}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.CATEGORY}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.QTY}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.UOM}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                  {formatCurrency(it.PRICE)}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                  {formatCurrency(it.BASIC_AMOUNT)}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                  {formatCurrency(it.TAX_AMOUNT)}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                  {formatCurrency(it.TOTAL_AMOUNT)}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)", whiteSpace: "normal" }}>
+                  {it.NOTES}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 20, paddingBottom: 24 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <div style={{ flex: "0 0 260px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+            <button
+              onClick={() => navigate("/modules/punch-order")}
+              aria-label="Back"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 15,
+                flexShrink: 0,
+              }}
+            >
+              ‹
+            </button>
+          </div>
+          <h2 style={{ margin: "8px 0 0", fontWeight: 500, wordBreak: "break-word" }}>{order.ORDER_ID}</h2>
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
         </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <Section title="Purchase Order Details">
             <Field label="Purchase Order No." value={order.PO_NO} />
             <Field label="Purchase Order Date" value={order.PO_DATE} />
@@ -96,7 +197,7 @@ export function OrderDetail() {
           </Section>
         </div>
 
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <Section title="Order Details">
             <Field label="Tally" value="Tally 1 (Registered)" />
             <Field label="Order Type" value={order.ORDER_TYPE} />
@@ -123,38 +224,10 @@ export function OrderDetail() {
             <Field label="Freight Paid By" value={order.FREIGHT_PAID_BY} />
             <Field label="Preferred Transporter" value={order.PREFERRED_TPT_ID} />
           </Section>
+
+          {partsCard}
         </div>
       </div>
-
-      <Section title={`Order Punch Parts (${items.length})`}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr>
-                {["Part No.", "Part Name", "Qty", "UOM", "Price", "Basic", "Tax", "Total"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", padding: 8, borderBottom: "1px solid var(--color-border)" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.ITEM_ID}>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{it.PART_NO}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{it.PART_NAME}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{it.QTY}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{it.UOM}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{formatCurrency(it.PRICE)}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{formatCurrency(it.BASIC_AMOUNT)}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{formatCurrency(it.TAX_AMOUNT)}</td>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--color-border)" }}>{formatCurrency(it.TOTAL_AMOUNT)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
     </div>
   );
 }

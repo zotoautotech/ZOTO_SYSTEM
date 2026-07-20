@@ -6,9 +6,12 @@ import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { formatTimestamp } from "../../lib/format";
+import { useSearch } from "../../lib/search";
+import { useSetHeaderActions } from "../../lib/headerActions";
 
 export function OrderPunchList() {
   const navigate = useNavigate();
+  const { query } = useSearch();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
 
@@ -31,7 +34,16 @@ export function OrderPunchList() {
     return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
   }, [scoped]);
 
-  const filtered = activeCustomer ? scoped.filter((o) => o.CUSTOMER_NAME === activeCustomer) : scoped;
+  const byCustomer = activeCustomer ? scoped.filter((o) => o.CUSTOMER_NAME === activeCustomer) : scoped;
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? byCustomer.filter((o) =>
+        [o.CUSTOMER_NAME, o.ORDER_ID, o.PO_NO, o.BUYER_GSTIN].some((field) =>
+          (field || "").toLowerCase().includes(q)
+        )
+      )
+    : byCustomer;
 
   const columns: Column<OrderRecord>[] = [
     { key: "status", header: "Status", render: (o) => <StatusBadge status={o.STATUS} /> },
@@ -48,50 +60,86 @@ export function OrderPunchList() {
     { key: "total", header: "Total Amount", render: (o) => `₹${Number(o.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}` },
   ];
 
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "20px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={() => navigate("/modules")}
-            aria-label="Back"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: "50%",
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 15,
-            }}
-          >
-            ‹
-          </button>
-          <h2 style={{ fontWeight: 500, margin: 0 }}>Pending Order Punch</h2>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            className={showCompleted ? "btn btn-primary" : "btn"}
-            onClick={() => setShowCompleted((s) => !s)}
-          >
-            ✓ {showCompleted ? "Showing Completed" : "Completed…"}
-          </button>
-          <button className="btn btn-primary" onClick={() => navigate("/modules/punch-order/new")}>
-            + New
-          </button>
-        </div>
-      </div>
+  useSetHeaderActions(
+    <>
+      <button
+        aria-label="New"
+        onClick={() => navigate("/modules/punch-order/new")}
+        style={{
+          width: 38,
+          height: 38,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg)",
+          color: "var(--color-primary)",
+          fontSize: 18,
+          fontWeight: 600,
+        }}
+      >
+        +
+      </button>
+      <button
+        className="btn btn-primary"
+        onClick={() => setShowCompleted((s) => !s)}
+        style={{ display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+        {showCompleted ? "Showing Completed" : "Completed…"}
+      </button>
+      <button
+        aria-label="Filter"
+        style={{
+          width: 38,
+          height: 38,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg)",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 5h16M7 12h10M10 19h4" />
+        </svg>
+      </button>
+      <button
+        aria-label="Select"
+        style={{
+          width: 38,
+          height: 38,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg)",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="4" width="16" height="16" rx="3" />
+          <path d="m8.5 12 2.5 2.5 4.5-5" />
+        </svg>
+      </button>
+    </>
+  );
 
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 128px)" }}>
+      <div style={{ display: "flex", alignItems: "stretch", flex: 1, minHeight: 0 }}>
         <CustomerFilterPanel customers={customerCounts} active={activeCustomer} onSelect={setActiveCustomer} />
+        <div style={{ width: 1, background: "var(--color-border)", flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <DataTable
             columns={columns}
             rows={filtered}
             onRowClick={(o) => navigate(`/modules/punch-order/${o.ORDER_ID}`)}
-            emptyMessage={isLoading ? "Loading…" : "No records"}
+            emptyMessage={isLoading ? "Loading…" : q ? `No orders match "${query}"` : "No records"}
           />
         </div>
       </div>

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, readTable } from "../services/sheets.js";
+import { listSheetTabs } from "../services/googleAuth.js";
 import { nextSequentialId } from "../services/ids.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -29,9 +30,13 @@ const CUSTOMER_LIST_FIELDS = [
 
 mastersRouter.get("/customers", async (req, res, next) => {
   try {
+    // T1 is a full-width read (577 rows x ~280 cols) that takes 5-7s from Sheets on a cold
+    // cache — the master list rarely changes within a session, so cache it longer than the
+    // 30s default to avoid re-paying that cost on every "Add New Customer" open.
     const rows = await readTable(env.sheets.customerBilling, CUSTOMER_TAB, {
       refresh: refresh(req.query.refresh),
       headerRow: CUSTOMER_HEADER_ROW,
+      ttlMs: 5 * 60_000,
     });
     // Row 4 of the sheet ("ASHOKA PACKWELL INDUSTRIES", CUST ID "SD") predates the
     // CUST-#### numbering and isn't a real pickable customer — exclude anything
@@ -191,9 +196,23 @@ mastersRouter.post("/customers", async (req, res, next) => {
   }
 });
 
+mastersRouter.get("/debug-tabs", async (req, res, next) => {
+  try {
+    const [transactions, customerBilling, transport, fg] = await Promise.all([
+      listSheetTabs(env.sheets.transactions),
+      listSheetTabs(env.sheets.customerBilling),
+      listSheetTabs(env.sheets.transport),
+      listSheetTabs(env.sheets.fg),
+    ]);
+    res.json({ transactions, customerBilling, transport, fg });
+  } catch (err) {
+    next(err);
+  }
+});
+
 mastersRouter.get("/dropdowns", async (req, res, next) => {
   try {
-    const rows = await readTable(env.sheets.transactions, "DROPDOWNS", {
+    const rows = await readTable(env.sheets.transactions, "CRR DD", {
       refresh: refresh(req.query.refresh),
     });
     res.json(rows);

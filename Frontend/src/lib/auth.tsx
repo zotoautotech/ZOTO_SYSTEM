@@ -9,7 +9,7 @@ export interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -21,8 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  async function login(email: string) {
-    const res = await api.post("/auth/login", { email });
+  async function login(email: string, password: string) {
+    const res = await api.post("/auth/login", { email, password });
     localStorage.setItem("zoto_token", res.data.token);
     localStorage.setItem("zoto_user", JSON.stringify(res.data.user));
     setUser(res.data.user);

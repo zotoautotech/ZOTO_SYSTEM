@@ -35,6 +35,12 @@ export interface BillingStrategyRow {
   [key: string]: string;
 }
 
+export interface DropdownRow {
+  Column: string;
+  "Value (Text)": string;
+  [key: string]: string;
+}
+
 export interface TransporterRow {
   "Transporter ID": string;
   Name: string;
@@ -115,6 +121,16 @@ export interface NewPartPayload {
 export async function createPart(payload: NewPartPayload) {
   const res = await api.post("/masters/goods", payload);
   return res.data as { fgId: string; partName: string; partNo?: string; segment?: string; category?: string; unit?: string; price?: number };
+}
+
+export async function listDropdowns(): Promise<DropdownRow[]> {
+  const res = await api.get<DropdownRow[]>("/masters/dropdowns");
+  return res.data;
+}
+
+/** Pulls the option list for one dropdown "Column" (e.g. "UOM") from the CRR DD master. */
+export function dropdownValues(rows: DropdownRow[], column: string): string[] {
+  return rows.filter((r) => r.Column === column && r["Value (Text)"]).map((r) => r["Value (Text)"]);
 }
 
 export async function listBillingStrategies(): Promise<BillingStrategyRow[]> {

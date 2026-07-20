@@ -184,3 +184,30 @@ textarea:focus {
     opacity: 1;
   }
 }
+
+.sheet-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.sheet-scroll::-webkit-scrollbar-track {
+  background: var(--color-bg-page);
+}
+
+.sheet-scroll::-webkit-scrollbar-thumb {
+  background: #b0b0b0;
+  border-radius: 6px;
+  border: 2px solid var(--color-bg-page);
+}
+
+.sheet-scroll::-webkit-scrollbar-thumb:hover {
+  background: #939393;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

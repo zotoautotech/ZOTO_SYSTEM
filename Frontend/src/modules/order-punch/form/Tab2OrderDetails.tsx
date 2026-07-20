@@ -9,6 +9,8 @@ import {
   listCustomers,
   listGoods,
   listBillingStrategies,
+  listDropdowns,
+  dropdownValues,
   customersToOptions,
   goodsToOptions,
 } from "../../../lib/mastersApi";
@@ -25,7 +27,10 @@ interface Props {
 export function Tab2OrderDetails({ form, update }: Props) {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
 
-  const { data: customers = [] } = useQuery({ queryKey: ["masters", "customers"], queryFn: listCustomers });
+  const { data: customers = [], isLoading: customersLoading } = useQuery({
+    queryKey: ["masters", "customers"],
+    queryFn: listCustomers,
+  });
   const customerOptions = customersToOptions(customers);
 
   function updateItem(index: number, patch: Partial<ItemFormState>) {
@@ -88,6 +93,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
             update({ custId: option?.value ?? "", customerName: option?.label ?? "" })
           }
           options={customerOptions}
+          loading={customersLoading}
           placeholder="Search customer…"
         />
       )}
@@ -156,6 +162,9 @@ function ItemBlock({
     queryKey: ["masters", "billing-strategies"],
     queryFn: listBillingStrategies,
   });
+  const { data: dropdowns = [] } = useQuery({ queryKey: ["masters", "dropdowns"], queryFn: listDropdowns });
+  const uomOptions = dropdownValues(dropdowns, "UOM");
+  const uomList = uomOptions.length > 0 ? uomOptions : UOM_OPTIONS;
 
   useEffect(() => {
     if (!custId || !item.partName) return;
@@ -248,7 +257,7 @@ function ItemBlock({
           onChange={(e) => onChange({ uom: e.target.value })}
           style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", fontSize: 14 }}
         >
-          {UOM_OPTIONS.map((u) => (
+          {uomList.map((u) => (
             <option key={u} value={u}>
               {u}
             </option>

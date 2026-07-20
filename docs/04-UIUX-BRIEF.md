@@ -82,3 +82,18 @@
 
 - Red-on-white primary meets AA for large text/buttons; never rely on color alone (Pass/Fail, Pending/Completed carry text labels).
 - All inputs labeled; error text tied via `aria-describedby`; focus rings visible; toggles are radio groups semantically.
+
+## 7. Confirmed Implementation (Locked Reference — 2026-07-20)
+
+The **Punch Order list page** (`Frontend/src/modules/order-punch/OrderPunchList.tsx` + `Frontend/src/components/Layout.tsx`) is the user-approved, pixel-matched reference for every list-style page going forward. New list pages (Modules, other future CRR lists) should copy this pattern rather than reinvent it. Locked specifics:
+
+- **Sidebar brand mark**: red `Z` logo tile 36×36px + `ZOTO` wordmark, 21px / 700 weight, next to it. Collapses to icon-only via the `‹` toggle.
+- **Top bar**: single row — search input (placeholder dynamically reads `Search {last breadcrumb label}`, wired via `useSetHeaderActions`/breadcrumb `crumbs` state, not hardcoded per page) — sync status text + refresh/chevron button group — theme toggle — account chip.
+- **Breadcrumb + action row**: one flex row, `justify-content: space-between`, `borderBottom: 1px solid var(--color-border)` beneath it. Left = clickable breadcrumb trail (13px→**16px**, last segment **700 weight**, not 500). Right = page-specific action buttons registered via `useSetHeaderActions()` (see `lib/headerActions.tsx`) so they render in this shared row instead of a separate page-local title bar.
+  - Standard action button set for list pages: icon-only `+` (new record, outlined, red icon), primary red "Completed…" pill (checkmark icon + label, toggles pending/completed dataset), icon-only filter button, icon-only checklist/select button. All 38×38px, `1px solid var(--color-border)`, `8px` radius, except the primary pill.
+- **Customer filter panel + table**: vertical 1px divider between them, flush against the breadcrumb row's bottom border (no top margin/padding gap) so the vertical and horizontal dividers visually connect into one line, matching the legacy app.
+- **Table scroll**: whole list area (`filter panel + divider + table`) is wrapped in a flex column with `minHeight: calc(100vh - 128px)`, and the table's own scroll container (`DataTable.tsx`, class `sheet-scroll`) stretches `height: 100%` so its horizontal scrollbar sits pinned at the very bottom of the viewport, not immediately under the last row.
+- **Custom scrollbar look**: `.sheet-scroll` class in `theme/tokens.css` gives a thick (12px), rounded, gray spreadsheet-style scrollbar. WebKit-only (Chrome/Edge); Firefox falls back to native thin scrollbar — acceptable since the team tests in Chrome.
+- Applied consistently to: Punch Order list, Order Detail's Parts table, Order Items View table (all three use `sheet-scroll`).
+
+**When building/fixing any other page**: match this file's tokens and structure first; only diverge with an explicit user instruction to do otherwise.

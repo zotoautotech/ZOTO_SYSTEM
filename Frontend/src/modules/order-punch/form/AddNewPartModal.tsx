@@ -58,16 +58,32 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
 
   return (
     <Modal title="Add New Product" onClose={onClose}>
-      <TextField label="Part Name" required value={form.partName} onChange={set("partName")} />
-      <TextField label="Part No." value={form.partNo} onChange={set("partNo")} />
-      <TextField label="Segment" value={form.segment} onChange={set("segment")} />
-      <TextField label="Category" value={form.category} onChange={set("category")} />
-      <TextField label="Unit" value={form.unit} onChange={set("unit")} />
-      <TextField label="Price" type="number" value={form.price} onChange={set("price")} />
-      {error && <p className="field-error">{error}</p>}
-      <button className="btn btn-primary" style={{ width: "100%" }} disabled={saving} onClick={handleSave}>
-        {saving ? "Saving…" : "Save & Select"}
-      </button>
+      <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+        <TextField
+          label="Part Name"
+          required
+          name="zoto-new-part-name"
+          autoComplete="off"
+          value={form.partName}
+          onChange={set("partName")}
+        />
+        <TextField label="Part No." name="zoto-new-part-no" autoComplete="off" value={form.partNo} onChange={set("partNo")} />
+        <TextField label="Segment" name="zoto-new-part-segment" autoComplete="off" value={form.segment} onChange={set("segment")} />
+        <TextField label="Category" name="zoto-new-part-category" autoComplete="off" value={form.category} onChange={set("category")} />
+        <TextField label="Unit" name="zoto-new-part-unit" autoComplete="off" value={form.unit} onChange={set("unit")} />
+        <TextField
+          label="Price"
+          type="number"
+          name="zoto-new-part-price"
+          autoComplete="off"
+          value={form.price}
+          onChange={set("price")}
+        />
+        {error && <p className="field-error">{error}</p>}
+        <button type="button" className="btn btn-primary" style={{ width: "100%" }} disabled={saving} onClick={handleSave}>
+          {saving ? "Saving…" : "Save & Select"}
+        </button>
+      </form>
     </Modal>
   );
 }

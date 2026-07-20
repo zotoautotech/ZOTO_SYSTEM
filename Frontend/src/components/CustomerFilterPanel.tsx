@@ -6,7 +6,7 @@ interface CustomerFilterPanelProps {
 
 export function CustomerFilterPanel({ customers, active, onSelect }: CustomerFilterPanelProps) {
   return (
-    <div className="card" style={{ width: "var(--filter-width)", flexShrink: 0, padding: 8 }}>
+    <div style={{ width: "var(--filter-width)", flexShrink: 0, padding: "8px 8px 8px 0" }}>
       <FilterRow label="All" active={active === null} onClick={() => onSelect(null)} />
       {customers.map((c) => (
         <FilterRow

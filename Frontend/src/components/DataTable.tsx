@@ -13,7 +13,7 @@ interface DataTableProps<T> {
 
 export function DataTable<T>({ columns, rows, onRowClick, emptyMessage }: DataTableProps<T>) {
   return (
-    <div className="card" style={{ overflowX: "auto" }}>
+    <div className="sheet-scroll" style={{ overflow: "auto", height: "100%" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <thead>
           <tr>

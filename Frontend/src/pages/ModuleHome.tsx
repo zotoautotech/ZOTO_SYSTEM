@@ -1,9 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { MODULES } from "../lib/modules";
 import { NavCard } from "../components/Layout";
+import { useSearch } from "../lib/search";
 
 export function ModuleHome() {
   const navigate = useNavigate();
+  const { query } = useSearch();
+
+  const filtered = MODULES.filter((m) => m.label.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <div>
@@ -35,10 +39,15 @@ export function ModuleHome() {
           marginTop: 16,
         }}
       >
-        {MODULES.map((m) => (
+        {filtered.map((m) => (
           <NavCard key={m.key} to={`/modules/${m.key}`} icon={m.icon} label={m.label} />
         ))}
       </div>
+      {filtered.length === 0 && (
+        <p className="text-muted" style={{ marginTop: 24 }}>
+          No modules match "{query}"
+        </p>
+      )}
     </div>
   );
 }

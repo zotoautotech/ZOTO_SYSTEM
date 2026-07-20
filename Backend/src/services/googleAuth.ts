@@ -33,6 +33,12 @@ export async function getSheetsClient() {
   return google.sheets({ version: "v4", auth: auth as any });
 }
 
+export async function listSheetTabs(spreadsheetId: string): Promise<string[]> {
+  const sheets = await getSheetsClient();
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  return (res.data.sheets ?? []).map((s) => s.properties?.title ?? "").filter(Boolean);
+}
+
 export async function getDriveClient() {
   const auth = getGoogleAuth();
   return google.drive({ version: "v3", auth: auth as any });
