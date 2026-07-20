@@ -113,7 +113,7 @@ export function OrderPunchForm() {
         inset: 0,
         background: "rgba(17, 17, 20, 0.5)",
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "flex-start" : "center",
         justifyContent: "center",
         zIndex: 50,
         padding: isMobile ? 0 : 24,
@@ -124,8 +124,8 @@ export function OrderPunchForm() {
         className="card modal-in"
         style={{
           width: "min(880px, 100%)",
-          height: isMobile ? "100dvh" : undefined,
-          maxHeight: isMobile ? "100dvh" : "90vh",
+          height: isMobile ? "calc(100dvh - 34px)" : undefined,
+          maxHeight: isMobile ? "calc(100dvh - 34px)" : "90vh",
           background: "var(--color-bg)",
           borderRadius: isMobile ? 0 : 18,
           boxShadow: "var(--shadow-lg)",
@@ -258,7 +258,7 @@ export function OrderPunchForm() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "14px var(--space)",
+            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
