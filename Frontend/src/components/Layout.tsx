@@ -322,20 +322,22 @@ export function Layout() {
             height: "var(--topbar-height)",
             borderBottom: "1px solid var(--color-border)",
             background: "var(--color-bg)",
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: "1fr auto 1fr",
             alignItems: "center",
             padding: "0 24px",
             gap: 16,
           }}
         >
+          <span />
           <input
             placeholder={`Search ${crumbs[crumbs.length - 1]?.label ?? "SALES CRR"}`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
-              flex: 1,
-              maxWidth: 480,
-              margin: "0 auto",
+              width: 480,
+              maxWidth: "100%",
+              justifySelf: "center",
               padding: "8px 14px",
               borderRadius: 20,
               border: "1px solid var(--color-border)",
@@ -344,7 +346,7 @@ export function Layout() {
             }}
           />
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative", justifySelf: "end" }}>
             <span className="text-muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
               {isFetching ? "Syncing…" : "Sync complete"}
             </span>
