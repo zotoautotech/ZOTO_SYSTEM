@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
@@ -120,6 +120,32 @@ export function Layout() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const [, forceTick] = useState(0);
+  const [railWidth, setRailWidth] = useState(208);
+  const railDrag = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const onRailMouseMove = useCallback((e: MouseEvent) => {
+    if (!railDrag.current) return;
+    const next = railDrag.current.startWidth + (e.clientX - railDrag.current.startX);
+    setRailWidth(Math.min(320, Math.max(160, next)));
+  }, []);
+
+  const onRailMouseUp = useCallback(() => {
+    railDrag.current = null;
+    document.body.style.cursor = "";
+    window.removeEventListener("mousemove", onRailMouseMove);
+    window.removeEventListener("mouseup", onRailMouseUp);
+  }, [onRailMouseMove]);
+
+  const onRailMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (collapsed) return;
+      railDrag.current = { startX: e.clientX, startWidth: railWidth };
+      document.body.style.cursor = "col-resize";
+      window.addEventListener("mousemove", onRailMouseMove);
+      window.addEventListener("mouseup", onRailMouseUp);
+    },
+    [collapsed, railWidth, onRailMouseMove, onRailMouseUp]
+  );
 
   // Clear the search box when the route changes so a stale query doesn't silently
   // filter a page the user didn't mean to search.
@@ -168,15 +194,14 @@ export function Layout() {
     <div style={{ display: "flex", height: "100vh" }}>
       <nav
         style={{
-          width: collapsed ? 72 : "var(--rail-width)",
+          width: collapsed ? 72 : railWidth,
           flexShrink: 0,
           background: "var(--color-bg)",
-          borderRight: "1px solid var(--color-border)",
           display: "flex",
           flexDirection: "column",
           padding: "20px 12px",
           gap: 4,
-          transition: "width 0.18s ease",
+          transition: railDrag.current ? "none" : "width 0.18s ease",
           overflow: "hidden",
         }}
       >
@@ -315,6 +340,26 @@ export function Layout() {
           </button>
         </div>
       </nav>
+
+      {!collapsed && (
+        <div
+          onMouseDown={onRailMouseDown}
+          onDoubleClick={() => setRailWidth(208)}
+          title="Drag to resize"
+          style={{
+            width: 5,
+            marginLeft: -2,
+            marginRight: -2,
+            cursor: "col-resize",
+            flexShrink: 0,
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <div style={{ width: 1, height: "100%", background: "var(--color-border)", margin: "0 auto" }} />
+        </div>
+      )}
+      {collapsed && <div style={{ width: 1, background: "var(--color-border)", flexShrink: 0 }} />}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <header
