@@ -82,7 +82,7 @@ export function Login() {
           maxWidth: 1180,
           width: "100%",
           margin: "0 auto",
-          padding: isCompact ? "32px 20px" : undefined,
+          padding: isMobile ? "54px 34px 28px" : isCompact ? "32px 20px" : undefined,
         }}
       >
         <div
@@ -93,21 +93,24 @@ export function Login() {
             justifyContent: "center",
             paddingLeft: isCompact ? 0 : 24,
             minWidth: isCompact ? "100%" : 0,
+            alignItems: isMobile ? "center" : undefined,
+            textAlign: isMobile ? "center" : undefined,
           }}
         >
           <div
             style={{
               display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              alignItems: isMobile ? "flex-start" : "center",
-              gap: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: isMobile ? "center" : undefined,
+              gap: isMobile ? 8 : 14,
               flexWrap: "nowrap",
             }}
           >
             <h1
               style={{
                 margin: 0,
-                fontSize: "clamp(28px, 9vw, 56px)",
+                fontSize: isMobile ? "clamp(34px, 11vw, 42px)" : "clamp(28px, 9vw, 56px)",
                 fontWeight: 800,
                 lineHeight: 1,
                 whiteSpace: "nowrap",
@@ -119,14 +122,14 @@ export function Login() {
               src={zotoLogo}
               alt="ZOTO"
               style={{
-                height: "clamp(60px, 20vw, 140px)",
+                height: isMobile ? "68px" : "clamp(60px, 20vw, 140px)",
                 width: "auto",
                 marginTop: isMobile ? 0 : "clamp(-90px, -12vw, -38px)",
               }}
             />
           </div>
-          <div style={{ borderTop: "1px solid #e6e6e9", margin: "24px 0", maxWidth: 560 }} />
-          <p style={{ margin: 0, color: "#5c5f6a", fontSize: 18, maxWidth: 560 }}>
+          <div style={{ borderTop: "1px solid #e6e6e9", margin: isMobile ? "20px 0 18px" : "24px 0", width: isMobile ? "100%" : undefined, maxWidth: 560 }} />
+          <p style={{ margin: 0, color: "#5c5f6a", fontSize: isMobile ? 16 : 18, maxWidth: 560 }}>
             Leading Manufacturers in Car Accessories
           </p>
         </div>
@@ -136,7 +139,7 @@ export function Login() {
             flex: isCompact ? "1 1 auto" : "0 0 460px",
             width: isCompact ? "100%" : undefined,
             maxWidth: isCompact ? 460 : undefined,
-            margin: isCompact ? "24px auto 0" : "0 0 0 24px",
+            margin: isMobile ? "30px auto 0" : isCompact ? "24px auto 0" : "0 0 0 24px",
             background: "#ffffff",
             border: "1px solid #e6e6e9",
             boxShadow: "0 12px 32px rgba(16,24,40,0.08)",
