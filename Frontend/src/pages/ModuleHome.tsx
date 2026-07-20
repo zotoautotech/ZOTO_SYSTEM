@@ -1,36 +1,35 @@
-import { useNavigate } from "react-router-dom";
 import { MODULES } from "../lib/modules";
 import { NavCard } from "../components/Layout";
 import { useSearch } from "../lib/search";
+import { useSetHeaderActions } from "../lib/headerActions";
 
 export function ModuleHome() {
-  const navigate = useNavigate();
   const { query } = useSearch();
 
   const filtered = MODULES.filter((m) => m.label.toLowerCase().includes(query.trim().toLowerCase()));
 
+  useSetHeaderActions(
+    <button
+      aria-label="Filter"
+      style={{
+        width: 38,
+        height: 38,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        background: "var(--color-bg)",
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 5h16M7 12h10M10 19h4" />
+      </svg>
+    </button>
+  );
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20 }}>
-        <button
-          onClick={() => navigate("/")}
-          aria-label="Back"
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            border: "1px solid var(--color-border)",
-            background: "var(--color-bg)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 15,
-          }}
-        >
-          ‹
-        </button>
-        <h2 style={{ fontWeight: 500, margin: 0 }}>SALES CRR</h2>
-      </div>
       <div
         style={{
           display: "grid",
