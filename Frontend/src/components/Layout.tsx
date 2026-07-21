@@ -263,23 +263,11 @@ export function Layout() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-            <span
-              style={{
-                width: 36,
-                height: 36,
-                flexShrink: 0,
-                borderRadius: 8,
-                background: "var(--color-primary)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                fontSize: 17,
-              }}
-            >
-              Z
-            </span>
+            <img
+              src="/zoto-logo.png"
+              alt="ZOTO"
+              style={{ width: 36, height: 36, flexShrink: 0, objectFit: "contain" }}
+            />
             {!effectivelyCollapsed && (
               <strong style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.3, whiteSpace: "nowrap" }}>
                 ZOTO
