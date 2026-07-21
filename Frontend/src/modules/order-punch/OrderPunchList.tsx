@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteOrders, listOrders, type OrderRecord } from "../../lib/ordersApi";
+import { listCustomers, listGoods } from "../../lib/mastersApi";
 import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -19,6 +20,13 @@ export function OrderPunchList() {
   const { user } = useAuth();
   const canDelete = user?.canDelete ?? false;
   const queryClient = useQueryClient();
+
+  // Warm the customer/part pickers while the user is still browsing the list, so the
+  // "New" order modal's dropdowns are already populated instead of showing "Loading…".
+  useEffect(() => {
+    queryClient.prefetchQuery({ queryKey: ["masters", "customers"], queryFn: listCustomers, staleTime: 60_000 });
+    queryClient.prefetchQuery({ queryKey: ["masters", "goods"], queryFn: listGoods, staleTime: 60_000 });
+  }, [queryClient]);
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
   const [filterWidth, setFilterWidth] = useState(260);

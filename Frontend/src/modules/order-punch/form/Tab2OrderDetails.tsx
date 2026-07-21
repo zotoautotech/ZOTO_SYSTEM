@@ -31,6 +31,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ["masters", "customers"],
     queryFn: listCustomers,
+    staleTime: 60_000,
   });
   const customerOptions = customersToOptions(customers);
 
@@ -168,7 +169,7 @@ function ItemBlock({
   onRemove?: () => void;
 }) {
   const [showAddPart, setShowAddPart] = useState(false);
-  const { data: goods = [] } = useQuery({ queryKey: ["masters", "goods"], queryFn: listGoods });
+  const { data: goods = [] } = useQuery({ queryKey: ["masters", "goods"], queryFn: listGoods, staleTime: 60_000 });
   const goodsOptions = goodsToOptions(goods);
   const { data: billingStrategies = [] } = useQuery({
     queryKey: ["masters", "billing-strategies"],
