@@ -105,16 +105,11 @@ export function Tab2OrderDetails({ form, update }: Props) {
       )}
 
       <h3 style={{ fontSize: 15, marginTop: 24 }}>Buyer Details</h3>
-      <ToggleGroup
-        label="Customer Type"
-        value={form.customerType}
-        onChange={(v) => update({ customerType: v, custId: "", customerName: "", buyerGstin: "" })}
-        options={[
-          { value: "Existing", label: "Existing" },
-          { value: "New", label: "New" },
-        ]}
-      />
-      {form.customerType === "Existing" && (
+      {form.customerType === "New" && form.custId ? (
+        <p style={{ fontSize: 14 }}>
+          ✅ New customer <strong>{form.customerName}</strong> ({form.custId}) will be created
+        </p>
+      ) : (
         <SearchableSelect
           label="Customer ID"
           value={form.custId}
@@ -122,26 +117,16 @@ export function Tab2OrderDetails({ form, update }: Props) {
           options={customerOptions}
           loading={customersLoading}
           placeholder="Search customer…"
+          addNewLabel="Add New Customer"
+          onAddNew={() => setShowAddCustomer(true)}
         />
-      )}
-      {form.customerType === "New" && (
-        <div style={{ marginBottom: 20 }}>
-          {form.custId ? (
-            <p style={{ fontSize: 14 }}>
-              ✅ New customer <strong>{form.customerName}</strong> ({form.custId}) will be created
-            </p>
-          ) : (
-            <button type="button" className="btn btn-outline-primary" onClick={() => setShowAddCustomer(true)}>
-              + Add New Customer
-            </button>
-          )}
-        </div>
       )}
       {showAddCustomer && (
         <AddNewCustomerModal
           onClose={() => setShowAddCustomer(false)}
           onCreated={(result) => {
             update({
+              customerType: "New",
               custId: result.custId,
               customerName: result.customerName,
               billingAddress: result.billingAddressLine1,
@@ -218,16 +203,7 @@ function ItemBlock({
           ✕
         </button>
       )}
-      <ToggleGroup
-        label="Part Type"
-        value={item.partType}
-        onChange={(v) => onChange({ partType: v, fgId: "", partName: "" })}
-        options={[
-          { value: "Existing", label: "Existing" },
-          { value: "New", label: "New" },
-        ]}
-      />
-      {item.partType === "Existing" && !item.fgId && (
+      {!item.fgId && (
         <SearchableSelect
           label="Part (ID)"
           value={item.fgId}
@@ -240,27 +216,22 @@ function ItemBlock({
           onAddNew={() => setShowAddPart(true)}
         />
       )}
-      {item.partType === "Existing" && item.fgId && (
+      {item.fgId && item.partType === "New" ? (
+        <p style={{ fontSize: 14 }}>
+          ✅ New part <strong>{item.partName}</strong> will be created
+        </p>
+      ) : item.fgId ? (
         <>
           <TextField label="Part Code" value={item.partNo} disabled />
           <TextField label="Part Name" value={item.partName} disabled />
         </>
-      )}
-      {item.partType === "New" && !item.fgId && (
-        <button type="button" className="btn btn-outline-primary" onClick={() => setShowAddPart(true)}>
-          + Add New Product
-        </button>
-      )}
-      {item.partType === "New" && item.fgId && (
-        <p style={{ fontSize: 14 }}>
-          ✅ New part <strong>{item.partName}</strong> will be created
-        </p>
-      )}
+      ) : null}
       {showAddPart && (
         <AddNewPartModal
           onClose={() => setShowAddPart(false)}
           onCreated={(result) => {
             onChange({
+              partType: "New",
               fgId: result.fgId,
               partName: result.partName,
               partNo: result.partNo ?? "",
