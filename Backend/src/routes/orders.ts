@@ -468,6 +468,21 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       })
     );
 
+    // SALE_ORDER_ITEMS uses the same column names as ORDER_ITEMS (no renaming), so each
+    // punch item row is copied over as-is, just adding the two sale-order link IDs.
+    const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter(
+      (i) => i.ORDER_ID === req.params.id
+    );
+    for (const item of items) {
+      await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", {
+        ...item,
+        Timestamp: now,
+        Useremail: req.user!.email,
+        SALE_ORDER_ID: saleOrderId,
+        SALE_ORDER_ITEM_ID: await nextId("SOI"),
+      });
+    }
+
     // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
     await updateRow(
       env.sheets.transactions,
