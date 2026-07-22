@@ -268,12 +268,13 @@ export function Layout() {
             <img
               src="/zoto-logo.png"
               alt="ZOTO"
-              style={{ display: "block", width: 44, height: 25, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
+              style={{ display: "block", width: 56, height: 31, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
             />
             {!effectivelyCollapsed && (
-              <strong style={{ fontSize: 20, fontWeight: 800, letterSpacing: 0.2, whiteSpace: "nowrap" }}>
-                My ZOTO
-              </strong>
+              <span style={{ display: "flex", flexDirection: "column", lineHeight: 1, whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>My</span>
+                <strong style={{ fontSize: 21, fontWeight: 800, letterSpacing: 0.3 }}>ZOTO</strong>
+              </span>
             )}
           </div>
           {!collapsed && !isCompact && (
