@@ -275,6 +275,55 @@ ordersRouter.post("/", async (req, res, next) => {
   }
 });
 
+const discountSchema = z
+  .object({
+    reason: z.string().min(1),
+    description: z.string().optional().default(""),
+    type: z.enum(["Percentage", "Rupees"]),
+    discountPct: z.number().min(0).max(100).optional(),
+    discountRs: z.number().min(0).optional(),
+  })
+  .refine((b) => (b.type === "Percentage" ? b.discountPct !== undefined : b.discountRs !== undefined), {
+    message: "discountPct is required for Percentage, discountRs is required for Rupees",
+  });
+
+/** Applies the Sale Order discount, recalculates TOTAL_AMOUNT, and pushes the order into
+ * the Sale Order stage's pending queue. */
+ordersRouter.post("/:id/discount", async (req, res, next) => {
+  try {
+    const body = discountSchema.parse(req.body);
+    const orders = await readTable(env.sheets.transactions, "ORDERS");
+    const order = orders.find((o) => o.ORDER_ID === req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+    }
+
+    const basicAmount = Number(order.BASIC_AMOUNT || 0);
+    const taxAmount = Number(order.TAX_AMOUNT || 0);
+    const discountRs = body.type === "Percentage" ? (basicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
+    const totalAmount = basicAmount + taxAmount - discountRs;
+
+    await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
+      DISCOUNT_REASON: body.reason,
+      DISCOUNT_DESCRIPTION: body.description,
+      DISCOUNT_TYPE: body.type,
+      DISCOUNT_PCT: body.type === "Percentage" ? String(body.discountPct) : "",
+      DISCOUNT_RS: money(discountRs),
+      TOTAL_AMOUNT: money(totalAmount),
+      // Stays in the "Punch" stage (still shows in both Punch Order's and Sale Order's
+      // pending queues — there's no separate Sale Order stage/sheet yet) but the status
+      // label flips so it reads as reviewed-with-discount rather than freshly punched.
+      STATUS: "PENDING SALE ORDER",
+      UPDATED_AT: new Date().toISOString(),
+      UPDATED_BY: req.user!.email,
+    });
+
+    res.json({ orderId: req.params.id, discountRs: money(discountRs), totalAmount: money(totalAmount) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Advances an order to the next pipeline stage (marks current stage record COMPLETED). */
 ordersRouter.post("/:id/stage", async (req, res, next) => {
   try {

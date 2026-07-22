@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
+import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -30,10 +32,12 @@ export function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const isCompact = useIsCompact();
   // Preserves whichever module list this was opened from (Punch Order vs. Sale Order —
   // both point at the same underlying order data) so back/expand links stay in that module.
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
+  const [showDiscountForm, setShowDiscountForm] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -180,6 +184,17 @@ export function OrderDetail() {
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
+          {/* Discount is a one-time Sale Order review step — once DISCOUNT_TYPE is set on
+              the order, hide the button rather than letting it be reapplied. */}
+          {basePath === "/modules/sale-order" && !order.DISCOUNT_TYPE && (
+            <button
+              className="btn btn-outline-primary"
+              onClick={() => setShowDiscountForm(true)}
+              style={{ display: "block", width: "100%", marginTop: 14 }}
+            >
+              + Add Discount
+            </button>
+          )}
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
@@ -240,6 +255,18 @@ export function OrderDetail() {
           {partsCard}
         </div>
       </div>
+
+      {showDiscountForm && (
+        <SaleOrderDiscountForm
+          orderId={orderId!}
+          onClose={() => setShowDiscountForm(false)}
+          onSaved={() => {
+            setShowDiscountForm(false);
+            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
+          }}
+        />
+      )}
     </div>
   );
 }

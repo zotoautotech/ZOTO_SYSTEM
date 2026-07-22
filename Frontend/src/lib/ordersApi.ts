@@ -105,3 +105,19 @@ export async function createOrder(payload: NewOrderPayload) {
   const res = await api.post<{ orderId: string }>("/orders", payload);
   return res.data;
 }
+
+export interface OrderDiscountPayload {
+  reason: string;
+  description?: string;
+  type: "Percentage" | "Rupees";
+  discountPct?: number;
+  discountRs?: number;
+}
+
+export async function applyOrderDiscount(orderId: string, payload: OrderDiscountPayload) {
+  const res = await api.post<{ orderId: string; discountRs: string; totalAmount: string }>(
+    `/orders/${orderId}/discount`,
+    payload
+  );
+  return res.data;
+}
