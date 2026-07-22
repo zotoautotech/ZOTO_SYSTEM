@@ -218,7 +218,7 @@ ordersRouter.post("/", async (req, res, next) => {
   try {
     const body = createOrderSchema.parse(req.body);
     const now = new Date().toISOString();
-    const orderId = await nextId("ORD");
+    const orderId = await nextId("ORD", ORDER_TAB, "ORDER_ID");
 
     let basicAmount = 0;
     let taxAmount = 0;
@@ -278,7 +278,7 @@ ordersRouter.post("/", async (req, res, next) => {
     for (const plan of body.dispatchPlan) {
       const targetItem = itemRows[plan.itemIndex];
       if (!targetItem) continue;
-      const dspId = await nextId("DSP");
+      const dspId = await nextId("DSP", "DISPATCH_PLAN", "DSP_ID");
       await appendRow(env.sheets.transactions, "DISPATCH_PLAN", {
         DSP_ID: dspId,
         ITEM_ID: targetItem.ITEM_ID,
@@ -419,7 +419,7 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     );
 
     await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
-    const punchDiscountId = await nextId("DISC");
+    const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "PUNCH_DISCOUNT_ID");
     await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
       TIMESTAMP: now,
       USEREMAIL: req.user!.email,
@@ -458,7 +458,7 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
     }
 
     const now = new Date().toISOString();
-    const saleOrderId = await nextId("SO");
+    const saleOrderId = await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID");
 
     await appendRow(
       env.sheets.transactions,
@@ -491,7 +491,7 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
         Timestamp: now,
         Useremail: req.user!.email,
         SALE_ORDER_ID: saleOrderId,
-        SALE_ORDER_ITEM_ID: await nextId("SOI"),
+        SALE_ORDER_ITEM_ID: await nextId("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID"),
       });
     }
 

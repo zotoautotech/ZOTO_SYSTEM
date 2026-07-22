@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { env } from "../config/env.js";
 import { readTable } from "./sheets.js";
 
 /**
@@ -29,10 +30,15 @@ export async function nextSequentialId(
 
 /**
  * Issues an ID as `${prefix}-${8 random hex chars}` (e.g. "ORD-e76026d8"), matching the
- * old ADC system's ID style (PNCH-dd8edb5b, PRE-b69aa81a, STR-7d4dfcb5). No longer uses
- * the COUNTERS tab / fiscal-year sequence — random hex has no collision bookkeeping to
- * maintain, at the cost of the IDs no longer sorting in creation order.
+ * old ADC system's ID style (PNCH-dd8edb5b, PRE-b69aa81a, STR-7d4dfcb5). A collision is
+ * astronomically unlikely (32 bits of randomness) but not impossible, so this checks the
+ * target tab's ID column and retries on the rare chance of a duplicate — guaranteed unique.
  */
-export async function nextId(prefix: string): Promise<string> {
-  return `${prefix}-${randomBytes(4).toString("hex")}`;
+export async function nextId(prefix: string, tab: string, idColumn: string): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `${prefix}-${randomBytes(4).toString("hex")}`;
+    const rows = await readTable(env.sheets.transactions, tab, { refresh: true });
+    if (!rows.some((r) => r[idColumn] === candidate)) return candidate;
+  }
+  throw new Error(`Could not generate a unique ID for ${tab}.${idColumn} after 5 attempts`);
 }
