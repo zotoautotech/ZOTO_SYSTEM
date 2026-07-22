@@ -262,15 +262,17 @@ export function Layout() {
             marginBottom: 24,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+            {/* zoto-logo.png is the full crest + "My ZOTO" wordmark stacked in one image (269x251);
+                crop to just the top ~60% (the crest) so the wordmark can be set as real, bold text instead. */}
             <img
               src="/zoto-logo.png"
               alt="ZOTO"
-              style={{ width: 36, height: 36, flexShrink: 0, objectFit: "contain" }}
+              style={{ display: "block", width: 44, height: 25, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
             />
             {!effectivelyCollapsed && (
-              <strong style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.3, whiteSpace: "nowrap" }}>
-                ZOTO
+              <strong style={{ fontSize: 20, fontWeight: 800, letterSpacing: 0.2, whiteSpace: "nowrap" }}>
+                My ZOTO
               </strong>
             )}
           </div>
