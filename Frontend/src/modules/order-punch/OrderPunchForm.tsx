@@ -11,9 +11,14 @@ import { useIsMobile } from "../../lib/responsive";
 
 const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
 
-// No field on this form is mandatory to advance or save — validation removed at the
-// user's request so the team can punch partial orders and fill gaps in later.
-function validateTab(_tab: number, form: OrderFormState): string | null {
+// Most fields on this form aren't mandatory to advance or save — validation was removed
+// at the user's request so the team can punch partial orders and fill gaps in later.
+// Customer ID is the one exception (matching the old CRR system): without a customer,
+// there's nothing to attach a billing address to, so Order Details can't be left blank.
+function validateTab(tab: number, form: OrderFormState): string | null {
+  if (tab === 1 && !form.custId) {
+    return "Select a Customer ID before continuing";
+  }
   if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
     return "Advance Payment (%) must be between 0 and 100";
   }
