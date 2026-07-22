@@ -179,6 +179,15 @@ function ItemBlock({
   const uomOptions = dropdownValues(dropdowns, "UOM");
   const uomList = uomOptions.length > 0 ? uomOptions : UOM_OPTIONS;
 
+  // The <select> silently falls back to its first <option> when item.uom (e.g. the
+  // "NOS" default) isn't an exact match in the live UOM list, leaving the displayed
+  // value out of sync with form state — reconcile once the real list has loaded.
+  useEffect(() => {
+    if (uomList.length === 0 || uomList.includes(item.uom)) return;
+    onChange({ uom: uomList.includes("NOS") ? "NOS" : uomList[0] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uomList.join("|")]);
+
   useEffect(() => {
     if (!custId || !item.partName) return;
     const match = billingStrategies.find(
