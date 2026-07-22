@@ -21,7 +21,7 @@ export function emptyItem(): ItemFormState {
     segment: "",
     category: "",
     qty: undefined,
-    uom: "NOS",
+    uom: "SET",
     price: undefined,
     gstSlabPct: 18,
     remarks: "",
