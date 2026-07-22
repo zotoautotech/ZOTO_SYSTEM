@@ -262,7 +262,7 @@ export function Layout() {
             marginBottom: 24,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, overflow: "hidden" }}>
             {/* zoto-logo.png is the full crest + "My ZOTO" wordmark stacked in one image (269x251).
                 The crossed swords dip down to ~62% of the image height before the wordmark starts
                 at ~66%, so the two crops below split there — leaving a hair of gap rather than
