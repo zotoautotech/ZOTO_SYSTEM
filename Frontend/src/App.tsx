@@ -38,6 +38,7 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/punch-order" element={<OrderPunchList />} />
+        <Route path="modules/sale-order" element={<OrderPunchList hideCreate />} />
         <Route path="modules/punch-order/new" element={<OrderPunchForm />} />
         <Route path="modules/punch-order/:orderId" element={<OrderDetail />} />
         <Route path="modules/punch-order/:orderId/items" element={<OrderItemsView />} />

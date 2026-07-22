@@ -13,7 +13,7 @@ import { useSetHeaderActions, useSetHeaderLeft } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
 import { useAuth } from "../../lib/auth";
 
-export function OrderPunchList() {
+export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } = {}) {
   const navigate = useNavigate();
   const { query } = useSearch();
   const isMobile = useIsMobile();
@@ -197,25 +197,27 @@ export function OrderPunchList() {
       </button>
     ) : (
       <>
-        <button
-          aria-label="New"
-          onClick={() => navigate("/modules/punch-order/new")}
-          style={{
-            width: 38,
-            height: 38,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid var(--color-border)",
-            borderRadius: 8,
-            background: "var(--color-bg)",
-            color: "var(--color-primary)",
-            fontSize: 18,
-            fontWeight: 600,
-          }}
-        >
-          +
-        </button>
+        {!hideCreate && (
+          <button
+            aria-label="New"
+            onClick={() => navigate("/modules/punch-order/new")}
+            style={{
+              width: 38,
+              height: 38,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              background: "var(--color-bg)",
+              color: "var(--color-primary)",
+              fontSize: 18,
+              fontWeight: 600,
+            }}
+          >
+            +
+          </button>
+        )}
         <button
           className="btn btn-primary"
           onClick={() => setShowCompleted((s) => !s)}
