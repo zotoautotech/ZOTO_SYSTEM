@@ -4,6 +4,8 @@
 **Version:** 1.0 — **DRAFT drafted from screenshots + standard practice.**
 **⚠ To reconcile:** the user will share the actual Google Sheet (edit access). Column names below then get updated to match the real headers, and this doc becomes the contract for the API's column maps (`packages/shared`).
 
+**Update (2026-07-22) — ORDERS → ORDER_PUNCH:** the live transactions sheet's order-header tab was renamed `ORDERS` → `ORDER_PUNCH` and its columns given human-readable names (e.g. `PO_NO` → `Purchase_Order_No.`, `CUSTOMER_NAME` → `Cutomer_Name`), with grey section-header spacer columns and new **Seller Details** / **Consignee Details** sections. The API keeps its internal field names and translates to/from the real headers via `Backend/src/routes/orderPunchMap.ts` (`punchToSheet` / `punchFromSheet`), used on every ORDER_PUNCH read/write in `orders.ts`. Seller fields auto-fill from `SALLER_MASTER` (branch `ZOTO-001`) and buyer segment/contact from `CUSTOMER MASTER T1` on save. `ORDER_PUNCH` has no `CURRENT_STAGE` column, so reads synthesize `CURRENT_STAGE = "Punch"`. **Phase 2 (pending):** `SALE_ORDERS` / `SALE_ORDER_ITEMS` writes for the Sale Order form + discount.
+
 ---
 
 ## 0. Conventions (apply to every sheet)

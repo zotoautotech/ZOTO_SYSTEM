@@ -89,6 +89,7 @@ export interface NewOrderPayload {
   billingAddress?: string;
   billingState?: string;
   billingPincode?: string;
+  billingCountry?: string;
   shippingSame?: "Yes" | "No";
   shippingAddress?: string;
   shippingState?: string;

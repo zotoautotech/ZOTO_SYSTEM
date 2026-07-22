@@ -72,6 +72,7 @@ export function OrderPunchForm() {
         billingAddress: form.billingAddress,
         billingState: form.billingState,
         billingPincode: form.billingPincode,
+        billingCountry: form.billingCountry,
         shippingSame:
           form.shippingSame === "Same as Previous Order" || form.shippingSame === ""
             ? undefined

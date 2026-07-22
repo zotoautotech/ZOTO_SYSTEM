@@ -4,10 +4,60 @@ import { env } from "../config/env.js";
 import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
+import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
 ordersRouter.use(requireModule("punch-order"));
+
+// The transactions sheet's order-header tab was renamed ORDERS -> ORDER_PUNCH and its
+// columns given human-readable names; punchToSheet/punchFromSheet translate between the
+// API's internal field names and those headers (see orderPunchMap.ts).
+const ORDER_TAB = "ORDER_PUNCH";
+
+/** Reads the single ZOTO seller branch (SALLER_MASTER, one row) to auto-fill the order's
+ * Seller Details section on save. Returns internal-keyed seller fields (blank on failure). */
+async function getSellerFields(): Promise<SheetRow> {
+  try {
+    const rows = await readTable(env.sheets.customerBilling, "SALLER_MASTER", { ttlMs: 5 * 60_000 });
+    const branch = rows.find((r) => r["ADC Firm ID"]) ?? rows[0];
+    if (!branch) return {};
+    return {
+      BRANCH_ID: branch["ADC Firm ID"] || "",
+      BRANCH_NAME: branch["Branch Name"] || "",
+      SELLER_GSTIN: branch["GSTIN"] || "",
+      SELLER_EMAIL: branch["Email"] || "",
+      SELLER_CONTACT: branch["Contact No."] || "",
+      SELLER_ADDRESS_1: branch["Address Line 1"] || "",
+      SELLER_ADDRESS_2: branch["Address Line 2"] || "",
+      SELLER_STATE: branch["State"] || "",
+      SELLER_PINCODE: branch["Pin Code"] || "",
+      SELLER_COUNTRY: branch["Country"] || "India",
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Reads the buyer's row from CUSTOMER MASTER T1 to auto-fill buyer contact/segment fields
+ * the punch form doesn't capture directly. Returns internal-keyed fields (blank on failure). */
+async function getBuyerFields(custId: string): Promise<SheetRow> {
+  if (!custId) return {};
+  try {
+    const rows = await readTable(env.sheets.customerBilling, "CUSTOMER MASTER T1", { headerRow: 2, ttlMs: 5 * 60_000 });
+    const c = rows.find((r) => r["CUST ID"] === custId);
+    if (!c) return {};
+    return {
+      BUSINESS_SEGMENT: c["Business Segment"] || "",
+      TYPE_OF_CUSTOMER: c["TYPE OF CUSTOMER"] || "",
+      BUYER_EMAIL: c["REGISTERED EMAIL ID"] || "",
+      BUYER_CONTACT: c["REGISTERED MOBILE NO."] || "",
+      PAYMENT_TERMS: c["Payment Terms With Days"] || "",
+    };
+  } catch {
+    return {};
+  }
+}
 
 // Nothing on Order Punch is mandatory (removed at the user's request so the team can
 // punch partial orders and fill gaps in later) — every field here is optional/defaulted.
@@ -59,6 +109,7 @@ const createOrderSchema = z.object({
   billingAddress: z.string().optional().default(""),
   billingState: z.string().optional().default(""),
   billingPincode: z.string().optional().default(""),
+  billingCountry: z.string().optional().default("India"),
   shippingSame: z.enum(["Yes", "No"]).optional(),
   shippingAddress: z.string().optional().default(""),
   shippingState: z.string().optional().default(""),
@@ -79,7 +130,7 @@ function money(n: number) {
 ordersRouter.get("/", async (req, res, next) => {
   try {
     const { stage, status } = req.query as { stage?: string; status?: string };
-    const rows = await readTable(env.sheets.transactions, "ORDERS");
+    const rows = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
     const filtered = rows.filter(
       (r) => (!stage || r.CURRENT_STAGE === stage) && (!status || r.STATUS === status)
     );
@@ -96,7 +147,7 @@ ordersRouter.get("/latest", async (req, res, next) => {
     if (!custId) {
       return res.status(400).json({ error: { code: "BAD_REQUEST", message: "custId query param is required" } });
     }
-    const orders = await readTable(env.sheets.transactions, "ORDERS");
+    const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
     const customerOrders = orders
       .filter((o) => o.CUST_ID === custId)
       .sort((a, b) => (b.CREATED_AT ?? "").localeCompare(a.CREATED_AT ?? ""));
@@ -113,16 +164,16 @@ ordersRouter.get("/latest", async (req, res, next) => {
 ordersRouter.get("/:id", async (req, res, next) => {
   try {
     const [orders, items, dispatchPlan] = await Promise.all([
-      readTable(env.sheets.transactions, "ORDERS"),
+      readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
       readTable(env.sheets.transactions, "DISPATCH_PLAN"),
     ]);
-    const order = orders.find((o) => o.ORDER_ID === req.params.id);
-    if (!order) {
+    const sheetOrder = orders.find((o) => o.ORDER_ID === req.params.id);
+    if (!sheetOrder) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
     res.json({
-      order,
+      order: punchFromSheet(sheetOrder),
       items: items.filter((i) => i.ORDER_ID === req.params.id),
       dispatchPlan: dispatchPlan.filter((d) => d.ORDER_ID === req.params.id),
     });
@@ -139,7 +190,7 @@ ordersRouter.delete("/", requireCanDelete, async (req, res, next) => {
     const { orderIds } = deleteOrdersSchema.parse(req.body);
     await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", orderIds);
     await deleteRows(env.sheets.transactions, "DISPATCH_PLAN", "ORDER_ID", orderIds);
-    const deleted = await deleteRows(env.sheets.transactions, "ORDERS", "ORDER_ID", orderIds);
+    const deleted = await deleteRows(env.sheets.transactions, ORDER_TAB, "ORDER_ID", orderIds);
     res.json({ deleted });
   } catch (err) {
     next(err);
@@ -191,6 +242,10 @@ ordersRouter.post("/", async (req, res, next) => {
         PACKING_REQUIREMENTS: item.packingRequirements,
         NOTES: item.notes,
         STATUS: "PENDING",
+        // ORDER_ITEMS uses Timestamp/Useremail (not CREATED_AT/BY); include both — the
+        // extra CREATED_* keys below are harmlessly ignored (no matching header).
+        Timestamp: now,
+        Useremail: req.user!.email,
         CREATED_AT: now,
         CREATED_BY: req.user!.email,
         UPDATED_AT: now,
@@ -223,51 +278,56 @@ ordersRouter.post("/", async (req, res, next) => {
       });
     }
 
-    await appendRow(env.sheets.transactions, "ORDERS", {
-      ORDER_ID: orderId,
-      PO_NO: body.poNo,
-      PO_DATE: body.poDate,
-      PO_ATTACHMENT_URL: body.poAttachmentUrl,
-      OTHER_ATTACHMENT_URL: body.otherAttachmentUrl,
-      PO_REMARKS: body.poRemarks,
-      ORDER_TYPE: body.orderType,
-      SALE_TYPE: body.saleType,
-      PAYMENT_TYPE: body.paymentType,
-      ADVANCE_PCT: body.advancePct !== undefined ? String(body.advancePct) : "",
-      CUST_ID: body.custId,
-      CUSTOMER_NAME: body.customerName,
-      BUYER_GSTIN: body.buyerGstin,
-      CLIENT_CLASSIFICATION: body.clientClassification ?? "",
-      THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
-      CONTACT_PERSON: body.contactPerson,
-      CONTACT_NO: body.contactNo,
-      ORDER_GIVEN_BY: body.orderGivenBy,
-      SALE_STAFF_NAME: body.saleStaffName,
-      BILLING_ADDRESS: body.billingAddress,
-      BILLING_STATE: body.billingState,
-      BILLING_PINCODE: body.billingPincode,
-      SHIPPING_SAME: body.shippingSame ?? "",
-      SHIPPING_ADDRESS: body.shippingAddress,
-      SHIPPING_STATE: body.shippingState,
-      SHIPPING_PINCODE: body.shippingPincode,
-      PREFERRED_DELIVERY_MODE: body.preferredDeliveryMode,
-      PREFERRED_TRANSPORT_MODE: body.preferredTransportMode,
-      FREIGHT_PAID_BY: body.freightPaidBy,
-      FREIGHT_ON_INVOICE: body.freightOnInvoice,
-      PREFERRED_TPT_ID: body.preferredTptId,
-      BASIC_AMOUNT: money(basicAmount),
-      TAX_AMOUNT: money(taxAmount),
-      TOTAL_AMOUNT: money(basicAmount + taxAmount),
-      CURRENT_STAGE: "Punch",
-      APPROVAL_STATUS: "",
-      APPROVAL_REMARKS: "",
-      STATUS: "PENDING",
-      CREATED_AT: now,
-      CREATED_BY: req.user!.email,
-      UPDATED_AT: now,
-      UPDATED_BY: req.user!.email,
-      ROW_VERSION: "1",
-    });
+    // Auto-fill the Seller Details section (fixed ZOTO branch) and buyer contact/segment
+    // fields from the masters, then translate everything to ORDER_PUNCH's sheet headers.
+    const [seller, buyer] = await Promise.all([getSellerFields(), getBuyerFields(body.custId)]);
+    await appendRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      punchToSheet({
+        ORDER_ID: orderId,
+        CREATED_AT: now,
+        CREATED_BY: req.user!.email,
+        PO_NO: body.poNo,
+        PO_DATE: body.poDate,
+        PO_ATTACHMENT_URL: body.poAttachmentUrl,
+        OTHER_ATTACHMENT_URL: body.otherAttachmentUrl,
+        PO_REMARKS: body.poRemarks,
+        ORDER_TYPE: body.orderType,
+        SALE_TYPE: body.saleType,
+        PAYMENT_TYPE: body.paymentType,
+        ADVANCE_PCT: body.advancePct !== undefined ? String(body.advancePct) : "",
+        ...seller,
+        CUST_ID: body.custId,
+        CUSTOMER_NAME: body.customerName,
+        ...buyer,
+        BUYER_GSTIN: body.buyerGstin,
+        THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
+        CONTACT_PERSON: body.contactPerson,
+        CONTACT_NO: body.contactNo,
+        ORDER_GIVEN_BY: body.orderGivenBy,
+        SALE_STAFF_NAME: body.saleStaffName,
+        BILLING_ADDRESS: body.billingAddress,
+        BILLING_STATE: body.billingState,
+        BILLING_PINCODE: body.billingPincode,
+        BILLING_COUNTRY: body.billingCountry,
+        SHIPPING_SAME: body.shippingSame ?? "",
+        SHIPPING_ADDRESS: body.shippingAddress,
+        SHIPPING_STATE: body.shippingState,
+        SHIPPING_PINCODE: body.shippingPincode,
+        PREFERRED_DELIVERY_MODE: body.preferredDeliveryMode,
+        PREFERRED_TRANSPORT_MODE: body.preferredTransportMode,
+        FREIGHT_PAID_BY: body.freightPaidBy,
+        FREIGHT_ON_INVOICE: body.freightOnInvoice,
+        PREFERRED_TPT_ID: body.preferredTptId,
+        BASIC_AMOUNT: money(basicAmount),
+        TAX_AMOUNT: money(taxAmount),
+        TOTAL_AMOUNT: money(basicAmount + taxAmount),
+        APPROVAL_STATUS: "",
+        APPROVAL_REMARKS: "",
+        STATUS: "PENDING",
+      })
+    );
 
     res.status(201).json({ orderId });
   } catch (err) {
@@ -309,7 +369,7 @@ const DISCOUNT_LOG_HEADERS = [
 ordersRouter.post("/:id/discount", async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
-    const orders = await readTable(env.sheets.transactions, "ORDERS");
+    const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
     const order = orders.find((o) => o.ORDER_ID === req.params.id);
     if (!order) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
@@ -321,20 +381,19 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     const totalAmount = basicAmount + taxAmount - discountRs;
     const now = new Date().toISOString();
 
-    await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
-      DISCOUNT_REASON: body.reason,
-      DISCOUNT_DESCRIPTION: body.description,
-      DISCOUNT_TYPE: body.type,
-      DISCOUNT_PCT: body.type === "Percentage" ? String(body.discountPct) : "",
-      DISCOUNT_RS: money(discountRs),
-      TOTAL_AMOUNT: money(totalAmount),
-      // Stays in the "Punch" stage (still shows in both Punch Order's and Sale Order's
-      // pending queues — there's no separate Sale Order stage/sheet yet) but the status
-      // label flips so it reads as reviewed-with-discount rather than freshly punched.
-      STATUS: "PENDING SALE ORDER",
-      UPDATED_AT: now,
-      UPDATED_BY: req.user!.email,
-    });
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      req.params.id,
+      punchToSheet({
+        INVOICE_DISCOUNT_RS: money(discountRs),
+        TOTAL_AMOUNT: money(totalAmount),
+        // Status flips so the order reads as reviewed-with-discount; the full discount
+        // detail is captured in the ORDER_PUNCH_DISCOUNT log below (and, in phase 2, SALE_ORDERS).
+        STATUS: "PENDING SALE ORDER",
+      })
+    );
 
     await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
     const punchDiscountId = await nextId("DISC");
@@ -364,35 +423,38 @@ const saleOrderFormSchema = z.object({
   soRemarks: z.string().optional().default(""),
 });
 
-/** Saves the Sale Order form (No./Date/Attachment/Remarks) once the discount step is done. */
+/** Saves the Sale Order form (No./Date/Attachment/Remarks). Phase 2 will persist these to
+ * SALE_ORDERS; for now this just marks the order and avoids a crash against the renamed tab. */
 ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
-    await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
-      SO_NO: body.soNo,
-      SO_DATE: body.soDate,
-      SO_ATTACHMENT_URL: body.soAttachmentUrl,
-      SO_REMARKS: body.soRemarks,
-      UPDATED_AT: new Date().toISOString(),
-      UPDATED_BY: req.user!.email,
-    });
+    void body; // SO_* columns live on SALE_ORDERS (phase 2), not ORDER_PUNCH.
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      req.params.id,
+      punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.email })
+    );
     res.json({ orderId: req.params.id });
   } catch (err) {
     next(err);
   }
 });
 
-/** Advances an order to the next pipeline stage (marks current stage record COMPLETED). */
+/** Advances an order to the next pipeline stage. Note: ORDER_PUNCH has no stage column, so
+ * this reflects the change via STATUS only until the pipeline tabs are wired (phase 2). */
 ordersRouter.post("/:id/stage", async (req, res, next) => {
   try {
     const schema = z.object({ toStage: z.string(), remarks: z.string().optional() });
     const { toStage, remarks } = schema.parse(req.body);
-    await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
-      CURRENT_STAGE: toStage,
-      UPDATED_AT: new Date().toISOString(),
-      UPDATED_BY: req.user!.email,
-      ...(remarks ? { APPROVAL_REMARKS: remarks } : {}),
-    });
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      req.params.id,
+      punchToSheet({ APPROVAL_REMARKS: remarks ?? "", CREATED_BY: req.user!.email })
+    );
     res.json({ orderId: req.params.id, currentStage: toStage });
   } catch (err) {
     next(err);

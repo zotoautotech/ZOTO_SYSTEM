@@ -259,16 +259,39 @@ export function OrderDetail() {
             />
           </Section>
 
+          <Section title="Seller Details">
+            <Field label="Branch" value={order.BRANCH_NAME || order.BRANCH_ID} />
+            <Field label="Seller GSTIN No." value={order.SELLER_GSTIN} />
+            <Field label="Seller Email" value={order.SELLER_EMAIL} />
+            <Field label="Seller Contact No." value={order.SELLER_CONTACT} />
+            <Field label="Seller Address" value={order.SELLER_ADDRESS_1} />
+            <Field label="Seller State" value={order.SELLER_STATE} />
+            <Field label="Seller Pin Code" value={order.SELLER_PINCODE} />
+          </Section>
+
           <Section title="Buyer Details">
             <Field label="Customer Name" value={order.CUSTOMER_NAME} />
+            <Field label="Business Segment" value={order.BUSINESS_SEGMENT} />
+            <Field label="Type of Customer" value={order.TYPE_OF_CUSTOMER} />
             <Field label="Buyer GSTIN No." value={order.BUYER_GSTIN} />
-            <Field label="Client Classification" value={order.CLIENT_CLASSIFICATION} />
-            <Field label="Payment Terms" value={order.THIS_ORDER_PAYMENT_TERMS} />
+            <Field label="Buyer Email" value={order.BUYER_EMAIL} />
+            <Field label="Buyer Contact No." value={order.BUYER_CONTACT} />
+            <Field label="Payment Terms" value={order.PAYMENT_TERMS || order.THIS_ORDER_PAYMENT_TERMS} />
             <Field label="Contact Person" value={order.CONTACT_PERSON} />
             <Field label="Contact No." value={order.CONTACT_NO} />
             <Field label="Sale Staff Name" value={order.SALE_STAFF_NAME} />
             <Field label="Order Given By" value={order.ORDER_GIVEN_BY} />
           </Section>
+
+          {(order.CONSIGNEE_NAME || order.CONSIGNEE_GSTIN) && (
+            <Section title="Consignee Details">
+              <Field label="Ship to Consignee" value={order.SHIP_TO_CONSIGNEE} />
+              <Field label="Consignee Name" value={order.CONSIGNEE_NAME} />
+              <Field label="Consignee GSTIN" value={order.CONSIGNEE_GSTIN} />
+              <Field label="Consignee Contact No." value={order.CONSIGNEE_CONTACT} />
+              <Field label="Consignee Email" value={order.CONSIGNEE_EMAIL} />
+            </Section>
+          )}
 
           <Section title="Logistics Details">
             <Field label="Preferred Delivery Mode" value={order.PREFERRED_DELIVERY_MODE} />
