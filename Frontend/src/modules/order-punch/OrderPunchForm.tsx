@@ -62,6 +62,7 @@ export function OrderPunchForm() {
         poAttachmentUrl: form.poAttachmentUrl,
         otherAttachmentUrl: form.otherAttachmentUrl,
         poRemarks: form.poRemarks,
+        saleType: form.saleType as "Order" | "Sample" | "Return Order",
         orderType: form.orderType as "Order Incoming" | "Order Outgoing",
         paymentType: form.paymentType as "Credit" | "Advance",
         advancePct: form.paymentType === "Advance" ? form.advancePct : undefined,

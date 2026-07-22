@@ -94,7 +94,7 @@ const createOrderSchema = z.object({
   otherAttachmentUrl: z.string().optional().default(""),
   poRemarks: z.string().optional().default(""),
   orderType: z.enum(["Order Incoming", "Order Outgoing"]).optional().default("Order Incoming"),
-  saleType: z.enum(["Regular", "Sample"]).optional().default("Regular"),
+  saleType: z.enum(["Order", "Sample", "Return Order"]).optional().default("Order"),
   paymentType: z.enum(["Credit", "Advance"]).optional().default("Credit"),
   advancePct: z.number().min(0).max(100).optional(),
   custId: z.string().optional().default(""),

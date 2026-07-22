@@ -79,6 +79,7 @@ export interface NewOrderPayload {
   poAttachmentUrl?: string;
   otherAttachmentUrl?: string;
   poRemarks?: string;
+  saleType?: "Order" | "Sample" | "Return Order";
   orderType?: "Order Incoming" | "Order Outgoing";
   paymentType?: "Credit" | "Advance";
   advancePct?: number;

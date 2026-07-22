@@ -37,6 +37,7 @@ export interface OrderFormState {
   poRemarks: string;
 
   // Tab 2 — order level
+  saleType: "Order" | "Sample" | "Return Order" | "";
   orderType: "Order Incoming" | "Order Outgoing" | "";
   paymentType: "Credit" | "Advance" | "";
   advancePct: number | undefined;
@@ -81,6 +82,7 @@ export function emptyOrderForm(): OrderFormState {
     poAttachmentUrl: "",
     otherAttachmentUrl: "",
     poRemarks: "",
+    saleType: "Order",
     orderType: "Order Incoming",
     paymentType: "Credit",
     advancePct: undefined,
