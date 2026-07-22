@@ -121,3 +121,15 @@ export async function applyOrderDiscount(orderId: string, payload: OrderDiscount
   );
   return res.data;
 }
+
+export interface SaleOrderFormPayload {
+  soNo: string;
+  soDate: string;
+  soAttachmentUrl: string;
+  soRemarks?: string;
+}
+
+export async function uploadSaleOrderForm(orderId: string, payload: SaleOrderFormPayload) {
+  const res = await api.post<{ orderId: string }>(`/orders/${orderId}/sale-order-form`, payload);
+  return res.data;
+}

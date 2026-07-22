@@ -5,6 +5,24 @@ import { getOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
+import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
+
+function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "none", cursor: "pointer", width: 76 }}
+    >
+      <span style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          {children}
+        </svg>
+      </span>
+      <span style={{ fontSize: 12, color: "var(--color-text)", textAlign: "center", lineHeight: 1.3 }}>{label}</span>
+    </button>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -38,6 +56,7 @@ export function OrderDetail() {
   // both point at the same underlying order data) so back/expand links stay in that module.
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const [showDiscountForm, setShowDiscountForm] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -184,38 +203,21 @@ export function OrderDetail() {
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
-          {/* Discount is a one-time Sale Order review step — once DISCOUNT_TYPE is set on
-              the order, hide the button rather than letting it be reapplied. Styled as a
-              quick-action icon + label, matching the old system's record-level shortcuts. */}
-          {basePath === "/modules/sale-order" && !order.DISCOUNT_TYPE && (
+          {/* Once a discount is saved, STATUS flips to "PENDING SALE ORDER" — the discount
+              step is done, so swap the discount action for the next step's action. */}
+          {basePath === "/modules/sale-order" && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
-              <button
-                onClick={() => setShowDiscountForm(true)}
-                aria-label="Add Discounts on Sale Order"
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "none", cursor: "pointer", width: 76 }}
-              >
-                <span
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "50%",
-                    background: "var(--color-primary)",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 5H5a2 2 0 0 0-2 2v4l10 10 8-8L11 3H7" />
-                    <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
-                  </svg>
-                </span>
-                <span style={{ fontSize: 12, color: "var(--color-text)", textAlign: "center", lineHeight: 1.3 }}>
-                  Add Discounts on Sale Order…
-                </span>
-              </button>
+              {order.STATUS !== "PENDING SALE ORDER" ? (
+                <QuickAction label="Add Discounts on Sale Order…" onClick={() => setShowDiscountForm(true)}>
+                  <path d="M9 5H5a2 2 0 0 0-2 2v4l10 10 8-8L11 3H7" />
+                  <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
+                </QuickAction>
+              ) : (
+                <QuickAction label="Upload Sale Order Form" onClick={() => setShowUploadForm(true)}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                  <path d="M14 2v6h6M9 13h6M9 17h6" />
+                </QuickAction>
+              )}
             </div>
           )}
         </div>
@@ -285,6 +287,18 @@ export function OrderDetail() {
           onClose={() => setShowDiscountForm(false)}
           onSaved={() => {
             setShowDiscountForm(false);
+            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
+          }}
+        />
+      )}
+
+      {showUploadForm && (
+        <SaleOrderUploadForm
+          orderId={orderId!}
+          onClose={() => setShowUploadForm(false)}
+          onSaved={() => {
+            setShowUploadForm(false);
             queryClient.invalidateQueries({ queryKey: ["order", orderId] });
             queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
           }}

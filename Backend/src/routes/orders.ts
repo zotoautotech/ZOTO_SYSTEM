@@ -357,6 +357,31 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
   }
 });
 
+const saleOrderFormSchema = z.object({
+  soNo: z.string().min(1),
+  soDate: z.string().min(1),
+  soAttachmentUrl: z.string().min(1),
+  soRemarks: z.string().optional().default(""),
+});
+
+/** Saves the Sale Order form (No./Date/Attachment/Remarks) once the discount step is done. */
+ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
+  try {
+    const body = saleOrderFormSchema.parse(req.body);
+    await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
+      SO_NO: body.soNo,
+      SO_DATE: body.soDate,
+      SO_ATTACHMENT_URL: body.soAttachmentUrl,
+      SO_REMARKS: body.soRemarks,
+      UPDATED_AT: new Date().toISOString(),
+      UPDATED_BY: req.user!.email,
+    });
+    res.json({ orderId: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Advances an order to the next pipeline stage (marks current stage record COMPLETED). */
 ordersRouter.post("/:id/stage", async (req, res, next) => {
   try {
