@@ -2,6 +2,7 @@ import { useState } from "react";
 import { isAxiosError } from "axios";
 import { uploadSaleOrderForm } from "../../lib/ordersApi";
 import { TextField } from "../../components/form/TextField";
+import { FileDropzone } from "../../components/form/FileDropzone";
 import { useIsMobile } from "../../lib/responsive";
 
 interface Props {
@@ -110,12 +111,10 @@ export function SaleOrderUploadForm({ orderId, onClose, onSaved }: Props) {
           )}
           <TextField label="Sale Order No." required value={soNo} onChange={(e) => setSoNo(e.target.value)} />
           <TextField label="Sale Order Date" required type="date" value={soDate} onChange={(e) => setSoDate(e.target.value)} />
-          <TextField
-            label="Sale Order Attachment"
-            required
-            placeholder="Attachment URL"
+          <FileDropzone
+            label="Sale Order Attachment *"
             value={soAttachmentUrl}
-            onChange={(e) => setSoAttachmentUrl(e.target.value)}
+            onChange={setSoAttachmentUrl}
           />
           <TextField label="Sale Order Remarks" value={soRemarks} onChange={(e) => setSoRemarks(e.target.value)} />
         </div>
