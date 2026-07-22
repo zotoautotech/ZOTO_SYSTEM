@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, deleteRows, readTable, updateRow, type SheetRow } from "../services/sheets.js";
+import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 
@@ -287,8 +287,25 @@ const discountSchema = z
     message: "discountPct is required for Percentage, discountRs is required for Rupees",
   });
 
-/** Applies the Sale Order discount, recalculates TOTAL_AMOUNT, and pushes the order into
- * the Sale Order stage's pending queue. */
+// Matches the old ADC system's "Order Punch Discount" tab (Timestamp, Useremail, Punch ID,
+// Punch Discount ID, Discount Reason, Description, Discount Type/%/Rs, Status) — created
+// automatically on first use since it isn't part of the current sheet's pre-built tabs.
+const DISCOUNT_LOG_TAB = "ORDER_PUNCH_DISCOUNT";
+const DISCOUNT_LOG_HEADERS = [
+  "TIMESTAMP",
+  "USEREMAIL",
+  "ORDER_ID",
+  "PUNCH_DISCOUNT_ID",
+  "DISCOUNT_REASON",
+  "DESCRIPTION",
+  "DISCOUNT_TYPE",
+  "DISCOUNT_PCT",
+  "DISCOUNT_RS",
+  "STATUS",
+];
+
+/** Applies the Sale Order discount, recalculates TOTAL_AMOUNT, logs the action to the
+ * Order Punch Discount tab, and pushes the order into the Sale Order stage's pending queue. */
 ordersRouter.post("/:id/discount", async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
@@ -302,6 +319,7 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     const taxAmount = Number(order.TAX_AMOUNT || 0);
     const discountRs = body.type === "Percentage" ? (basicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
     const totalAmount = basicAmount + taxAmount - discountRs;
+    const now = new Date().toISOString();
 
     await updateRow(env.sheets.transactions, "ORDERS", "ORDER_ID", req.params.id, {
       DISCOUNT_REASON: body.reason,
@@ -314,8 +332,23 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
       // pending queues — there's no separate Sale Order stage/sheet yet) but the status
       // label flips so it reads as reviewed-with-discount rather than freshly punched.
       STATUS: "PENDING SALE ORDER",
-      UPDATED_AT: new Date().toISOString(),
+      UPDATED_AT: now,
       UPDATED_BY: req.user!.email,
+    });
+
+    await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
+    const punchDiscountId = await nextId("DISC");
+    await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
+      TIMESTAMP: now,
+      USEREMAIL: req.user!.email,
+      ORDER_ID: req.params.id,
+      PUNCH_DISCOUNT_ID: punchDiscountId,
+      DISCOUNT_REASON: body.reason,
+      DESCRIPTION: body.description,
+      DISCOUNT_TYPE: body.type,
+      DISCOUNT_PCT: body.type === "Percentage" ? String(body.discountPct) : "",
+      DISCOUNT_RS: money(discountRs),
+      STATUS: "PENDING SALE ORDER",
     });
 
     res.json({ orderId: req.params.id, discountRs: money(discountRs), totalAmount: money(totalAmount) });

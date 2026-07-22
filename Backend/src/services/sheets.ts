@@ -52,6 +52,26 @@ export async function readTable(
   return records;
 }
 
+/** Creates `tab` with the given header row if it doesn't already exist in the spreadsheet.
+ * Additive only — never touches an existing tab's data, even if its headers differ. */
+export async function ensureSheetTab(spreadsheetId: string, tab: string, headers: string[]): Promise<void> {
+  const sheets = await getSheetsClient();
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const exists = (meta.data.sheets ?? []).some((s) => s.properties?.title === tab);
+  if (exists) return;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${tab}!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [headers] },
+  });
+}
+
 /** Appends one row, mapping the object's keys to the tab's existing header order (row 1 unless `headerRow` is given). */
 export async function appendRow(
   spreadsheetId: string,
