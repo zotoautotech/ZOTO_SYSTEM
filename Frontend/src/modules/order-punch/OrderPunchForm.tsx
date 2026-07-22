@@ -86,6 +86,12 @@ export function OrderPunchForm() {
         freightPaidBy: form.freightPaidBy,
         freightOnInvoice: form.freightOnInvoice as "Yes" | "No",
         preferredTptId: form.preferredTptId,
+        preferredTptName: form.preferredTptName,
+        transporterType: form.transporterType,
+        transporterContactNo: form.transporterContactNo,
+        transporterPersonName: form.transporterPersonName,
+        transporterPersonContactNo: form.transporterPersonContactNo,
+        transporterAddress: form.transporterAddress,
         items: form.items.map((it) => ({
           fgId: it.fgId,
           partNo: it.partNo,

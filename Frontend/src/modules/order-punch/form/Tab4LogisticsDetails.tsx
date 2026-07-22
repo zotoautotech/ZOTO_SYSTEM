@@ -21,6 +21,7 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
     const row = transporters.find((t) => t["Transporter ID"] === option?.value);
     update({
       preferredTptId: option?.value ?? "",
+      preferredTptName: option?.label ?? "",
       transporterType: row?.["Transporter Type"] ?? "",
       transporterContactNo: row?.["Contact No."] ?? "",
       transporterPersonName: row?.["Contact Person Name"] ?? "",

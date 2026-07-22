@@ -321,7 +321,12 @@ export function OrderDetail() {
             <Field label="Preferred Delivery Mode" value={order.PREFERRED_DELIVERY_MODE} />
             <Field label="Transportation Mode" value={order.PREFERRED_TRANSPORT_MODE} />
             <Field label="Freight Paid By" value={order.FREIGHT_PAID_BY} />
-            <Field label="Preferred Transporter" value={order.PREFERRED_TPT_ID} />
+            <Field label="Preferred Transporter" value={order.PREFERRED_TPT_NAME || order.PREFERRED_TPT_ID} />
+            <Field label="Transporter Type" value={order.TRANSPORTER_TYPE} />
+            <Field label="Transporter Contact No." value={order.TRANSPORTER_CONTACT} />
+            <Field label="Transporter Person Name" value={order.TRANSPORTER_PERSON_NAME} />
+            <Field label="Transporter Person Contact No." value={order.TRANSPORTER_PERSON_CONTACT} />
+            <Field label="Transporter Address" value={order.TRANSPORTER_ADDRESS} />
           </Section>
 
           {partsCard}

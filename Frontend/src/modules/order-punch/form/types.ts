@@ -68,6 +68,7 @@ export interface OrderFormState {
   freightPaidBy: string;
   freightOnInvoice: "Yes" | "No" | "";
   preferredTptId: string;
+  preferredTptName: string;
   transporterType: string;
   transporterContactNo: string;
   transporterPersonName: string;
@@ -105,6 +106,7 @@ export function emptyOrderForm(): OrderFormState {
     freightPaidBy: "",
     freightOnInvoice: "No",
     preferredTptId: "",
+    preferredTptName: "",
     transporterType: "",
     transporterContactNo: "",
     transporterPersonName: "",

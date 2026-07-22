@@ -100,6 +100,12 @@ export interface NewOrderPayload {
   freightPaidBy?: string;
   freightOnInvoice?: "Yes" | "No";
   preferredTptId?: string;
+  preferredTptName?: string;
+  transporterType?: string;
+  transporterContactNo?: string;
+  transporterPersonName?: string;
+  transporterPersonContactNo?: string;
+  transporterAddress?: string;
   items?: NewOrderItem[];
 }
 

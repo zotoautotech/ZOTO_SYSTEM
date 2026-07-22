@@ -83,6 +83,10 @@ export const ORDER_PUNCH_MAP: Record<string, string> = {
   PREFERRED_TPT_ID: "Preferred_Transporter_ID",
   PREFERRED_TPT_NAME: "Preferred_Transporter_Name",
   TRANSPORTER_TYPE: "Transporter_Type",
+  TRANSPORTER_CONTACT: "Transporter_Contact_No.",
+  TRANSPORTER_PERSON_NAME: "Transporter_Person_Name",
+  TRANSPORTER_PERSON_CONTACT: "Transporter_Person_Contact_No.",
+  TRANSPORTER_ADDRESS: "Transporter_Address",
 
   // GST Details
   INVOICE_DISCOUNT_RS: "Invoice_Discount_(rs)",
