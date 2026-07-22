@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
-import { nextId } from "../services/ids.js";
+import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 
@@ -275,12 +275,12 @@ ordersRouter.post("/", async (req, res, next) => {
       await appendRow(env.sheets.transactions, "ORDER_ITEMS", row);
     }
 
-    for (const plan of body.dispatchPlan) {
+    const dspIds = await nextIds("DSP", "DISPATCH_PLAN", "DSP_ID", body.dispatchPlan.length);
+    for (const [i, plan] of body.dispatchPlan.entries()) {
       const targetItem = itemRows[plan.itemIndex];
       if (!targetItem) continue;
-      const dspId = await nextId("DSP", "DISPATCH_PLAN", "DSP_ID");
       await appendRow(env.sheets.transactions, "DISPATCH_PLAN", {
-        DSP_ID: dspId,
+        DSP_ID: dspIds[i],
         ITEM_ID: targetItem.ITEM_ID,
         ORDER_ID: orderId,
         EXPECTED_DATE: plan.expectedDate,
@@ -485,13 +485,14 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
     const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter(
       (i) => i.ORDER_ID === req.params.id
     );
-    for (const item of items) {
+    const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
+    for (const [i, item] of items.entries()) {
       await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", {
         ...item,
         Timestamp: now,
         Useremail: req.user!.email,
         SALE_ORDER_ID: saleOrderId,
-        SALE_ORDER_ITEM_ID: await nextId("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID"),
+        SALE_ORDER_ITEM_ID: soItemIds[i],
       });
     }
 

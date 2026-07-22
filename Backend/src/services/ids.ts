@@ -28,17 +28,34 @@ export async function nextSequentialId(
   return prefix ? `${prefix}${String(next).padStart(pad, "0")}` : String(next);
 }
 
+function randomId(prefix: string): string {
+  return `${prefix}-${randomBytes(4).toString("hex")}`;
+}
+
 /**
- * Issues an ID as `${prefix}-${8 random hex chars}` (e.g. "ORD-e76026d8"), matching the
- * old ADC system's ID style (PNCH-dd8edb5b, PRE-b69aa81a, STR-7d4dfcb5). A collision is
- * astronomically unlikely (32 bits of randomness) but not impossible, so this checks the
- * target tab's ID column and retries on the rare chance of a duplicate — guaranteed unique.
+ * Issues `count` IDs as `${prefix}-${8 random hex chars}` (e.g. "ORD-e76026d8"), matching
+ * the old ADC system's ID style (PNCH-dd8edb5b, PRE-b69aa81a, STR-7d4dfcb5). A collision is
+ * astronomically unlikely (32 bits of randomness) but not impossible, so existing IDs in
+ * the target tab are fetched ONCE (not per ID — important when issuing many at once, e.g.
+ * one per line item) and every candidate is checked against that plus this batch's own IDs.
+ * Uses the normal 30s cache (no forced refresh) since this isn't a hot correctness path.
  */
-export async function nextId(prefix: string, tab: string, idColumn: string): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const candidate = `${prefix}-${randomBytes(4).toString("hex")}`;
-    const rows = await readTable(env.sheets.transactions, tab, { refresh: true });
-    if (!rows.some((r) => r[idColumn] === candidate)) return candidate;
+export async function nextIds(prefix: string, tab: string, idColumn: string, count: number): Promise<string[]> {
+  if (count <= 0) return [];
+  const rows = await readTable(env.sheets.transactions, tab);
+  const existing = new Set(rows.map((r) => r[idColumn]));
+  const issued: string[] = [];
+  while (issued.length < count) {
+    const candidate = randomId(prefix);
+    if (!existing.has(candidate)) {
+      existing.add(candidate);
+      issued.push(candidate);
+    }
   }
-  throw new Error(`Could not generate a unique ID for ${tab}.${idColumn} after 5 attempts`);
+  return issued;
+}
+
+/** Issues a single ID — see nextIds() for the collision-check details. */
+export async function nextId(prefix: string, tab: string, idColumn: string): Promise<string> {
+  return (await nextIds(prefix, tab, idColumn, 1))[0];
 }
