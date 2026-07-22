@@ -263,20 +263,22 @@ export function Layout() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
-            {/* zoto-logo.png is the full crest + "My ZOTO" wordmark stacked in one image (269x251);
-                crop to just the top ~60% (the crest) so the wordmark can be set as real, bold text instead. */}
+            {/* zoto-logo.png is the full crest + "My ZOTO" wordmark stacked in one image (269x251).
+                The crossed swords dip down to ~62% of the image height before the wordmark starts
+                at ~66%, so the two crops below split there — leaving a hair of gap rather than
+                cutting into the swords or bleeding a sword-tip into the wordmark crop. */}
             <img
               src="/zoto-logo.png"
               alt="ZOTO crest"
-              style={{ display: "block", width: 56, height: 31, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
+              style={{ display: "block", width: 42, height: 25, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
             />
-            {/* Same source image, cropped to its bottom ~42% (the "My ZOTO®" wordmark) — using
+            {/* Same source image, cropped to its bottom ~34% (the "My ZOTO®" wordmark) — using
                 the real artwork here instead of recreated text keeps the exact logo typeface. */}
             {!effectivelyCollapsed && (
               <img
                 src="/zoto-logo.png"
                 alt="My ZOTO"
-                style={{ display: "block", width: 108, height: 42, flexShrink: 0, objectFit: "cover", objectPosition: "bottom" }}
+                style={{ display: "block", width: 92, height: 29, flexShrink: 0, objectFit: "cover", objectPosition: "bottom" }}
               />
             )}
           </div>
