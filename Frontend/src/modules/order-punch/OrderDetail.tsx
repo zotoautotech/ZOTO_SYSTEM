@@ -185,15 +185,38 @@ export function OrderDetail() {
             {formatTimestamp(order.CREATED_AT)}
           </span>
           {/* Discount is a one-time Sale Order review step — once DISCOUNT_TYPE is set on
-              the order, hide the button rather than letting it be reapplied. */}
+              the order, hide the button rather than letting it be reapplied. Styled as a
+              quick-action icon + label, matching the old system's record-level shortcuts. */}
           {basePath === "/modules/sale-order" && !order.DISCOUNT_TYPE && (
-            <button
-              className="btn btn-outline-primary"
-              onClick={() => setShowDiscountForm(true)}
-              style={{ display: "block", width: "100%", marginTop: 14 }}
-            >
-              + Add Discount
-            </button>
+            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
+              <button
+                onClick={() => setShowDiscountForm(true)}
+                aria-label="Add Discounts on Sale Order"
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "none", cursor: "pointer", width: 76 }}
+              >
+                <span
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: "50%",
+                    background: "var(--color-primary)",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 5H5a2 2 0 0 0-2 2v4l10 10 8-8L11 3H7" />
+                    <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
+                  </svg>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--color-text)", textAlign: "center", lineHeight: 1.3 }}>
+                  Add Discounts on Sale Order…
+                </span>
+              </button>
+            </div>
           )}
         </div>
 
