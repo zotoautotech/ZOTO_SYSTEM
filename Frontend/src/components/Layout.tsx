@@ -267,14 +267,17 @@ export function Layout() {
                 crop to just the top ~60% (the crest) so the wordmark can be set as real, bold text instead. */}
             <img
               src="/zoto-logo.png"
-              alt="ZOTO"
+              alt="ZOTO crest"
               style={{ display: "block", width: 56, height: 31, flexShrink: 0, objectFit: "cover", objectPosition: "top" }}
             />
+            {/* Same source image, cropped to its bottom ~42% (the "My ZOTO®" wordmark) — using
+                the real artwork here instead of recreated text keeps the exact logo typeface. */}
             {!effectivelyCollapsed && (
-              <span style={{ display: "flex", flexDirection: "column", lineHeight: 1, whiteSpace: "nowrap" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>My</span>
-                <strong style={{ fontSize: 21, fontWeight: 800, letterSpacing: 0.3 }}>ZOTO</strong>
-              </span>
+              <img
+                src="/zoto-logo.png"
+                alt="My ZOTO"
+                style={{ display: "block", width: 108, height: 42, flexShrink: 0, objectFit: "cover", objectPosition: "bottom" }}
+              />
             )}
           </div>
           {!collapsed && !isCompact && (
