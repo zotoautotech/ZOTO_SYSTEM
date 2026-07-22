@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getOrder } from "../../lib/ordersApi";
+import { getOrder, getSaleOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
@@ -62,6 +62,13 @@ export function OrderDetail() {
     queryKey: ["order", orderId],
     queryFn: () => getOrder(orderId!),
     enabled: !!orderId,
+  });
+
+  // Only relevant in the Sale Order module — shows the saved Sale Order form details.
+  const { data: saleOrder } = useQuery({
+    queryKey: ["saleOrder", orderId],
+    queryFn: () => getSaleOrder(orderId!),
+    enabled: !!orderId && basePath === "/modules/sale-order",
   });
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
@@ -250,6 +257,23 @@ export function OrderDetail() {
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
+          {saleOrder && (
+            <Section title="Sale Order Details">
+              <Field label="Sale Order No." value={saleOrder.SO_NO} />
+              <Field label="Sale Order Date" value={saleOrder.SO_DATE} />
+              <Field label="Sale Order ID" value={saleOrder.SALE_ORDER_ID} />
+              <Field label="Discount (Rs)" value={saleOrder.INVOICE_DISCOUNT_RS} />
+              <Field label="Remarks" value={saleOrder.SO_REMARKS} />
+              {saleOrder.SO_ATTACHMENT_URL && (
+                <div style={{ marginBottom: 12 }}>
+                  <a href={saleOrder.SO_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", fontSize: 14 }}>
+                    📄 View Sale Order attachment
+                  </a>
+                </div>
+              )}
+            </Section>
+          )}
+
           <Section title="Order Details">
             <Field label="Tally" value="Tally 1 (Registered)" />
             <Field label="Order Type" value={order.ORDER_TYPE} />
@@ -324,6 +348,7 @@ export function OrderDetail() {
             setShowUploadForm(false);
             queryClient.invalidateQueries({ queryKey: ["order", orderId] });
             queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
+            queryClient.invalidateQueries({ queryKey: ["saleOrder", orderId] });
           }}
         />
       )}

@@ -103,14 +103,38 @@ for (const [internal, header] of Object.entries(ORDER_PUNCH_MAP)) {
   if (!(header in READ_HEADER_TO_INTERNAL)) READ_HEADER_TO_INTERNAL[header] = internal;
 }
 
-/** Translate an internal-keyed record into one keyed by ORDER_PUNCH sheet headers (for writes). */
-export function punchToSheet(record: SheetRow): SheetRow {
+/**
+ * SALE_ORDERS mirrors ORDER_PUNCH's columns (same header names) plus SALE_ORDER_ID and a
+ * "Sale Order Details" section, and it names the discount column "Invoice_Discount" (not
+ * "Invoice_Discount_(rs)"). Reuse the punch map and override just those differences.
+ */
+export const SALE_ORDER_MAP: Record<string, string> = {
+  ...ORDER_PUNCH_MAP,
+  INVOICE_DISCOUNT_RS: "Invoice_Discount",
+  SALE_ORDER_ID: "SALE_ORDER_ID",
+  SO_NO: "Sale Order No.",
+  SO_DATE: "Sale Order Date",
+  SO_ATTACHMENT_URL: "Sale Order Attachment",
+  SO_REMARKS: "Sale Order Remarks",
+};
+
+function translate(record: SheetRow, map: Record<string, string>): SheetRow {
   const out: SheetRow = {};
   for (const [key, value] of Object.entries(record)) {
-    const header = ORDER_PUNCH_MAP[key];
+    const header = map[key];
     if (header) out[header] = value;
   }
   return out;
+}
+
+/** Translate an internal-keyed record into one keyed by ORDER_PUNCH sheet headers (for writes). */
+export function punchToSheet(record: SheetRow): SheetRow {
+  return translate(record, ORDER_PUNCH_MAP);
+}
+
+/** Translate an internal-keyed record into one keyed by SALE_ORDERS sheet headers (for writes). */
+export function saleOrderToSheet(record: SheetRow): SheetRow {
+  return translate(record, SALE_ORDER_MAP);
 }
 
 /** Translate a sheet row (keyed by ORDER_PUNCH headers) back into internal field names (for reads). */
@@ -123,5 +147,20 @@ export function punchFromSheet(row: SheetRow): SheetRow {
   // The new sheet has no CURRENT_STAGE column; the app filters lists by it, so synthesize
   // it from the tab (ORDER_PUNCH = the Punch stage) to keep existing filtering working.
   out.CURRENT_STAGE = "Punch";
+  return out;
+}
+
+const SALE_ORDER_HEADER_TO_INTERNAL: Record<string, string> = {};
+for (const [internal, header] of Object.entries(SALE_ORDER_MAP)) {
+  if (!(header in SALE_ORDER_HEADER_TO_INTERNAL)) SALE_ORDER_HEADER_TO_INTERNAL[header] = internal;
+}
+
+/** Translate a SALE_ORDERS sheet row back into internal field names (for reads). */
+export function saleOrderFromSheet(row: SheetRow): SheetRow {
+  const out: SheetRow = {};
+  for (const [header, value] of Object.entries(row)) {
+    const internal = SALE_ORDER_HEADER_TO_INTERNAL[header];
+    if (internal) out[internal] = value;
+  }
   return out;
 }

@@ -131,6 +131,15 @@ export interface SaleOrderFormPayload {
 }
 
 export async function uploadSaleOrderForm(orderId: string, payload: SaleOrderFormPayload) {
-  const res = await api.post<{ orderId: string }>(`/orders/${orderId}/sale-order-form`, payload);
+  const res = await api.post<{ orderId: string; saleOrderId: string }>(
+    `/orders/${orderId}/sale-order-form`,
+    payload
+  );
+  return res.data;
+}
+
+/** The SALE_ORDERS row for an order once its Sale Order form is saved, or null. */
+export async function getSaleOrder(orderId: string) {
+  const res = await api.get<Record<string, string> | null>(`/orders/${orderId}/sale-order`);
   return res.data;
 }

@@ -4,7 +4,7 @@ import { env } from "../config/env.js";
 import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
-import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
+import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -177,6 +177,17 @@ ordersRouter.get("/:id", async (req, res, next) => {
       items: items.filter((i) => i.ORDER_ID === req.params.id),
       dispatchPlan: dispatchPlan.filter((d) => d.ORDER_ID === req.params.id),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Returns the SALE_ORDERS row for an order (once its Sale Order form has been saved), or null. */
+ordersRouter.get("/:id/sale-order", async (req, res, next) => {
+  try {
+    const rows = await readTable(env.sheets.transactions, "SALE_ORDERS");
+    const row = rows.find((r) => r.ORDER_ID === req.params.id);
+    res.json(row ? saleOrderFromSheet(row) : null);
   } catch (err) {
     next(err);
   }
@@ -423,12 +434,41 @@ const saleOrderFormSchema = z.object({
   soRemarks: z.string().optional().default(""),
 });
 
-/** Saves the Sale Order form (No./Date/Attachment/Remarks). Phase 2 will persist these to
- * SALE_ORDERS; for now this just marks the order and avoids a crash against the renamed tab. */
+/** Saves the Sale Order form: creates a full SALE_ORDERS row (a copy of the punch order +
+ * the carried discount + SO No./Date/Attachment/Remarks) and marks the punch order done. */
 ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
-    void body; // SO_* columns live on SALE_ORDERS (phase 2), not ORDER_PUNCH.
+    const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
+    const order = orders.find((o) => o.ORDER_ID === req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+    }
+
+    const now = new Date().toISOString();
+    const saleOrderId = await nextId("SO");
+
+    await appendRow(
+      env.sheets.transactions,
+      "SALE_ORDERS",
+      saleOrderToSheet({
+        // Copy every order-header field captured at Punch (PO, seller, buyer, billing,
+        // shipping, consignee, logistics, amounts, carried discount)...
+        ...order,
+        // ...then set the sale-order-specific fields (these win over the spread).
+        CREATED_AT: now,
+        CREATED_BY: req.user!.email,
+        ORDER_ID: req.params.id,
+        SALE_ORDER_ID: saleOrderId,
+        SO_NO: body.soNo,
+        SO_DATE: body.soDate,
+        SO_ATTACHMENT_URL: body.soAttachmentUrl,
+        SO_REMARKS: body.soRemarks,
+        STATUS: "PENDING",
+      })
+    );
+
+    // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
     await updateRow(
       env.sheets.transactions,
       ORDER_TAB,
@@ -436,7 +476,8 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       req.params.id,
       punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.email })
     );
-    res.json({ orderId: req.params.id });
+
+    res.json({ orderId: req.params.id, saleOrderId });
   } catch (err) {
     next(err);
   }
