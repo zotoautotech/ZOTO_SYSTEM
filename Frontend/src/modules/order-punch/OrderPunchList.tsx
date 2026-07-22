@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteOrders, listOrders, type OrderRecord } from "../../lib/ordersApi";
 import { listCustomers, listGoods } from "../../lib/mastersApi";
@@ -15,6 +15,8 @@ import { useAuth } from "../../lib/auth";
 
 export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const { query } = useSearch();
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -131,7 +133,7 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
       {filtered.map((order) => (
         <button
           key={order.ORDER_ID}
-          onClick={() => (selectMode ? toggleRow(order.ORDER_ID) : navigate(`/modules/punch-order/${order.ORDER_ID}`))}
+          onClick={() => (selectMode ? toggleRow(order.ORDER_ID) : navigate(`${basePath}/${order.ORDER_ID}`))}
           style={{ width: "100%", textAlign: "left", display: "block", border: "1px solid var(--color-border)", borderRadius: 12, background: selectedIds.has(order.ORDER_ID) ? "var(--color-primary-tint)" : "var(--color-bg)", padding: "14px 16px", marginBottom: 10, color: "var(--color-text)" }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -309,7 +311,7 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
           {isMobile ? mobileOrders : <DataTable
             columns={columns}
             rows={filtered}
-            onRowClick={(o) => navigate(`/modules/punch-order/${o.ORDER_ID}`)}
+            onRowClick={(o) => navigate(`${basePath}/${o.ORDER_ID}`)}
             emptyMessage={isLoading ? "Loading…" : q ? `No orders match "${query}"` : "No records"}
             selectable={selectMode}
             getRowKey={(o) => o.ORDER_ID}

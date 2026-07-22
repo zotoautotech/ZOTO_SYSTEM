@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
@@ -30,6 +30,8 @@ function Field({ label, value }: { label: string; value?: string }) {
 export function OrderItemDetail() {
   const { orderId, itemId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const isCompact = useIsCompact();
   const isMobile = useIsMobile();
 
@@ -58,7 +60,7 @@ export function OrderItemDetail() {
       <div style={{ display: "flex", flexWrap: isCompact ? "wrap" : "nowrap", gap: 16, alignItems: "flex-start" }}>
         <div style={{ flex: isCompact ? "1 1 100%" : "0 0 260px" }}>
           <button
-            onClick={() => navigate(`/modules/punch-order/${orderId}/items`)}
+            onClick={() => navigate(`${basePath}/${orderId}/items`)}
             aria-label="Back"
             style={{
               width: 30,

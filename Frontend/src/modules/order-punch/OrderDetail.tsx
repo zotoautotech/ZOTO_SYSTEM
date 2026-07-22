@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
@@ -29,7 +29,11 @@ function Field({ label, value }: { label: string; value?: string }) {
 export function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isCompact = useIsCompact();
+  // Preserves whichever module list this was opened from (Punch Order vs. Sale Order —
+  // both point at the same underlying order data) so back/expand links stay in that module.
+  const basePath = `/modules/${location.pathname.split("/")[2]}`;
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -62,7 +66,7 @@ export function OrderDetail() {
           </span>
         </div>
         <button
-          onClick={() => navigate(`/modules/punch-order/${orderId}/items`)}
+          onClick={() => navigate(`${basePath}/${orderId}/items`)}
           style={{
             border: "none",
             background: "none",
@@ -112,7 +116,7 @@ export function OrderDetail() {
             {items.map((it) => (
               <tr
                 key={it.ITEM_ID}
-                onClick={() => navigate(`/modules/punch-order/${orderId}/items/${it.ITEM_ID}`)}
+                onClick={() => navigate(`${basePath}/${orderId}/items/${it.ITEM_ID}`)}
                 style={{ cursor: "pointer" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -154,7 +158,7 @@ export function OrderDetail() {
         <div style={{ flex: isCompact ? "1 1 100%" : "0 0 260px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
             <button
-              onClick={() => navigate("/modules/punch-order")}
+              onClick={() => navigate(basePath)}
               aria-label="Back"
               style={{
                 width: 30,

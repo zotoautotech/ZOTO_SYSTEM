@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
@@ -37,6 +37,8 @@ const COLUMNS = [
 export function OrderItemsView() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const isCompact = useIsCompact();
   const isMobile = useIsMobile();
   const [colWidths, setColWidths] = useState(() => COLUMNS.map((c) => c.width));
@@ -154,7 +156,7 @@ export function OrderItemsView() {
               return (
                 <tr
                   key={it.ITEM_ID}
-                  onClick={() => navigate(`/modules/punch-order/${orderId}/items/${it.ITEM_ID}`)}
+                  onClick={() => navigate(`${basePath}/${orderId}/items/${it.ITEM_ID}`)}
                   style={{ cursor: "pointer" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}

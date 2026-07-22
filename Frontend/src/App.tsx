@@ -43,6 +43,9 @@ export default function App() {
         <Route path="modules/punch-order/:orderId" element={<OrderDetail />} />
         <Route path="modules/punch-order/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/punch-order/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        <Route path="modules/sale-order/:orderId" element={<OrderDetail />} />
+        <Route path="modules/sale-order/:orderId/items" element={<OrderItemsView />} />
+        <Route path="modules/sale-order/:orderId/items/:itemId" element={<OrderItemDetail />} />
         <Route path="modules/:moduleKey" element={<PlaceholderModule />} />
       </Route>
     </Routes>
