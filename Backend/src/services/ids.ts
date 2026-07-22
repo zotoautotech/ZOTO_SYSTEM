@@ -1,5 +1,5 @@
-import { env } from "../config/env.js";
-import { readTable, updateRow, appendRow } from "./sheets.js";
+import { randomBytes } from "node:crypto";
+import { readTable } from "./sheets.js";
 
 /**
  * Issues the next sequential value for a master ID column by scanning existing
@@ -28,31 +28,11 @@ export async function nextSequentialId(
 }
 
 /**
- * Issues the next sequential ID for a prefix (e.g. "ORD" -> "ORD-2627-0001"),
- * using the COUNTERS tab in the transactions sheet as the single source of truth.
- * Not safe against true concurrent writers (Sheets has no transactions) but the
- * read-then-write window is short and collisions are rare at this scale.
+ * Issues an ID as `${prefix}-${8 random hex chars}` (e.g. "ORD-e76026d8"), matching the
+ * old ADC system's ID style (PNCH-dd8edb5b, PRE-b69aa81a, STR-7d4dfcb5). No longer uses
+ * the COUNTERS tab / fiscal-year sequence — random hex has no collision bookkeeping to
+ * maintain, at the cost of the IDs no longer sorting in creation order.
  */
-export async function nextId(prefix: string, pad = 4): Promise<string> {
-  const spreadsheetId = env.sheets.transactions;
-  const counterKey = `${prefix}-${env.fiscalYearSeries}`;
-
-  const rows = await readTable(spreadsheetId, "COUNTERS", { refresh: true });
-  const existing = rows.find((r) => r.COUNTER_KEY === counterKey);
-
-  const current = existing ? Number(existing.LAST_VALUE || 0) : 0;
-  const next = current + 1;
-
-  if (existing) {
-    await updateRow(spreadsheetId, "COUNTERS", "COUNTER_KEY", counterKey, {
-      LAST_VALUE: String(next),
-    });
-  } else {
-    await appendRow(spreadsheetId, "COUNTERS", {
-      COUNTER_KEY: counterKey,
-      LAST_VALUE: String(next),
-    });
-  }
-
-  return `${counterKey}-${String(next).padStart(pad, "0")}`;
+export async function nextId(prefix: string): Promise<string> {
+  return `${prefix}-${randomBytes(4).toString("hex")}`;
 }
