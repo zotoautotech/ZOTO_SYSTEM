@@ -88,8 +88,10 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
     queryFn: () => listOrders({}),
   });
 
+  // "Completed" means the Sale Order form has been uploaded (STATUS "SALE ORDER") — this
+  // stage of the pipeline is done. Shared by both Punch Order and Sale Order (same data).
   const scoped = useMemo(
-    () => orders.filter((o) => (showCompleted ? o.CURRENT_STAGE !== "Punch" : o.CURRENT_STAGE === "Punch")),
+    () => orders.filter((o) => (showCompleted ? o.STATUS === "SALE ORDER" : o.STATUS !== "SALE ORDER")),
     [orders, showCompleted]
   );
 

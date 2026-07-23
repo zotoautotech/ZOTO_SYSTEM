@@ -210,9 +210,10 @@ export function OrderDetail() {
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
-          {/* Once a discount is saved, STATUS flips to "PENDING SALE ORDER" — the discount
-              step is done, so swap the discount action for the next step's action. */}
-          {basePath === "/modules/sale-order" && (
+          {/* Three states: STATUS "PENDING" (fresh punch) -> show the discount action;
+              "PENDING SALE ORDER" (discount saved) -> show the upload action;
+              "SALE ORDER" (form uploaded, this stage done) -> show neither. */}
+          {basePath === "/modules/sale-order" && order.STATUS !== "SALE ORDER" && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               {order.STATUS !== "PENDING SALE ORDER" ? (
                 <QuickAction label="Add Discounts on Sale Order…" onClick={() => setShowDiscountForm(true)}>
