@@ -14,9 +14,15 @@ is the short, current-state summary — don't let it grow into a second changelo
 
 ## Deploy
 
+Backend:
 ```
-cd "C:\Users\ADMIN\Desktop\ZOTO SYSTEM\Backend" && npx.cmd vercel --prod
-cd "C:\Users\ADMIN\Desktop\ZOTO SYSTEM\Frontend" && npx.cmd vercel --prod
+cd "C:\Users\ADMIN\Desktop\ZOTO SYSTEM\Backend"
+npx.cmd vercel --prod
+```
+Frontend:
+```
+cd "C:\Users\ADMIN\Desktop\ZOTO SYSTEM\Frontend"
+npx.cmd vercel --prod
 ```
 Deploy Backend whenever `Backend/` changed; Frontend whenever `Frontend/` changed. Check
 `git status`/the diff to know which (or both).
