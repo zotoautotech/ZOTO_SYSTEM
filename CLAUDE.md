@@ -41,7 +41,12 @@ The detail action rail opens `SoConfirmationForm.tsx` — Confirmed/Changes/Canc
 wired: Confirmed captures payment fields, Changes reveals the same Tab1/3/4 punch-form
 components prefilled with the order's current data (edits post back and update both
 `ORDER_PUNCH`+`SALE_ORDERS`), Cancelled just takes a remark. All three persist via
-`POST /orders/:id/so-confirmation`. `Frontend/src/modules/dispatch-approval/
+`POST /orders/:id/so-confirmation`. Changes also gets a 6th "GST Details" tab
+(`ConfirmationItemsTab.tsx`) for editing the order's actual line items — same search/qty/
+price/GST-slab pattern as the punch form's item editor — which on save **replaces**
+`ORDER_ITEMS`+`SALE_ORDER_ITEMS` for that order and recalculates `BASIC_AMOUNT`/`TAX_AMOUNT`/
+`TOTAL_AMOUNT` on both `ORDER_PUNCH`/`SALE_ORDERS`, preserving any discount already applied.
+`Frontend/src/modules/dispatch-approval/
 DispatchApprovalList.tsx` is the next-stage queue (same list pattern), fed by orders whose
 `ORDER_PUNCH.STATUS` got set to `DISPATCH APPROVAL` on Confirm — no detail form built for
 this stage yet.

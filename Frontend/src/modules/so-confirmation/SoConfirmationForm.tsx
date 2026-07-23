@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { FileDropzone } from "../../components/form/FileDropzone";
 import { TextField } from "../../components/form/TextField";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
-import { getOrder, submitSoConfirmation, type OrderRecord } from "../../lib/ordersApi";
-import { emptyOrderForm, type OrderFormState } from "../order-punch/form/types";
+import { getOrder, submitSoConfirmation, type OrderItemRecord, type OrderRecord } from "../../lib/ordersApi";
+import { emptyItem, emptyOrderForm, type ItemFormState, type OrderFormState } from "../order-punch/form/types";
 import { Tab1PurchaseOrder } from "../order-punch/form/Tab1PurchaseOrder";
 import { Tab3BillingAddress } from "../order-punch/form/Tab3BillingAddress";
 import { Tab4LogisticsDetails } from "../order-punch/form/Tab4LogisticsDetails";
+import { ConfirmationItemsTab } from "./ConfirmationItemsTab";
 import { useIsMobile } from "../../lib/responsive";
 
 type Confirmation = "Confirmed" | "Changes" | "Cancelled" | "";
@@ -58,11 +59,32 @@ function orderToFormState(order: OrderRecord): OrderFormState {
   };
 }
 
-const TABS = ["Confirmation Details", "Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
+/** Maps ORDER_ITEMS rows into the punch form's item shape, for the same GST Details /
+ * items editor the punch form itself uses. */
+function itemsToFormState(items: OrderItemRecord[]): ItemFormState[] {
+  if (items.length === 0) return [emptyItem()];
+  return items.map((item) => ({
+    ...emptyItem(),
+    partType: item.FG_ID ? "Existing" : "",
+    fgId: item.FG_ID || "",
+    partNo: item.PART_NO || "",
+    partName: item.PART_NAME || "",
+    segment: item.SEGMENT || "",
+    category: item.CATEGORY || "",
+    qty: item.QTY ? Number(item.QTY) : undefined,
+    uom: item.UOM || "SET",
+    price: item.PRICE ? Number(item.PRICE) : undefined,
+    gstSlabPct: item.GST_SLAB_PCT ? Number(item.GST_SLAB_PCT) : 18,
+    remarks: item.NOTES || "",
+  }));
+}
+
+const TABS = ["Confirmation Details", "Purchase Order Details", "Order Details", "Billing Address", "Logistics Details", "GST Details"];
 
 export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(0);
+  const tabStripRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -76,13 +98,20 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
 
   useEffect(() => {
     getOrder(orderId)
-      .then((data) => setForm(orderToFormState(data.order)))
+      .then((data) => setForm({ ...orderToFormState(data.order), items: itemsToFormState(data.items) }))
       .finally(() => setLoading(false));
   }, [orderId]);
 
   function update(patch: Partial<OrderFormState>) {
     setForm((f) => ({ ...f, ...patch }));
   }
+
+  // Keep the active tab scrolled into view when Next/Prev or a tab click changes it.
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const active = strip?.children[tab] as HTMLElement | undefined;
+    active?.scrollIntoView({ inline: "center", behavior: "smooth", block: "nearest" });
+  }, [tab]);
 
   const confirmed = confirmation === "Confirmed";
   const changes = confirmation === "Changes";
@@ -146,6 +175,18 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
               transporterPersonName: form.transporterPersonName,
               transporterPersonContactNo: form.transporterPersonContactNo,
               transporterAddress: form.transporterAddress,
+              items: form.items.map((it) => ({
+                fgId: it.fgId,
+                partNo: it.partNo,
+                partName: it.partName,
+                segment: it.segment,
+                category: it.category,
+                price: it.price ?? 0,
+                qty: it.qty ?? 0,
+                uom: it.uom,
+                gstSlabPct: it.gstSlabPct,
+                notes: it.remarks,
+              })),
             }
           : undefined,
       });
@@ -179,27 +220,46 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
           </button>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", overflow: "hidden", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
-          {TABS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => (changes || index === 0) && goToTab(index)}
-              disabled={!changes && index > 0}
-              style={{
-                flexShrink: 0,
-                padding: "12px 14px",
-                background: "none",
-                border: "none",
-                color: index === tab ? "var(--color-primary)" : "var(--color-text-muted)",
-                borderBottom: index === tab ? "3px solid var(--color-primary)" : "3px solid transparent",
-                fontSize: 13,
-                cursor: changes || index === 0 ? "pointer" : "default",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--color-border)" }}>
+          <button
+            type="button"
+            aria-label="Scroll tabs left"
+            onClick={() => tabStripRef.current?.scrollBy({ left: -160, behavior: "smooth" })}
+            style={{ flexShrink: 0, width: 28, alignSelf: "stretch", border: "none", background: "none", color: "var(--color-text-muted)", cursor: "pointer" }}
+          >
+            ‹
+          </button>
+          <div ref={tabStripRef} style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none", flex: 1 }}>
+            {TABS.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => (changes || index === 0) && goToTab(index)}
+                disabled={!changes && index > 0}
+                style={{
+                  flexShrink: 0,
+                  padding: "12px 14px",
+                  background: "none",
+                  border: "none",
+                  color: index === tab ? "var(--color-primary)" : "var(--color-text-muted)",
+                  borderBottom: index === tab ? "3px solid var(--color-primary)" : "3px solid transparent",
+                  fontSize: 13,
+                  whiteSpace: "nowrap",
+                  cursor: changes || index === 0 ? "pointer" : "default",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-label="Scroll tabs right"
+            onClick={() => tabStripRef.current?.scrollBy({ left: 160, behavior: "smooth" })}
+            style={{ flexShrink: 0, width: 28, alignSelf: "stretch", border: "none", background: "none", color: "var(--color-text-muted)", cursor: "pointer" }}
+          >
+            ›
+          </button>
         </div>
 
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
@@ -279,8 +339,10 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
             </>
           ) : tab === 3 ? (
             <Tab3BillingAddress form={form} update={update} />
-          ) : (
+          ) : tab === 4 ? (
             <Tab4LogisticsDetails form={form} update={update} />
+          ) : (
+            <ConfirmationItemsTab form={form} update={update} />
           )}
         </div>
 

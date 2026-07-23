@@ -4,6 +4,18 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-23
 
+- **SO Confirmation gets a real item/GST editor.** Added a 6th "GST Details" tab to the
+  Changes flow (`ConfirmationItemsTab.tsx`, same search/qty/price/GST-slab pattern as the
+  punch form's item editor), prefilled with the order's actual current items. Saving
+  replaces `ORDER_ITEMS`+`SALE_ORDER_ITEMS` for that order and recalculates
+  `BASIC_AMOUNT`/`TAX_AMOUNT`/`TOTAL_AMOUNT` on both `ORDER_PUNCH`/`SALE_ORDERS` — verified
+  against the live sheet that an existing discount survives the recalculation correctly.
+  Also fixed the tab-bar header (was `overflowX: auto`, rendering as an unreadable squished
+  line with scrollbar arrows on some setups) to use explicit `‹`/`›` scroll buttons instead,
+  and fixed a real pre-existing bug found while wiring this: `OrderPunchForm.tsx` sent item
+  remarks as `remarks`, but the backend's item schema field is actually named `notes` — item
+  remarks entered at Punch were silently being dropped (zod ignored the unknown key) ever
+  since items were added to the punch form.
 - **SO Confirmation → Dispatch Approval fully wired.** `SoConfirmationForm.tsx` now actually
   persists (`POST /orders/:id/so-confirmation`): Confirmed captures payment fields and
   advances the order to Dispatch Approval; Changes reveals the punch form's own Tab1/3/4

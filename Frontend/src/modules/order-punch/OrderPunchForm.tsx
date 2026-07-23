@@ -107,7 +107,7 @@ export function OrderPunchForm() {
           qty: it.qty ?? 0,
           uom: it.uom,
           gstSlabPct: it.gstSlabPct,
-          remarks: it.remarks,
+          notes: it.remarks,
         })),
       });
       navigate(`/modules/punch-order/${result.orderId}`);

@@ -544,6 +544,7 @@ const confirmationChangesSchema = z.object({
   shippingSame: z.string().optional(), shippingAddress: z.string().optional(), shippingState: z.string().optional(), shippingPincode: z.string().optional(),
   preferredDeliveryMode: z.string().optional(), preferredTransportMode: z.string().optional(), freightPaidBy: z.string().optional(), freightOnInvoice: z.string().optional(),
   preferredTptId: z.string().optional(), preferredTptName: z.string().optional(), transporterType: z.string().optional(), transporterContactNo: z.string().optional(), transporterPersonName: z.string().optional(), transporterPersonContactNo: z.string().optional(), transporterAddress: z.string().optional(),
+  items: z.array(itemSchema).optional(),
 });
 
 const soConfirmationSchema = z.object({
@@ -589,9 +590,55 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
     const withoutUndefined = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
 
     if (body.outcome === "Changes") {
+      let amountFields: Record<string, string> = {};
+
+      // Replacing the item list means the order's amounts must be recalculated from
+      // scratch — same per-line GST math as creating an order — and both ORDER_ITEMS
+      // and SALE_ORDER_ITEMS need to reflect the new lines (SALE_ORDER_ITEMS is a copy
+      // taken at Sale Order save time and otherwise never revisited).
+      if (body.changes?.items && body.changes.items.length > 0) {
+        const now = new Date().toISOString();
+        let basicAmount = 0;
+        let taxAmount = 0;
+        const newItemRows: SheetRow[] = [];
+        for (const item of body.changes.items) {
+          const itemId = `${req.params.id}-${String(newItemRows.length + 1).padStart(2, "0")}`;
+          const lineBasic = item.price * item.qty - item.discountRs;
+          const cgst = (lineBasic * item.gstSlabPct) / 2 / 100;
+          const sgst = cgst;
+          const lineTax = cgst + sgst;
+          basicAmount += lineBasic;
+          taxAmount += lineTax;
+          newItemRows.push({
+            ITEM_ID: itemId, ORDER_ID: req.params.id, FG_ID: item.fgId, PART_NO: item.partNo, PART_NAME: item.partName,
+            SEGMENT: item.segment, CATEGORY: item.category, STRATEGY_ID: item.strategyId, PRICE: money(item.price),
+            QTY: String(item.qty), UOM: item.uom, DISCOUNT_ON: item.discountOn, DISCOUNT_RS: money(item.discountRs),
+            DISCOUNT_PCT: String(item.discountPct), BASIC_AMOUNT: money(lineBasic), GST_SLAB_PCT: String(item.gstSlabPct),
+            CGST: money(cgst), SGST: money(sgst), IGST: "0.00", TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
+            SPECIAL_INSTRUCTIONS: item.specialInstructions, PACKING_REQUIREMENTS: item.packingRequirements, NOTES: item.notes,
+            STATUS: "PENDING", Timestamp: now, Useremail: req.user!.email, CREATED_AT: now, CREATED_BY: req.user!.email,
+            UPDATED_AT: now, UPDATED_BY: req.user!.email, ROW_VERSION: "1",
+          });
+        }
+
+        await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", [req.params.id]);
+        for (const row of newItemRows) {
+          await appendRow(env.sheets.transactions, "ORDER_ITEMS", row);
+        }
+        await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
+        for (const row of newItemRows) {
+          await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...row, SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
+        }
+
+        // Carry forward any discount already applied at the Sale Order discount step.
+        const discountRs = Number(punchFromSheet(punch).INVOICE_DISCOUNT_RS || 0);
+        const totalAmount = basicAmount + taxAmount - discountRs;
+        amountFields = { BASIC_AMOUNT: money(basicAmount), TAX_AMOUNT: money(taxAmount), TOTAL_AMOUNT: money(totalAmount) };
+      }
+
       await Promise.all([
-        updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
-        updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+        updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+        updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
       ]);
       return res.json({ orderId: req.params.id, status: "PENDING" });
     }

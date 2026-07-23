@@ -76,7 +76,7 @@ export interface NewOrderItem {
   qty: number;
   uom: string;
   gstSlabPct?: number;
-  remarks?: string;
+  notes?: string;
 }
 
 export interface NewOrderPayload {
@@ -189,6 +189,7 @@ export interface SoConfirmationChanges {
   transporterPersonName?: string;
   transporterPersonContactNo?: string;
   transporterAddress?: string;
+  items?: NewOrderItem[];
 }
 
 export interface SoConfirmationPayload {
