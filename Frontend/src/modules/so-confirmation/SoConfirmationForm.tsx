@@ -168,7 +168,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
           </button>
         </div>
 
-        <div style={{ display: "flex", overflowX: "auto", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", overflow: "hidden", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
           {TABS.map((label, index) => (
             <button
               key={label}
