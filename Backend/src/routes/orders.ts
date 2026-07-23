@@ -545,6 +545,7 @@ const confirmationChangesSchema = z.object({
   preferredDeliveryMode: z.string().optional(), preferredTransportMode: z.string().optional(), freightPaidBy: z.string().optional(), freightOnInvoice: z.string().optional(),
   preferredTptId: z.string().optional(), preferredTptName: z.string().optional(), transporterType: z.string().optional(), transporterContactNo: z.string().optional(), transporterPersonName: z.string().optional(), transporterPersonContactNo: z.string().optional(), transporterAddress: z.string().optional(),
   items: z.array(itemSchema).optional(),
+  invoiceDiscountRs: z.number().min(0).optional(),
 });
 
 const soConfirmationSchema = z.object({
@@ -591,6 +592,9 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
 
     if (body.outcome === "Changes") {
       let amountFields: Record<string, string> = {};
+      const existingPunch = punchFromSheet(punch);
+      // Reviewer can edit the discount directly on this tab, independent of touching items.
+      const discountRs = body.changes?.invoiceDiscountRs ?? Number(existingPunch.INVOICE_DISCOUNT_RS || 0);
 
       // Replacing the item list means the order's amounts must be recalculated from
       // scratch — same per-line GST math as creating an order — and both ORDER_ITEMS
@@ -630,10 +634,18 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
           await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...row, SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
         }
 
-        // Carry forward any discount already applied at the Sale Order discount step.
-        const discountRs = Number(punchFromSheet(punch).INVOICE_DISCOUNT_RS || 0);
         const totalAmount = basicAmount + taxAmount - discountRs;
-        amountFields = { BASIC_AMOUNT: money(basicAmount), TAX_AMOUNT: money(taxAmount), TOTAL_AMOUNT: money(totalAmount) };
+        amountFields = {
+          BASIC_AMOUNT: money(basicAmount), TAX_AMOUNT: money(taxAmount), TOTAL_AMOUNT: money(totalAmount),
+          INVOICE_DISCOUNT_RS: money(discountRs),
+        };
+      } else if (body.changes?.invoiceDiscountRs !== undefined) {
+        // Discount edited without touching items — keep the existing basic/tax, just
+        // recompute the total against the new discount.
+        const basicAmount = Number(existingPunch.BASIC_AMOUNT || 0);
+        const taxAmount = Number(existingPunch.TAX_AMOUNT || 0);
+        const totalAmount = basicAmount + taxAmount - discountRs;
+        amountFields = { TOTAL_AMOUNT: money(totalAmount), INVOICE_DISCOUNT_RS: money(discountRs) };
       }
 
       await Promise.all([

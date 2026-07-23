@@ -95,10 +95,14 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
   const [paymentAmountPct, setPaymentAmountPct] = useState("");
   const [paymentAttachment, setPaymentAttachment] = useState("");
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
+  const [invoiceDiscountRs, setInvoiceDiscountRs] = useState("");
 
   useEffect(() => {
     getOrder(orderId)
-      .then((data) => setForm({ ...orderToFormState(data.order), items: itemsToFormState(data.items) }))
+      .then((data) => {
+        setForm({ ...orderToFormState(data.order), items: itemsToFormState(data.items) });
+        setInvoiceDiscountRs(data.order.INVOICE_DISCOUNT_RS || "");
+      })
       .finally(() => setLoading(false));
   }, [orderId]);
 
@@ -187,6 +191,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
                 gstSlabPct: it.gstSlabPct,
                 notes: it.remarks,
               })),
+              invoiceDiscountRs: invoiceDiscountRs ? Number(invoiceDiscountRs) : undefined,
             }
           : undefined,
       });
@@ -342,7 +347,12 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
           ) : tab === 4 ? (
             <Tab4LogisticsDetails form={form} update={update} />
           ) : (
-            <ConfirmationItemsTab form={form} update={update} />
+            <ConfirmationItemsTab
+              form={form}
+              update={update}
+              invoiceDiscountRs={invoiceDiscountRs}
+              onInvoiceDiscountChange={setInvoiceDiscountRs}
+            />
           )}
         </div>
 

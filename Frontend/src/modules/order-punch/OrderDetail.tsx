@@ -8,6 +8,7 @@ import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
 import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
+import { DispatchApprovalForm } from "../dispatch-approval/DispatchApprovalForm";
 
 function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -87,6 +88,7 @@ export function OrderDetail() {
   const [showDiscountForm, setShowDiscountForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showSoConfirmationForm, setShowSoConfirmationForm] = useState(false);
+  const [showDispatchApprovalForm, setShowDispatchApprovalForm] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -267,6 +269,14 @@ export function OrderDetail() {
               </QuickAction>
             </div>
           )}
+          {basePath === "/modules/dispatch-approval" && (
+            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
+              <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowDispatchApprovalForm(true)}>
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </QuickAction>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
@@ -411,6 +421,8 @@ export function OrderDetail() {
           }}
         />
       )}
+
+      {showDispatchApprovalForm && <DispatchApprovalForm onClose={() => setShowDispatchApprovalForm(false)} />}
     </div>
   );
 }

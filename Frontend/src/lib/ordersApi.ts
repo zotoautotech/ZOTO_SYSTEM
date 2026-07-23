@@ -190,6 +190,7 @@ export interface SoConfirmationChanges {
   transporterPersonContactNo?: string;
   transporterAddress?: string;
   items?: NewOrderItem[];
+  invoiceDiscountRs?: number;
 }
 
 export interface SoConfirmationPayload {

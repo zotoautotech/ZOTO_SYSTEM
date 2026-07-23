@@ -10,12 +10,14 @@ import { emptyItem, type ItemFormState, type OrderFormState } from "../order-pun
 interface Props {
   form: OrderFormState;
   update: (patch: Partial<OrderFormState>) => void;
+  invoiceDiscountRs: string;
+  onInvoiceDiscountChange: (value: string) => void;
 }
 
 /** "GST Details" tab for SO Confirmation's Changes flow — same items-editing pattern as the
  * punch form's Tab2OrderDetails (search part, qty, UOM, price, GST slab), operating on the
  * order's actual current items so a reviewer can correct them before the order proceeds. */
-export function ConfirmationItemsTab({ form, update }: Props) {
+export function ConfirmationItemsTab({ form, update, invoiceDiscountRs, onInvoiceDiscountChange }: Props) {
   function updateItem(index: number, patch: Partial<ItemFormState>) {
     const items = form.items.slice();
     items[index] = { ...items[index], ...patch };
@@ -32,6 +34,7 @@ export function ConfirmationItemsTab({ form, update }: Props) {
 
   const basicAmount = form.items.reduce((sum, it) => sum + (it.price ?? 0) * (it.qty ?? 0), 0);
   const taxAmount = form.items.reduce((sum, it) => sum + ((it.price ?? 0) * (it.qty ?? 0) * (it.gstSlabPct ?? 0)) / 100, 0);
+  const discount = Number(invoiceDiscountRs || 0);
 
   return (
     <div>
@@ -50,9 +53,15 @@ export function ConfirmationItemsTab({ form, update }: Props) {
         + Add another item
       </button>
 
+      <TextField
+        label="Invoice Discount (Rs)"
+        type="number"
+        value={invoiceDiscountRs}
+        onChange={(e) => onInvoiceDiscountChange(e.target.value)}
+      />
       <TextField label="Basic Amount" disabled value={`₹ ${basicAmount.toFixed(2)}`} />
       <TextField label="Tax Amount" disabled value={`₹ ${taxAmount.toFixed(2)}`} />
-      <TextField label="Total Amount" disabled value={`₹ ${(basicAmount + taxAmount).toFixed(2)}`} />
+      <TextField label="Total Amount" disabled value={`₹ ${(basicAmount + taxAmount - discount).toFixed(2)}`} />
     </div>
   );
 }

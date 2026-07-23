@@ -4,6 +4,15 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-23
 
+- **Removed Production/Remarks/Sample module cards** — matches the confirmed 12-module set.
+- **Editable Invoice Discount in SO Confirmation's GST Details tab**, above Basic Amount.
+  Works whether or not items are also being edited: editing just the discount recomputes
+  `TOTAL_AMOUNT` against the existing basic/tax; editing items recomputes everything
+  together. Verified both paths against the live sheet.
+- **Dispatch Approval detail form scaffolded (UI-only)** — `DispatchApprovalForm.tsx`, a
+  single "Dispatch Details" tab with the Dispatch Approval dropdown (Dispatch Today /
+  Dispatch Extended / Short Quantity / Excess Quantity), matching the reference exactly.
+  Fields per choice and persistence are a later phase, by request.
 - **SO Confirmation gets a real item/GST editor.** Added a 6th "GST Details" tab to the
   Changes flow (`ConfirmationItemsTab.tsx`, same search/qty/price/GST-slab pattern as the
   punch form's item editor), prefilled with the order's actual current items. Saving
