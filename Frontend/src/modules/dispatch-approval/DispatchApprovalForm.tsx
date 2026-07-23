@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
+import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
 
 interface Props {
   onClose: () => void;
 }
+
+type Outcome = "Dispatch Today" | "Dispatch Extended" | "Short Quantity" | "Excess Quantity" | "";
 
 const DISPATCH_APPROVAL_OPTIONS = [
   { value: "Dispatch Today", label: "Dispatch Today" },
@@ -13,11 +16,46 @@ const DISPATCH_APPROVAL_OPTIONS = [
   { value: "Excess Quantity", label: "Excess Quantity" },
 ];
 
-/** UI-only first phase of the Dispatch Approval form, matching the reference's single
- * "Dispatch Details" tab. Persistence and the fields each choice reveals come next phase. */
+/**
+ * UI-only first phase of the Dispatch Approval form, matching the reference's per-outcome
+ * field set and live red-border validation.
+ *
+ * Available Stock Quantity is a placeholder (disabled, "0.00") until a real Inventory
+ * Management System is connected — Balance Dispatch Quantity is the only stock-derived
+ * number we can show for real today (it comes from the order's own planned/order
+ * quantity), so quantity validation only enforces against Balance when it's actually
+ * known (> 0); once inventory is wired, Available Stock should feed in the same way.
+ */
 export function DispatchApprovalForm({ onClose }: Props) {
   const isMobile = useIsMobile();
-  const [dispatchApproval, setDispatchApproval] = useState("");
+  const [outcome, setOutcome] = useState<Outcome>("");
+  const [approvedQty, setApprovedQty] = useState("");
+  const [shortQty, setShortQty] = useState("");
+  const [excessQty, setExcessQty] = useState("");
+  const [nextExtendedDate, setNextExtendedDate] = useState("");
+  const [remarks, setRemarks] = useState("");
+
+  // Placeholder until Inventory Management System is connected — see comment above.
+  const availableStockQty = 0;
+  // Real for today: derived from the order's own quantity, not yet wired here — 0 means
+  // "unknown", in which case quantity fields are only checked for being > 0.
+  const balanceDispatchQty = 0;
+
+  const qtyError = (value: string, label: string) => {
+    const n = Number(value);
+    if (!value || Number.isNaN(n) || n <= 0) return "Invalid Quantity.";
+    if (balanceDispatchQty > 0 && n > balanceDispatchQty) return `You can't ${label} more than Balance quantity.`;
+    return "";
+  };
+
+  function canSave() {
+    if (!outcome || !remarks.trim()) return false;
+    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch");
+    if (outcome === "Dispatch Extended") return !!nextExtendedDate;
+    if (outcome === "Short Quantity") return !qtyError(shortQty, "Short");
+    if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess");
+    return false;
+  }
 
   return (
     <div
@@ -50,11 +88,66 @@ export function DispatchApprovalForm({ onClose }: Props) {
           <SearchableSelect
             label="Dispatch Approval"
             required
-            value={dispatchApproval}
-            onChange={(v) => setDispatchApproval(v)}
+            value={outcome}
+            onChange={(v) => setOutcome(v as Outcome)}
             options={DISPATCH_APPROVAL_OPTIONS}
             placeholder="Search"
           />
+
+          {outcome && (
+            <TextField label="Available Stock Quantity" disabled value={availableStockQty.toFixed(2)} />
+          )}
+
+          {(outcome === "Dispatch Today" || outcome === "Short Quantity" || outcome === "Excess Quantity") && (
+            <TextField label="Balance Dispatch Quantity" disabled value={balanceDispatchQty.toFixed(2)} />
+          )}
+
+          {outcome === "Dispatch Today" && (
+            <TextField
+              label="Approved Quantity"
+              required
+              type="number"
+              value={approvedQty}
+              onChange={(e) => setApprovedQty(e.target.value)}
+              error={approvedQty ? qtyError(approvedQty, "Dispatch") : undefined}
+            />
+          )}
+          {outcome === "Short Quantity" && (
+            <TextField
+              label="Short Quantity"
+              required
+              type="number"
+              value={shortQty}
+              onChange={(e) => setShortQty(e.target.value)}
+              error={shortQty ? qtyError(shortQty, "Short") : undefined}
+            />
+          )}
+          {outcome === "Excess Quantity" && (
+            <TextField
+              label="Excess Quantity"
+              required
+              type="number"
+              value={excessQty}
+              onChange={(e) => setExcessQty(e.target.value)}
+              error={excessQty ? qtyError(excessQty, "Excess") : undefined}
+            />
+          )}
+
+          {outcome && <TextField label="Unit" disabled value="NOS" />}
+
+          {outcome === "Dispatch Extended" && (
+            <TextField
+              label="Next Extended Date"
+              required
+              type="date"
+              value={nextExtendedDate}
+              onChange={(e) => setNextExtendedDate(e.target.value)}
+            />
+          )}
+
+          {outcome && (
+            <TextField label="Dispatch Remarks" required value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+          )}
         </div>
 
         <div
@@ -70,7 +163,7 @@ export function DispatchApprovalForm({ onClose }: Props) {
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={onClose} disabled={!dispatchApproval}>
+          <button className="btn btn-primary" onClick={onClose} disabled={!canSave()}>
             Save
           </button>
         </div>
