@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { api } from "../../lib/api";
+import { openAttachment } from "../../lib/attachments";
 
 interface FileDropzoneProps {
   label: string;
+  /** A Drive file ID (current uploads store this — never a raw Drive link). */
   value: string;
-  onChange: (url: string) => void;
+  onChange: (fileId: string) => void;
   /** Included in the auto-generated Drive filename (e.g. an order ID) so files are easy
    * to find by record, matching the AppSheet-style naming the old system used. */
   context?: string;
@@ -26,7 +28,7 @@ export function FileDropzone({ label, value, onChange, context }: FileDropzonePr
       const res = await api.post("/uploads", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      onChange(res.data.url);
+      onChange(res.data.fileId);
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail || "Upload failed — check file type (PDF/PNG/JPG) and size (max 10MB)");
@@ -58,15 +60,16 @@ export function FileDropzone({ label, value, onChange, context }: FileDropzonePr
         {uploading ? (
           <span className="text-muted">Uploading…</span>
         ) : value ? (
-          <a
-            href={value}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            style={{ color: "var(--color-primary)" }}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openAttachment(value);
+            }}
+            style={{ color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", font: "inherit" }}
           >
             📄 View attachment
-          </a>
+          </button>
         ) : (
           <span className="text-muted">📄 Click to upload PDF/PNG/JPG</span>
         )}

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOrder, getSaleOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
+import { openAttachment } from "../../lib/attachments";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
@@ -57,18 +58,17 @@ function FieldFile({ label, url }: { label: string; url?: string }) {
         {label}
       </div>
       <div style={{ flex: 1 }}>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", textDecoration: "none" }}
+        <button
+          type="button"
+          onClick={() => openAttachment(url)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
         >
           View attachment
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
             <path d="M14 2v6h6" />
           </svg>
-        </a>
+        </button>
       </div>
     </div>
   );

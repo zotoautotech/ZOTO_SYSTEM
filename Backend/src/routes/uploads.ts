@@ -1,12 +1,12 @@
 import { Router } from "express";
 import multer from "multer";
+import jwt from "jsonwebtoken";
 import { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { getDriveClient } from "../services/googleAuth.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const uploadsRouter = Router();
-uploadsRouter.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -31,7 +31,10 @@ function buildFilename(originalName: string, context?: string): string {
   return `${Date.now()}-${originalName}`;
 }
 
-uploadsRouter.post("/", upload.single("file"), async (req, res, next) => {
+/** Files are kept fully private on Drive (no "anyone" link at all) — every view/download
+ * goes through /stream below, gated by our own login, never Drive's own UI (Share dialog,
+ * edit access, etc.). */
+uploadsRouter.post("/", requireAuth, upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: { code: "BAD_REQUEST", message: "No file uploaded (or unsupported type — PDF/PNG/JPG only)" } });
@@ -53,32 +56,70 @@ uploadsRouter.post("/", upload.single("file"), async (req, res, next) => {
         mimeType: req.file.mimetype,
         body: Readable.from(req.file.buffer),
       },
-      fields: "id, webViewLink",
+      fields: "id",
       supportsAllDrives: true,
     });
 
-    // The folder's own "anyone with link" permission can be broader than we want (this
-    // has happened — the folder was set to Editor), and a new file inherits it as-is; a
-    // plain permissions.create() for the same well-known "anyoneWithLink" id is a no-op
-    // against that inherited grant. permissions.update() actually overrides it per-file.
+    // Explicitly strip any "anyone" access this file might inherit from the folder (the
+    // folder has at times been set to "Anyone with the link: Editor" — .update() is what
+    // actually overrides an inherited grant; plain .create() is a silent no-op against it).
     try {
-      await drive.permissions.update({
+      await drive.permissions.delete({
         fileId: response.data.id!,
         permissionId: "anyoneWithLink",
-        requestBody: { role: "reader" },
         supportsAllDrives: true,
       });
     } catch {
-      // No inherited "anyone" permission to override (e.g. folder isn't publicly shared) —
-      // create one explicitly so the returned link is still viewable.
-      await drive.permissions.create({
-        fileId: response.data.id!,
-        requestBody: { role: "reader", type: "anyone" },
-        supportsAllDrives: true,
-      });
+      // No inherited "anyone" permission to remove — already private, nothing to do.
     }
 
-    res.status(201).json({ fileId: response.data.id, url: response.data.webViewLink });
+    res.status(201).json({ fileId: response.data.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Mints a short-lived (5 min) token scoped to one file, so the browser's plain top-level
+ * navigation to /stream (which can't carry an Authorization header) can still prove the
+ * request came from an authenticated session moments ago. */
+uploadsRouter.get("/:fileId/view-url", requireAuth, (req, res) => {
+  const token = jwt.sign({ fileId: req.params.fileId, purpose: "view-attachment" }, env.jwtSecret, {
+    expiresIn: "5m",
+  });
+  res.json({ token });
+});
+
+/** Streams the file's bytes directly — no Drive UI (Share dialog, edit permissions, etc.)
+ * ever reaches the doer, just the content in the browser's own PDF/image viewer, which
+ * already has its own download button. Auth is the short-lived token from /view-url above,
+ * not the usual bearer header, since this is a plain link navigation, not an API call. */
+uploadsRouter.get("/:fileId/stream", async (req, res, next) => {
+  try {
+    const token = String(req.query.token ?? "");
+    let payload: { fileId: string; purpose: string };
+    try {
+      payload = jwt.verify(token, env.jwtSecret) as typeof payload;
+    } catch {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Invalid or expired view link" } });
+    }
+    if (payload.purpose !== "view-attachment" || payload.fileId !== req.params.fileId) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Invalid view link" } });
+    }
+
+    const drive = await getDriveClient();
+    const meta = await drive.files.get({
+      fileId: req.params.fileId,
+      fields: "name,mimeType",
+      supportsAllDrives: true,
+    });
+    const stream = await drive.files.get(
+      { fileId: req.params.fileId, alt: "media", supportsAllDrives: true },
+      { responseType: "stream" }
+    );
+
+    res.setHeader("Content-Type", meta.data.mimeType || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${(meta.data.name || "attachment").replace(/"/g, "")}"`);
+    stream.data.pipe(res);
   } catch (err) {
     next(err);
   }
