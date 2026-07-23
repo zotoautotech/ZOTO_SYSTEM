@@ -46,6 +46,34 @@ function Field({ label, value }: { label: string; value?: string }) {
   );
 }
 
+/** Same row layout as Field, but the value is a clickable attachment link with a file icon —
+ * matching the old system's inline "label | filename 📄" attachment rows. */
+function FieldFile({ label, url }: { label: string; url?: string }) {
+  const isMobile = useIsMobile();
+  if (!url) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 2 : 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: isMobile ? "0 0 auto" : "0 0 140px" }}>
+        {label}
+      </div>
+      <div style={{ flex: 1 }}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", textDecoration: "none" }}
+        >
+          View attachment
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -234,6 +262,8 @@ export function OrderDetail() {
           <Section title="Purchase Order Details">
             <Field label="Purchase Order No." value={order.PO_NO} />
             <Field label="Purchase Order Date" value={order.PO_DATE} />
+            <FieldFile label="Purchase Order Attachment" url={order.PO_ATTACHMENT_URL} />
+            <FieldFile label="Other Order Attachment" url={order.OTHER_ATTACHMENT_URL} />
             <Field label="Remarks" value={order.PO_REMARKS} />
           </Section>
 
@@ -265,13 +295,7 @@ export function OrderDetail() {
               <Field label="Sale Order ID" value={saleOrder.SALE_ORDER_ID} />
               <Field label="Discount (Rs)" value={saleOrder.INVOICE_DISCOUNT_RS} />
               <Field label="Remarks" value={saleOrder.SO_REMARKS} />
-              {saleOrder.SO_ATTACHMENT_URL && (
-                <div style={{ marginBottom: 12 }}>
-                  <a href={saleOrder.SO_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", fontSize: 14 }}>
-                    📄 View Sale Order attachment
-                  </a>
-                </div>
-              )}
+              <FieldFile label="Sale Order Attachment" url={saleOrder.SO_ATTACHMENT_URL} />
             </Section>
           )}
 
