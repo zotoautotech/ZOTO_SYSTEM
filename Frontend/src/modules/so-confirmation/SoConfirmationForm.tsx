@@ -88,6 +88,17 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
   const changes = confirmation === "Changes";
   const remarksLabel = confirmation === "Cancelled" ? "Cancelled Remarks" : confirmation === "Changes" ? "Changes Remarks" : "Remarks";
 
+  /** Leaving tab 0 requires Changes Remarks to already be filled in — used by both the
+   * Next button and clicking a later tab label directly, so neither can skip past it. */
+  function goToTab(index: number) {
+    if (index > 0 && tab === 0 && !remarks.trim()) {
+      setError(`${remarksLabel} is required`);
+      return;
+    }
+    setError("");
+    setTab(index);
+  }
+
   async function handleSave() {
     if (!confirmation) return;
     if (!remarks.trim()) return setError(`${remarksLabel} is required`);
@@ -173,7 +184,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
             <button
               key={label}
               type="button"
-              onClick={() => (changes || index === 0) && setTab(index)}
+              onClick={() => (changes || index === 0) && goToTab(index)}
               disabled={!changes && index > 0}
               style={{
                 flexShrink: 0,
@@ -293,7 +304,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
               </button>
             )}
             {changes && tab < TABS.length - 1 ? (
-              <button className="btn btn-primary" onClick={() => setTab((t) => Math.min(t + 1, TABS.length - 1))} disabled={!confirmation}>
+              <button className="btn btn-primary" onClick={() => goToTab(Math.min(tab + 1, TABS.length - 1))} disabled={!confirmation}>
                 Next ›
               </button>
             ) : (
