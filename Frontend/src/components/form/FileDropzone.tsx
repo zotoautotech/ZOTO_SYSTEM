@@ -1,13 +1,17 @@
 import { useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { api } from "../../lib/api";
 
 interface FileDropzoneProps {
   label: string;
   value: string;
   onChange: (url: string) => void;
+  /** Included in the auto-generated Drive filename (e.g. an order ID) so files are easy
+   * to find by record, matching the AppSheet-style naming the old system used. */
+  context?: string;
 }
 
-export function FileDropzone({ label, value, onChange }: FileDropzoneProps) {
+export function FileDropzone({ label, value, onChange, context }: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -18,12 +22,14 @@ export function FileDropzone({ label, value, onChange }: FileDropzoneProps) {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (context) formData.append("context", context);
       const res = await api.post("/uploads", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       onChange(res.data.url);
-    } catch {
-      setError("Upload failed — check file type (PDF/PNG/JPG) and size (max 10MB)");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail || "Upload failed — check file type (PDF/PNG/JPG) and size (max 10MB)");
     } finally {
       setUploading(false);
     }

@@ -115,6 +115,7 @@ export function SaleOrderUploadForm({ orderId, onClose, onSaved }: Props) {
             label="Sale Order Attachment *"
             value={soAttachmentUrl}
             onChange={setSoAttachmentUrl}
+            context={`SaleOrder_${orderId}`}
           />
           <TextField label="Sale Order Remarks" value={soRemarks} onChange={(e) => setSoRemarks(e.target.value)} />
         </div>

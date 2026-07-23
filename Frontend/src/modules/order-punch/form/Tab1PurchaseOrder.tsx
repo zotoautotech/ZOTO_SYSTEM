@@ -25,6 +25,7 @@ export function Tab1PurchaseOrder({ form, update }: Props) {
         label="Purchase Order Attachment"
         value={form.poAttachmentUrl}
         onChange={(url) => update({ poAttachmentUrl: url })}
+        context={form.poNo ? `PO_${form.poNo}` : undefined}
       />
       <TextField
         label="Purchase Order Remarks"
@@ -35,6 +36,7 @@ export function Tab1PurchaseOrder({ form, update }: Props) {
         label="Other Order Attachment"
         value={form.otherAttachmentUrl}
         onChange={(url) => update({ otherAttachmentUrl: url })}
+        context={form.poNo ? `OtherAttachment_${form.poNo}` : undefined}
       />
     </div>
   );
