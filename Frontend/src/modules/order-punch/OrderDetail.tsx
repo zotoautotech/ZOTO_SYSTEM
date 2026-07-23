@@ -7,6 +7,7 @@ import { openAttachment } from "../../lib/attachments";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
+import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
 
 function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -85,6 +86,7 @@ export function OrderDetail() {
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const [showDiscountForm, setShowDiscountForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showSoConfirmationForm, setShowSoConfirmationForm] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -92,11 +94,12 @@ export function OrderDetail() {
     enabled: !!orderId,
   });
 
-  // Only relevant in the Sale Order module — shows the saved Sale Order form details.
+  // Sale Order and SO Confirmation both show the saved Sale Order form details in the
+  // right column, so a confirmation reviewer sees the same complete record.
   const { data: saleOrder } = useQuery({
     queryKey: ["saleOrder", orderId],
     queryFn: () => getSaleOrder(orderId!),
-    enabled: !!orderId && basePath === "/modules/sale-order",
+    enabled: !!orderId && (basePath === "/modules/sale-order" || basePath === "/modules/so-confirmation"),
   });
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
@@ -256,6 +259,14 @@ export function OrderDetail() {
               )}
             </div>
           )}
+          {basePath === "/modules/so-confirmation" && saleOrder?.STATUS !== "COMPLETED" && (
+            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
+              <QuickAction label="Take SO Confirmation Form" onClick={() => setShowSoConfirmationForm(true)}>
+                <path d="M20 6 9 17l-5-5" />
+                <path d="M12 3v8" />
+              </QuickAction>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
@@ -380,6 +391,23 @@ export function OrderDetail() {
             queryClient.invalidateQueries({ queryKey: ["order", orderId] });
             queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
             queryClient.invalidateQueries({ queryKey: ["saleOrder", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
+            navigate("/modules/so-confirmation");
+          }}
+        />
+      )}
+
+      {showSoConfirmationForm && (
+        <SoConfirmationForm
+          orderId={orderId!}
+          onClose={() => setShowSoConfirmationForm(false)}
+          onSaved={() => {
+            setShowSoConfirmationForm(false);
+            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["saleOrder", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
+            queryClient.invalidateQueries({ queryKey: ["dispatchApprovals"] });
+            navigate("/modules/so-confirmation");
           }}
         />
       )}

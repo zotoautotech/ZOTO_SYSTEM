@@ -4,6 +4,23 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-23
 
+- **SO Confirmation → Dispatch Approval fully wired.** `SoConfirmationForm.tsx` now actually
+  persists (`POST /orders/:id/so-confirmation`): Confirmed captures payment fields and
+  advances the order to Dispatch Approval; Changes reveals the punch form's own Tab1/3/4
+  components prefilled with the order's live data, letting the reviewer edit and post those
+  edits back to both `ORDER_PUNCH` and `SALE_ORDERS`; Cancelled takes a single required
+  remark. Added `DispatchApprovalList.tsx` (same list/Completed-toggle pattern as the other
+  queues) fed by the newly-fixed `GET /orders/dispatch-approvals` — it was reading
+  `SALE_ORDERS.APPROVAL_STATUS`, a column that doesn't exist on that sheet, so it always
+  returned empty; now reads `ORDER_PUNCH.STATUS` instead, which `so-confirmation` actually
+  sets. Verified against the live sheet: Confirmed correctly flips both rows' status and the
+  fixed dispatch-approvals query picks the order up.
+- **Attachment viewer now has an explicit Download button, not just the raw file.** Raw
+  browser navigation to an image gives no toolbar/download control (only PDFs get one, and
+  even then it's Chrome's own chrome, not ours) — added `GET /uploads/:fileId/viewer`, a
+  small self-contained HTML page (dark header, filename, one clearly visible Download link)
+  that embeds the file via `/stream`; `openAttachment()` now opens this page instead of the
+  raw stream URL directly.
 - **Attachments: fully private on Drive, viewed only via our own proxy.** Uploaded files no longer get any public "anyone" Drive permission at all. `POST /uploads` returns a bare `fileId`; viewing goes through `GET /uploads/:fileId/view-url` (mints a 5-minute token) → `GET /uploads/:fileId/stream` (token-gated, streams the file inline) — the doer sees the file in the browser's native viewer, never Drive's own UI (Share dialog, edit permissions). Also removed the attachments folder's lingering "Anyone with the link" permission entirely, which cascaded to make the one already-uploaded file private too. *(`44a4223`)*
 - **Fixed a real security hole: uploaded files were publicly editable.** The attachments folder had "Anyone with the link: Editor" set (pre-existing, not caused by this app); every uploaded file inherited that as-is because the upload code's permission call was a silent no-op against the inherited grant. Downgraded to Viewer as an interim fix before the full private-by-default change above. *(`f8ef2d6`)*
 - **GST Details now shows Invoice Discount (Rs)** on the Punch Order detail view, matching the reference layout. *(`b92ba7e`)*

@@ -146,6 +146,31 @@ ordersRouter.get("/", async (req, res, next) => {
   }
 });
 
+/** Saved Sale Orders waiting for review in the SO Confirmation queue. */
+ordersRouter.get("/sale-orders", async (_req, res, next) => {
+  try {
+    const rows = await readTable(env.sheets.transactions, "SALE_ORDERS");
+    res.json(rows.map(saleOrderFromSheet));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Confirmed orders become the pending queue for Dispatch Approval. Reads ORDER_PUNCH (not
+ * SALE_ORDERS) — SALE_ORDERS has no Approval_Status/Status columns of its own to filter on,
+ * ORDER_PUNCH.STATUS is what /:id/so-confirmation actually sets to "DISPATCH APPROVAL". */
+ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
+  try {
+    const { status } = req.query as { status?: string };
+    const rows = (await readTable(env.sheets.transactions, ORDER_TAB))
+      .map(punchFromSheet)
+      .filter((row) => (status === "COMPLETED" ? row.STATUS === "DISPATCH APPROVAL COMPLETED" : row.STATUS === "DISPATCH APPROVAL"));
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Most recent order for a customer, used to autofill "Shipping = Same as Previous Order". */
 ordersRouter.get("/latest", async (req, res, next) => {
   try {
@@ -506,6 +531,77 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
     );
 
     res.json({ orderId: req.params.id, saleOrderId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const confirmationChangesSchema = z.object({
+  poNo: z.string().optional(), poDate: z.string().optional(), poAttachmentUrl: z.string().optional(), otherAttachmentUrl: z.string().optional(), poRemarks: z.string().optional(),
+  saleType: z.string().optional(), orderType: z.string().optional(), paymentType: z.string().optional(), advancePct: z.number().optional(),
+  custId: z.string().optional(), customerName: z.string().optional(), buyerGstin: z.string().optional(),
+  billingAddress: z.string().optional(), billingState: z.string().optional(), billingPincode: z.string().optional(), billingCountry: z.string().optional(),
+  shippingSame: z.string().optional(), shippingAddress: z.string().optional(), shippingState: z.string().optional(), shippingPincode: z.string().optional(),
+  preferredDeliveryMode: z.string().optional(), preferredTransportMode: z.string().optional(), freightPaidBy: z.string().optional(), freightOnInvoice: z.string().optional(),
+  preferredTptId: z.string().optional(), preferredTptName: z.string().optional(), transporterType: z.string().optional(), transporterContactNo: z.string().optional(), transporterPersonName: z.string().optional(), transporterPersonContactNo: z.string().optional(), transporterAddress: z.string().optional(),
+});
+
+const soConfirmationSchema = z.object({
+  outcome: z.enum(["Confirmed", "Changes", "Cancelled"]),
+  remarks: z.string().min(1),
+  receivedPaymentAmount: z.string().optional(),
+  paymentAmountPct: z.string().optional(),
+  paymentAttachmentUrl: z.string().optional(),
+  changes: confirmationChangesSchema.optional(),
+});
+
+/** Saves the SO Confirmation decision. Confirmed orders advance to Dispatch Approval;
+ * cancelled orders finish in this queue; requested changes update both source rows and stay pending. */
+ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
+  try {
+    const body = soConfirmationSchema.parse(req.body);
+    const [punchRows, saleRows] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, "SALE_ORDERS"),
+    ]);
+    const punch = punchRows.find((row) => row.ORDER_ID === req.params.id);
+    const saleOrder = saleRows.find((row) => row.ORDER_ID === req.params.id);
+    if (!punch || !saleOrder) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Sale Order not found" } });
+    }
+
+    const changes = body.changes
+      ? {
+          PO_NO: body.changes.poNo, PO_DATE: body.changes.poDate, PO_ATTACHMENT_URL: body.changes.poAttachmentUrl,
+          OTHER_ATTACHMENT_URL: body.changes.otherAttachmentUrl, PO_REMARKS: body.changes.poRemarks,
+          SALE_TYPE: body.changes.saleType, ORDER_TYPE: body.changes.orderType, PAYMENT_TYPE: body.changes.paymentType,
+          ADVANCE_PCT: body.changes.advancePct === undefined ? undefined : String(body.changes.advancePct),
+          CUST_ID: body.changes.custId, CUSTOMER_NAME: body.changes.customerName, BUYER_GSTIN: body.changes.buyerGstin,
+          BILLING_ADDRESS: body.changes.billingAddress, BILLING_STATE: body.changes.billingState, BILLING_PINCODE: body.changes.billingPincode, BILLING_COUNTRY: body.changes.billingCountry,
+          SHIPPING_SAME: body.changes.shippingSame, SHIPPING_ADDRESS: body.changes.shippingAddress, SHIPPING_STATE: body.changes.shippingState, SHIPPING_PINCODE: body.changes.shippingPincode,
+          PREFERRED_DELIVERY_MODE: body.changes.preferredDeliveryMode, PREFERRED_TRANSPORT_MODE: body.changes.preferredTransportMode,
+          FREIGHT_PAID_BY: body.changes.freightPaidBy, FREIGHT_ON_INVOICE: body.changes.freightOnInvoice,
+          PREFERRED_TPT_ID: body.changes.preferredTptId, PREFERRED_TPT_NAME: body.changes.preferredTptName, TRANSPORTER_TYPE: body.changes.transporterType,
+          TRANSPORTER_CONTACT: body.changes.transporterContactNo, TRANSPORTER_PERSON_NAME: body.changes.transporterPersonName,
+          TRANSPORTER_PERSON_CONTACT: body.changes.transporterPersonContactNo, TRANSPORTER_ADDRESS: body.changes.transporterAddress,
+        }
+      : {};
+    const withoutUndefined = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
+
+    if (body.outcome === "Changes") {
+      await Promise.all([
+        updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+        updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+      ]);
+      return res.json({ orderId: req.params.id, status: "PENDING" });
+    }
+
+    const confirmed = body.outcome === "Confirmed";
+    await Promise.all([
+      updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ STATUS: "COMPLETED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+    ]);
+    res.json({ orderId: req.params.id, status: "COMPLETED", nextStage: confirmed ? "dispatch-approval" : undefined });
   } catch (err) {
     next(err);
   }

@@ -34,6 +34,17 @@ list, reused for both Punch Order and Sale Order routes via a `basePath` prop de
 the URL), `OrderPunchForm.tsx` (4-tab punch form, `form/Tab1-4*.tsx` + `form/types.ts` for
 form state), `OrderDetail.tsx` (detail view, also shared between both modules),
 `SaleOrderDiscountForm.tsx` / `SaleOrderUploadForm.tsx` (the two Sale Order step modals).
+`Frontend/src/modules/so-confirmation/SoConfirmationList.tsx` is the next-stage queue: it
+reads saved `SALE_ORDERS` rows, uses the approved list/table pattern with a Completed toggle,
+and opens the shared `OrderDetail`/items routes under `/modules/so-confirmation/:orderId`.
+The detail action rail opens `SoConfirmationForm.tsx` — Confirmed/Changes/Cancelled is fully
+wired: Confirmed captures payment fields, Changes reveals the same Tab1/3/4 punch-form
+components prefilled with the order's current data (edits post back and update both
+`ORDER_PUNCH`+`SALE_ORDERS`), Cancelled just takes a remark. All three persist via
+`POST /orders/:id/so-confirmation`. `Frontend/src/modules/dispatch-approval/
+DispatchApprovalList.tsx` is the next-stage queue (same list pattern), fed by orders whose
+`ORDER_PUNCH.STATUS` got set to `DISPATCH APPROVAL` on Confirm — no detail form built for
+this stage yet.
 `Frontend/src/lib/` holds the API clients (`ordersApi.ts`, `mastersApi.ts`, `attachments.ts`
 for the upload-viewer flow, `api.ts` for the shared axios instance + auth header).
 
@@ -81,8 +92,17 @@ punch save), `BILLING STRATEGY MASTER`.
 
 **Pipeline so far:** Punch (`ORDER_PUNCH`, `STATUS: PENDING`) → discount applied
 (`STATUS: PENDING SALE ORDER`, logged to `ORDER_PUNCH_DISCOUNT`) → Sale Order form uploaded
-(`STATUS: SALE ORDER`, full row written to `SALE_ORDERS`/`SALE_ORDER_ITEMS`). Stages beyond
-Sale Order (SO Confirmation, Dispatch Approval, …) aren't wired yet.
+(`STATUS: SALE ORDER`, full row written to `SALE_ORDERS`/`SALE_ORDER_ITEMS`) → SO Confirmation
+queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome:
+- **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
+  (this is what feeds the Dispatch Approval queue — `GET /orders/dispatch-approvals` reads
+  `ORDER_PUNCH` filtered on that status, **not** `SALE_ORDERS`, since `SALE_ORDERS` has no
+  `Approval_Status`/`Status`-for-this-purpose columns of its own).
+- **Changes** → both `ORDER_PUNCH` and `SALE_ORDERS` get the edited fields + `APPROVAL_STATUS:
+  CHANGES`, stays in the pending SO Confirmation queue.
+- **Cancelled** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: CANCELLED`.
+
+Dispatch Approval itself (beyond the pending queue) has no detail form yet.
 
 ## IDs
 
@@ -103,6 +123,10 @@ means the doer never sees Drive's own UI (Share dialog, edit permissions) — ju
 in the browser's native viewer. **Never re-add an "anyone" Drive permission** — a past bug
 had the attachments folder itself set to "Anyone with the link: Editor" (not caused by this
 app, but everything uploaded inherited it); that's been removed at the source.
+
+The attachment viewer follows Google Drive's dark-canvas preview: images start centered and
+fitted to the viewport. A bottom `−` / `Fit` / `+` control zooms images; the content pane's
+right-side scrollbar is for navigating a zoomed image, not for an oversized default preview.
 
 Drive auth uses **domain-wide delegation**, impersonating `operations@theairtrap.com`
 (`Backend/src/services/googleAuth.ts`, `DRIVE_IMPERSONATE_USER` env var) — necessary because

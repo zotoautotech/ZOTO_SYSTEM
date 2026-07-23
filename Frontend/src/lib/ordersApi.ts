@@ -39,6 +39,12 @@ export async function listOrders(params: { stage?: string; status?: string }) {
   return res.data;
 }
 
+/** Sale Orders that have been saved and are awaiting SO Confirmation. */
+export async function listSaleOrders() {
+  const res = await api.get<OrderRecord[]>("/orders/sale-orders");
+  return res.data;
+}
+
 export async function getOrder(orderId: string) {
   const res = await api.get<{ order: OrderRecord; items: OrderItemRecord[]; dispatchPlan: unknown[] }>(
     `/orders/${orderId}`
@@ -148,5 +154,62 @@ export async function uploadSaleOrderForm(orderId: string, payload: SaleOrderFor
 /** The SALE_ORDERS row for an order once its Sale Order form is saved, or null. */
 export async function getSaleOrder(orderId: string) {
   const res = await api.get<Record<string, string> | null>(`/orders/${orderId}/sale-order`);
+  return res.data;
+}
+
+export interface SoConfirmationChanges {
+  poNo?: string;
+  poDate?: string;
+  poAttachmentUrl?: string;
+  otherAttachmentUrl?: string;
+  poRemarks?: string;
+  saleType?: string;
+  orderType?: string;
+  paymentType?: string;
+  advancePct?: number;
+  custId?: string;
+  customerName?: string;
+  buyerGstin?: string;
+  billingAddress?: string;
+  billingState?: string;
+  billingPincode?: string;
+  billingCountry?: string;
+  shippingSame?: string;
+  shippingAddress?: string;
+  shippingState?: string;
+  shippingPincode?: string;
+  preferredDeliveryMode?: string;
+  preferredTransportMode?: string;
+  freightPaidBy?: string;
+  freightOnInvoice?: string;
+  preferredTptId?: string;
+  preferredTptName?: string;
+  transporterType?: string;
+  transporterContactNo?: string;
+  transporterPersonName?: string;
+  transporterPersonContactNo?: string;
+  transporterAddress?: string;
+}
+
+export interface SoConfirmationPayload {
+  outcome: "Confirmed" | "Changes" | "Cancelled";
+  remarks: string;
+  receivedPaymentAmount?: string;
+  paymentAmountPct?: string;
+  paymentAttachmentUrl?: string;
+  changes?: SoConfirmationChanges;
+}
+
+export async function submitSoConfirmation(orderId: string, payload: SoConfirmationPayload) {
+  const res = await api.post<{ orderId: string; status: string; nextStage?: string }>(
+    `/orders/${orderId}/so-confirmation`,
+    payload
+  );
+  return res.data;
+}
+
+/** Orders confirmed in SO Confirmation, now pending Dispatch Approval. */
+export async function listDispatchApprovals(status?: string) {
+  const res = await api.get<OrderRecord[]>("/orders/dispatch-approvals", { params: { status } });
   return res.data;
 }

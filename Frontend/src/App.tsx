@@ -13,6 +13,8 @@ import { OrderPunchForm } from "./modules/order-punch/OrderPunchForm";
 import { OrderDetail } from "./modules/order-punch/OrderDetail";
 import { OrderItemsView } from "./modules/order-punch/OrderItemsView";
 import { OrderItemDetail } from "./modules/order-punch/OrderItemDetail";
+import { SoConfirmationList } from "./modules/so-confirmation/SoConfirmationList";
+import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprovalList";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -46,6 +48,14 @@ export default function App() {
         <Route path="modules/sale-order/:orderId" element={<OrderDetail />} />
         <Route path="modules/sale-order/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/sale-order/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        <Route path="modules/so-confirmation" element={<SoConfirmationList />} />
+        <Route path="modules/so-confirmation/:orderId" element={<OrderDetail />} />
+        <Route path="modules/so-confirmation/:orderId/items" element={<OrderItemsView />} />
+        <Route path="modules/so-confirmation/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        <Route path="modules/dispatch-approval" element={<DispatchApprovalList />} />
+        <Route path="modules/dispatch-approval/:orderId" element={<OrderDetail />} />
+        <Route path="modules/dispatch-approval/:orderId/items" element={<OrderItemsView />} />
+        <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<OrderItemDetail />} />
         <Route path="modules/:moduleKey" element={<PlaceholderModule />} />
       </Route>
     </Routes>

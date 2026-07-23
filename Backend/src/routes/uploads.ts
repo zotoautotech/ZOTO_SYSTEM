@@ -89,21 +89,23 @@ uploadsRouter.get("/:fileId/view-url", requireAuth, (req, res) => {
   res.json({ token });
 });
 
-/** Streams the file's bytes directly — no Drive UI (Share dialog, edit permissions, etc.)
- * ever reaches the doer, just the content in the browser's own PDF/image viewer, which
- * already has its own download button. Auth is the short-lived token from /view-url above,
- * not the usual bearer header, since this is a plain link navigation, not an API call. */
+function verifyViewToken(fileId: string, token: string): boolean {
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as { fileId: string; purpose: string };
+    return payload.purpose === "view-attachment" && payload.fileId === fileId;
+  } catch {
+    return false;
+  }
+}
+
+/** Streams the file's raw bytes. Used by the /viewer page below (as the <img>/<embed> src)
+ * and for the Download button (`?download=1` switches to a Content-Disposition that forces
+ * a save-as instead of inline display). Auth is the short-lived token from /view-url, not
+ * the usual bearer header, since this is a plain resource load, not an API call. */
 uploadsRouter.get("/:fileId/stream", async (req, res, next) => {
   try {
-    const token = String(req.query.token ?? "");
-    let payload: { fileId: string; purpose: string };
-    try {
-      payload = jwt.verify(token, env.jwtSecret) as typeof payload;
-    } catch {
+    if (!verifyViewToken(req.params.fileId, String(req.query.token ?? ""))) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Invalid or expired view link" } });
-    }
-    if (payload.purpose !== "view-attachment" || payload.fileId !== req.params.fileId) {
-      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Invalid view link" } });
     }
 
     const drive = await getDriveClient();
@@ -117,9 +119,114 @@ uploadsRouter.get("/:fileId/stream", async (req, res, next) => {
       { responseType: "stream" }
     );
 
+    const filename = (meta.data.name || "attachment").replace(/"/g, "");
+    const disposition = req.query.download ? "attachment" : "inline";
     res.setHeader("Content-Type", meta.data.mimeType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `inline; filename="${(meta.data.name || "attachment").replace(/"/g, "")}"`);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
     stream.data.pipe(res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+/** A small self-contained viewer page — never Drive's own UI (Share dialog, edit access,
+ * the whole file-manager chrome), just the content plus one clearly visible Download
+ * button. This is what "View attachment" actually opens; /stream above is just the raw
+ * bytes it (and the Download button) point at. */
+uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
+  try {
+    const token = String(req.query.token ?? "");
+    if (!verifyViewToken(req.params.fileId, token)) {
+      return res.status(401).send("Invalid or expired view link.");
+    }
+
+    const drive = await getDriveClient();
+    const meta = await drive.files.get({
+      fileId: req.params.fileId,
+      fields: "name,mimeType",
+      supportsAllDrives: true,
+    });
+    const name = escapeHtml(meta.data.name || "Attachment");
+    const isImage = (meta.data.mimeType || "").startsWith("image/");
+    const streamUrl = `./stream?token=${encodeURIComponent(token)}`;
+    const downloadUrl = `./stream?token=${encodeURIComponent(token)}&download=1`;
+
+    const content = isImage
+      ? `<img id="attachment-image" src="${streamUrl}" alt="${name}" />`
+      : `<embed src="${streamUrl}" type="application/pdf" />`;
+    const controls = isImage
+      ? `<div class="zoom-controls" aria-label="Image zoom controls">
+          <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" id="zoom-reset" aria-label="Reset zoom">Fit</button>
+          <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        </div>`
+      : "";
+
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${name}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #202124; font-family: -apple-system, Segoe UI, Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #2d2e30; color: #e8eaed; flex-shrink: 0; }
+  header .name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .download-btn { display: flex; align-items: center; gap: 6px; background: #8ab4f8; color: #202124; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; flex-shrink: 0; }
+  /* Google Drive-style contained preview by default. Zoomed images can still scroll in
+     either direction inside this pane. */
+  main { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  main::-webkit-scrollbar { width: 14px; height: 14px; }
+  main::-webkit-scrollbar-track { background: #202124; }
+  main::-webkit-scrollbar-thumb { background: #777; border: 3px solid #202124; border-radius: 999px; }
+  main::-webkit-scrollbar-thumb:hover { background: #999; }
+  img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+  embed { width: 100%; height: 100%; border: none; }
+  .zoom-controls { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; overflow: hidden; border: 1px solid #5f6368; border-radius: 8px; background: #303134; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .zoom-controls button { min-width: 42px; height: 34px; border: 0; border-right: 1px solid #5f6368; background: transparent; color: #e8eaed; font-size: 18px; cursor: pointer; }
+  .zoom-controls button#zoom-reset { min-width: 52px; font-size: 13px; }
+  .zoom-controls button:last-child { border-right: 0; }
+  .zoom-controls button:hover { background: #3c4043; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="name">${name}</span>
+    <a class="download-btn" href="${downloadUrl}" download>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+      Download
+    </a>
+  </header>
+  <main id="viewer-content">${content}</main>
+  ${controls}
+  ${isImage ? `<script>
+    const image = document.getElementById("attachment-image");
+    const content = document.getElementById("viewer-content");
+    let zoom = 1;
+    function applyZoom() {
+      if (zoom === 1) {
+        image.style.maxWidth = "100%";
+        image.style.maxHeight = "100%";
+        image.style.width = "auto";
+        image.style.height = "auto";
+      } else {
+        image.style.maxWidth = "none";
+        image.style.maxHeight = "none";
+        image.style.width = Math.round(image.naturalWidth * zoom) + "px";
+        image.style.height = "auto";
+      }
+    }
+    document.getElementById("zoom-in").onclick = () => { zoom = Math.min(3, zoom + 0.25); applyZoom(); };
+    document.getElementById("zoom-out").onclick = () => { zoom = Math.max(0.5, zoom - 0.25); applyZoom(); };
+    document.getElementById("zoom-reset").onclick = () => { zoom = 1; applyZoom(); content.scrollTo({ top: 0, left: 0 }); };
+  </script>` : ""}
+</body>
+</html>`);
   } catch (err) {
     next(err);
   }
