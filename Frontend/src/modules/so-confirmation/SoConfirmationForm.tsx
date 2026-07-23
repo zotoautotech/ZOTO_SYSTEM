@@ -159,25 +159,13 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>SO Confirmation Form</h2>
-          <div style={{ display: "flex", gap: 8 }}>
-            {tab > 0 && (
-              <button className="btn" onClick={() => setTab((t) => t - 1)}>
-                ‹ Prev
-              </button>
-            )}
-            <button className="btn" onClick={onClose}>
-              Cancel
-            </button>
-            {changes && tab < TABS.length - 1 ? (
-              <button className="btn btn-primary" onClick={() => setTab((t) => Math.min(t + 1, TABS.length - 1))} disabled={!confirmation}>
-                Next ›
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={handleSave} disabled={!confirmation || saving}>
-                {saving ? "Saving…" : "Save"}
-              </button>
-            )}
-          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}
+          >
+            ✕
+          </button>
         </div>
 
         <div style={{ display: "flex", overflowX: "auto", borderBottom: "1px solid var(--color-border)", padding: "0 var(--space)" }}>
@@ -283,6 +271,37 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
           ) : (
             <Tab4LogisticsDetails form={form} update={update} />
           )}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
+            borderTop: "1px solid var(--color-border)",
+            background: "var(--color-bg-page)",
+          }}
+        >
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {tab > 0 && (
+              <button className="btn" onClick={() => setTab((t) => t - 1)}>
+                ‹ Prev
+              </button>
+            )}
+            {changes && tab < TABS.length - 1 ? (
+              <button className="btn btn-primary" onClick={() => setTab((t) => Math.min(t + 1, TABS.length - 1))} disabled={!confirmation}>
+                Next ›
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleSave} disabled={!confirmation || saving}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
