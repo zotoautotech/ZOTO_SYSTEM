@@ -57,11 +57,26 @@ uploadsRouter.post("/", upload.single("file"), async (req, res, next) => {
       supportsAllDrives: true,
     });
 
-    await drive.permissions.create({
-      fileId: response.data.id!,
-      requestBody: { role: "reader", type: "anyone" },
-      supportsAllDrives: true,
-    });
+    // The folder's own "anyone with link" permission can be broader than we want (this
+    // has happened — the folder was set to Editor), and a new file inherits it as-is; a
+    // plain permissions.create() for the same well-known "anyoneWithLink" id is a no-op
+    // against that inherited grant. permissions.update() actually overrides it per-file.
+    try {
+      await drive.permissions.update({
+        fileId: response.data.id!,
+        permissionId: "anyoneWithLink",
+        requestBody: { role: "reader" },
+        supportsAllDrives: true,
+      });
+    } catch {
+      // No inherited "anyone" permission to override (e.g. folder isn't publicly shared) —
+      // create one explicitly so the returned link is still viewable.
+      await drive.permissions.create({
+        fileId: response.data.id!,
+        requestBody: { role: "reader", type: "anyone" },
+        supportsAllDrives: true,
+      });
+    }
 
     res.status(201).json({ fileId: response.data.id, url: response.data.webViewLink });
   } catch (err) {
