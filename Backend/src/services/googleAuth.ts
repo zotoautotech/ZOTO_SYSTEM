@@ -1,31 +1,50 @@
+import { readFileSync } from "node:fs";
 import { google } from "googleapis";
 import { env } from "../config/env.js";
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.file",
-];
+const SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"];
 
-let authClient: InstanceType<typeof google.auth.GoogleAuth> | null = null;
+function loadCredentials(): { client_email: string; private_key: string } {
+  if (env.googleServiceAccountKeyJson) return JSON.parse(env.googleServiceAccountKeyJson);
+  if (env.googleApplicationCredentials) return JSON.parse(readFileSync(env.googleApplicationCredentials, "utf8"));
+  throw new Error(
+    "No Google credentials configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_JSON or GOOGLE_APPLICATION_CREDENTIALS in .env"
+  );
+}
 
+let sheetsAuth: InstanceType<typeof google.auth.GoogleAuth> | null = null;
+
+/** Sheets access is unimpersonated — every sheet is shared directly with the service
+ * account, so it doesn't need to act as anyone else. */
 export function getGoogleAuth() {
-  if (authClient) return authClient;
+  if (sheetsAuth) return sheetsAuth;
+  const credentials = loadCredentials();
+  sheetsAuth = new google.auth.GoogleAuth({ credentials, scopes: SHEETS_SCOPES });
+  return sheetsAuth;
+}
 
-  if (env.googleServiceAccountKeyJson) {
-    const credentials = JSON.parse(env.googleServiceAccountKeyJson);
-    authClient = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
-  } else if (env.googleApplicationCredentials) {
-    authClient = new google.auth.GoogleAuth({
-      keyFile: env.googleApplicationCredentials,
-      scopes: SCOPES,
-    });
-  } else {
-    throw new Error(
-      "No Google credentials configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_JSON or GOOGLE_APPLICATION_CREDENTIALS in .env"
-    );
-  }
+let driveAuth: InstanceType<typeof google.auth.JWT> | null = null;
 
-  return authClient;
+/**
+ * Drive access impersonates DRIVE_IMPERSONATE_USER via domain-wide delegation (Workspace
+ * Admin Console > Security > API Controls > Domain-wide Delegation, authorized for this
+ * service account's Client ID + the drive scope). Without impersonation, files the service
+ * account creates in someone else's Drive folder are owned by the service account itself,
+ * which has zero storage quota — impersonation makes the Workspace user the owner instead,
+ * using their quota. Falls back to unimpersonated if not configured (uploads will fail
+ * with the quota error until domain-wide delegation is set up).
+ */
+function getDriveAuth() {
+  if (driveAuth) return driveAuth;
+  const credentials = loadCredentials();
+  driveAuth = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: DRIVE_SCOPES,
+    subject: env.driveImpersonateUser || undefined,
+  });
+  return driveAuth;
 }
 
 export async function getSheetsClient() {
@@ -40,6 +59,6 @@ export async function listSheetTabs(spreadsheetId: string): Promise<string[]> {
 }
 
 export async function getDriveClient() {
-  const auth = getGoogleAuth();
+  const auth = getDriveAuth();
   return google.drive({ version: "v3", auth: auth as any });
 }

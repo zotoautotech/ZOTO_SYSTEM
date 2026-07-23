@@ -23,6 +23,11 @@ export const env = {
   },
 
   driveFolderId: process.env.DRIVE_FOLDER_ID ?? "",
+  // Domain-wide delegation: the service account impersonates this Workspace user for Drive
+  // uploads, so files are owned by them (using their quota) rather than the service account
+  // itself, which has none. Requires this Client ID authorized in Workspace Admin Console
+  // (Security > API Controls > Domain-wide Delegation) for the drive scope.
+  driveImpersonateUser: process.env.DRIVE_IMPERSONATE_USER ?? "",
 };
 
 export { required };
