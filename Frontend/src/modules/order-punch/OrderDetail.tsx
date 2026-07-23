@@ -281,6 +281,7 @@ export function OrderDetail() {
           </Section>
 
           <Section title="GST Details">
+            <Field label="Invoice Discount (Rs)" value={formatCurrency(order.INVOICE_DISCOUNT_RS)} />
             <Field label="Basic Amount" value={formatCurrency(order.BASIC_AMOUNT)} />
             <Field label="Tax Amount" value={formatCurrency(order.TAX_AMOUNT)} />
             <Field label="Total Amount" value={formatCurrency(order.TOTAL_AMOUNT)} />
