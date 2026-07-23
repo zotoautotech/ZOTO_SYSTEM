@@ -27,6 +27,30 @@ npx.cmd vercel --prod
 Deploy Backend whenever `Backend/` changed; Frontend whenever `Frontend/` changed. Check
 `git status`/the diff to know which (or both).
 
+## Frontend structure
+
+`Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
+list, reused for both Punch Order and Sale Order routes via a `basePath` prop derived from
+the URL), `OrderPunchForm.tsx` (4-tab punch form, `form/Tab1-4*.tsx` + `form/types.ts` for
+form state), `OrderDetail.tsx` (detail view, also shared between both modules),
+`SaleOrderDiscountForm.tsx` / `SaleOrderUploadForm.tsx` (the two Sale Order step modals).
+`Frontend/src/lib/` holds the API clients (`ordersApi.ts`, `mastersApi.ts`, `attachments.ts`
+for the upload-viewer flow, `api.ts` for the shared axios instance + auth header).
+
+Env: `Frontend/.env.local` needs `VITE_API_BASE_URL` pointing at the deployed Backend in
+prod (local dev proxies relative `/api/v1` to the Backend dev server instead).
+
+## Auth & Permissions
+
+JWT-based (`Backend/src/middleware/auth.ts`, `JWT_SECRET` env var). Permissions are read
+**live** from the `USERS` sheet on every request (not trusted from the JWT), so an admin
+edit to a user's row takes effect within seconds:
+- `MODULES` column — comma-separated module keys (or blank/`ALL` = unrestricted, fail-open).
+  Aliases old Process names case-insensitively (`Sale Order` etc.) — see `permissions.ts`.
+- `CAN_DELETE` column — gates the Punch Order list's bulk-delete (fail-closed: blank = no
+  access, since it's irreversible).
+Both are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
+
 ## Google Sheets (source of truth)
 
 Three spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
