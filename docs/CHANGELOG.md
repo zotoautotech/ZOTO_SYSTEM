@@ -4,6 +4,32 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-24
 
+- **Built the remaining 8 pipeline stages end-to-end** (PDI, Transport, Transport Reached,
+  Stock Release, Tax Invoice, Dispatch, Collect LR, Delivery) — the tail of the pipeline
+  reverse-engineered from the old CRR system in `docs/Report.md`. Rather than 8 bespoke
+  modules, built one generic, config-driven implementation:
+  - `Backend/src/routes/stageConfig.ts` (`STAGES` array — tab name, ID prefix, prev/next
+    `ORDER_PUNCH.STATUS` values, field list per stage) + `stageRoutes.ts`
+    (`registerStageRoutes()`, registers `GET /orders/<stageKey>` and `POST
+    /orders/:id/<stageKey>` for every stage; registered **before** the generic `GET /:id`
+    route so Express doesn't swallow e.g. `GET /pdi` as `:id="pdi"`). Each stage appends one
+    row to its own brand-new tab (`PDI`/`TRANSPORT`/`TRANSPORT_REACHED`/`STOCK_RELEASE`/
+    `TAX_INVOICE`/`DISPATCH`/`LR`/`DELIVERY`, created on first use via `ensureSheetTab`,
+    additive only) and advances `ORDER_PUNCH.STATUS` so the next stage's queue picks the
+    order up — same append-only-log pattern as SO Confirmation/Dispatch Approval.
+  - `Frontend/src/lib/stages.ts` mirrors the backend config field-for-field.
+    `components/stage/StageQueueList.tsx` and `components/stage/StageForm.tsx` are the one
+    list and one form component shared by all 8 stages; `App.tsx` generates their routes via
+    `STAGES.map(...)`; `OrderDetail.tsx` derives the current stage from the URL and shows one
+    generic "Give `{label}` Form" action instead of 8 hand-wired QuickActions.
+  - Verified against the live sheet end-to-end: punched a test order through the full
+    pipeline (Punch → Discount → Sale Order → SO Confirmation → Dispatch Approval → PDI →
+    Transport → Transport Reached → Stock Release → Tax Invoice → Dispatch → Collect LR →
+    Delivery), confirming every stage's tab got a correctly-ID'd row and `ORDER_PUNCH.STATUS`
+    advanced correctly at each step; also drove the PDI stage through the actual UI (queue →
+    detail → form → save → order correctly appears in Transport's queue next).
+  - Adding a 9th stage later is one entry in each `STAGES` array — no new files needed.
+
 - **Buyer GSTIN now auto-fills from the customer master too.** The Punch form never had a
   manual GSTIN input at all, so `BUYER_GSTIN` was always saved blank; `getBuyerFields()`
   now also picks it from `CUSTOMER MASTER T1`'s "Company GSTIN NO." column (found via the

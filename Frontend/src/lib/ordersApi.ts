@@ -228,3 +228,16 @@ export async function submitDispatchApproval(orderId: string, payload: DispatchA
   const res = await api.post<{ orderId: string; status: string }>(`/orders/${orderId}/dispatch-approval`, payload);
   return res.data;
 }
+
+/** Generic queue for any of the 8 pipeline stages after Dispatch Approval (PDI, Transport,
+ * Transport Reached, Stock Release, Tax Invoice, Dispatch, Collect LR, Delivery) — see
+ * Frontend/src/lib/stages.ts and Backend/src/routes/stageRoutes.ts. */
+export async function listStageOrders(stageKey: string, status?: string) {
+  const res = await api.get<OrderRecord[]>(`/orders/${stageKey}`, { params: { status } });
+  return res.data;
+}
+
+export async function submitStageForm(stageKey: string, orderId: string, payload: Record<string, string | number>) {
+  const res = await api.post<{ orderId: string; stageId: string; status: string }>(`/orders/${orderId}/${stageKey}`, payload);
+  return res.data;
+}

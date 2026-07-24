@@ -9,6 +9,8 @@ import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
 import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
 import { DispatchApprovalForm } from "../dispatch-approval/DispatchApprovalForm";
+import { StageForm } from "../../components/stage/StageForm";
+import { getStage } from "../../lib/stages";
 
 function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -89,6 +91,11 @@ export function OrderDetail() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showSoConfirmationForm, setShowSoConfirmationForm] = useState(false);
   const [showDispatchApprovalForm, setShowDispatchApprovalForm] = useState(false);
+  const [showStageForm, setShowStageForm] = useState(false);
+  // The 8 stages after Dispatch Approval (PDI, Transport, Transport Reached, Stock
+  // Release, Tax Invoice, Dispatch, Collect LR, Delivery) all share one generic
+  // form/queue pair, keyed off whichever module this detail view was opened from.
+  const currentStage = getStage(basePath.replace("/modules/", ""));
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -277,6 +284,14 @@ export function OrderDetail() {
               </QuickAction>
             </div>
           )}
+          {currentStage && order.STATUS === currentStage.prevStatus && (
+            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
+              <QuickAction label={`Give ${currentStage.label} Form`} onClick={() => setShowStageForm(true)}>
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </QuickAction>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
@@ -430,6 +445,20 @@ export function OrderDetail() {
             queryClient.invalidateQueries({ queryKey: ["order", orderId] });
             queryClient.invalidateQueries({ queryKey: ["dispatchApprovals"] });
             navigate("/modules/dispatch-approval");
+          }}
+        />
+      )}
+
+      {showStageForm && currentStage && (
+        <StageForm
+          stage={currentStage}
+          orderId={orderId!}
+          onClose={() => setShowStageForm(false)}
+          onSaved={() => {
+            setShowStageForm(false);
+            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["stageOrders", currentStage.key] });
+            navigate(`/modules/${currentStage.key}`);
           }}
         />
       )}

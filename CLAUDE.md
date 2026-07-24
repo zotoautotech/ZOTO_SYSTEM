@@ -50,11 +50,39 @@ Invoice Discount (Rs) field (works standalone too — editing it without touchin
 recomputes `TOTAL_AMOUNT` against the existing basic/tax). `Frontend/src/modules/
 dispatch-approval/DispatchApprovalList.tsx` is the next-stage queue (same list pattern), fed
 by orders whose `ORDER_PUNCH.STATUS` got set to `DISPATCH APPROVAL` on Confirm. Its detail
-action rail opens `DispatchApprovalForm.tsx` — UI-only so far (Dispatch Approval dropdown:
-Dispatch Today / Dispatch Extended / Short Quantity / Excess Quantity), matching the
-reference; the fields each choice reveals plus persistence are a later phase.
-`Frontend/src/lib/` holds the API clients (`ordersApi.ts`, `mastersApi.ts`, `attachments.ts`
-for the upload-viewer flow, `api.ts` for the shared axios instance + auth header).
+action rail opens `DispatchApprovalForm.tsx` — Dispatch Approval dropdown (Dispatch Today /
+Dispatch Extended / Short Quantity / Excess Quantity) with live validation, persists via
+`POST /orders/:id/dispatch-approval`.
+
+**The 8 stages after Dispatch Approval** (PDI, Transport, Transport Reached, Stock Release,
+Tax Invoice, Dispatch, Collect LR, Delivery — reverse-engineered from the old CRR system,
+see `docs/Report.md`) are all driven by one generic, config-based implementation instead of
+8 bespoke module folders:
+- `Frontend/src/lib/stages.ts` — `STAGES` array, one `StageDef` per stage: `key` (also the
+  URL segment and API path), `label`, `prevStatus`/`nextStatus` (the `ORDER_PUNCH.STATUS`
+  values that gate its pending queue and that it advances to), and a `fields[]` list driving
+  the form (types: `text`/`number`/`date`/`datetime-local`/`yesno`/`file`).
+- `Frontend/src/components/stage/StageQueueList.tsx` — the one list component for all 8
+  (same Completed-toggle/customer-filter pattern as every other queue), rendered via
+  `App.tsx`'s `STAGES.map(...)` route generation.
+- `Frontend/src/components/stage/StageForm.tsx` — the one modal form for all 8, rendering
+  whichever fields the `StageDef` declares.
+- `OrderDetail.tsx` derives `currentStage` from the URL's module segment and shows a single
+  generic "Give `{label}` Form" action whenever `order.STATUS === currentStage.prevStatus` —
+  no per-stage QuickAction wiring needed.
+- Backend mirror: `Backend/src/routes/stageConfig.ts` (`STAGES`, one `StageConfig` per
+  stage — tab name, ID prefix/column, prev/next status, fields) and `stageRoutes.ts`
+  (`registerStageRoutes()`, called from `orders.ts` **before** the generic `GET /:id` route
+  so Express doesn't swallow e.g. `GET /pdi` as `:id="pdi"`). Each stage's tab
+  (`PDI`/`TRANSPORT`/`TRANSPORT_REACHED`/`STOCK_RELEASE`/`TAX_INVOICE`/`DISPATCH`/`LR`/
+  `DELIVERY`) is brand-new — plain internal `UPPER_SNAKE` headers, no translation-map file
+  needed (unlike `ORDER_PUNCH`/`SO_Confirmation`), created on first use via `ensureSheetTab`.
+  Adding a 9th stage later means one new entry in each `STAGES` array — no new components,
+  routes, or files.
+`Frontend/src/lib/` holds the API clients (`ordersApi.ts` — includes the generic
+`listStageOrders(stageKey, status?)`/`submitStageForm(stageKey, orderId, payload)` used by
+all 8 stages, `mastersApi.ts`, `attachments.ts` for the upload-viewer flow, `api.ts` for the
+shared axios instance + auth header).
 
 Env: `Frontend/.env.local` needs `VITE_API_BASE_URL` pointing at the deployed Backend in
 prod (local dev proxies relative `/api/v1` to the Backend dev server instead).
@@ -127,6 +155,17 @@ queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome
 Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
 /orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
 is what `?status=COMPLETED` on that same GET route filters on).
+
+From there, the generic stage pipeline (see Frontend structure above) carries the order
+through: `DISPATCH APPROVAL COMPLETED → PDI COMPLETED → TRANSPORT ASSIGNED → TRANSPORT
+REACHED → STOCK RELEASED → TAX INVOICE COMPLETED → DISPATCHED → LR COLLECTED → DELIVERED`.
+Each arrow is one `POST /orders/:id/<stageKey>` call (`pdi`/`transport`/`transport-reached`/
+`stock-release`/`tax-invoice`/`dispatch`/`collect-lr`/`delivery`), appending one row to that
+stage's own tab and advancing `ORDER_PUNCH.STATUS` to the next stage's trigger value. `GET
+/orders/<stageKey>?status=COMPLETED` mirrors the existing pattern — but note each stage's
+"Completed" view only shows orders **currently sitting** at that exact status; once the
+order advances to the next stage it leaves the previous stage's Completed view too (same
+already-existing behavior as SO Confirmation/Dispatch Approval, not a bug).
 
 **`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch_Approval`** are separate,
 pre-built append-only snapshot/audit-log tabs (human-readable headers, mapped in

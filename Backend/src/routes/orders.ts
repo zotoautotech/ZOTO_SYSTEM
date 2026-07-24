@@ -6,6 +6,7 @@ import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
+import { registerStageRoutes } from "./stageRoutes.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -196,6 +197,10 @@ ordersRouter.get("/latest", async (req, res, next) => {
     next(err);
   }
 });
+
+// Must be registered before the generic GET/POST "/:id..." routes below, since Express
+// matches routes in registration order and "/:id" would otherwise swallow e.g. GET "/pdi".
+registerStageRoutes(ordersRouter);
 
 ordersRouter.get("/:id", async (req, res, next) => {
   try {

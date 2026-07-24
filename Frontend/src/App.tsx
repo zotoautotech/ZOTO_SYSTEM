@@ -15,6 +15,8 @@ import { OrderItemsView } from "./modules/order-punch/OrderItemsView";
 import { OrderItemDetail } from "./modules/order-punch/OrderItemDetail";
 import { SoConfirmationList } from "./modules/so-confirmation/SoConfirmationList";
 import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprovalList";
+import { StageQueueList } from "./components/stage/StageQueueList";
+import { STAGES } from "./lib/stages";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -56,6 +58,12 @@ export default function App() {
         <Route path="modules/dispatch-approval/:orderId" element={<OrderDetail />} />
         <Route path="modules/dispatch-approval/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        {STAGES.map((stage) => (
+          <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
+        ))}
+        <Route path="modules/:moduleKey/:orderId" element={<OrderDetail />} />
+        <Route path="modules/:moduleKey/:orderId/items" element={<OrderItemsView />} />
+        <Route path="modules/:moduleKey/:orderId/items/:itemId" element={<OrderItemDetail />} />
         <Route path="modules/:moduleKey" element={<PlaceholderModule />} />
       </Route>
     </Routes>
