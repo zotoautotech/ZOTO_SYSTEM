@@ -322,7 +322,6 @@ export function OrderDetail() {
           )}
 
           <Section title="Order Details">
-            <Field label="Tally" value="Tally 1 (Registered)" />
             <Field label="Order Type" value={order.ORDER_TYPE} />
             <Field
               label="Payment Type"

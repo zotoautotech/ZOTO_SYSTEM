@@ -54,6 +54,10 @@ async function getBuyerFields(custId: string): Promise<SheetRow> {
       BUYER_EMAIL: c["REGISTERED EMAIL ID"] || "",
       BUYER_CONTACT: c["REGISTERED MOBILE NO."] || "",
       PAYMENT_TERMS: c["Payment Terms With Days"] || "",
+      // Auto-picked from the customer master (not user-entered) — only the Sales
+      // Representative's Name column, not the "customer with id" field next to it.
+      // NB: the live sheet's header is actually misspelled "Repersentative".
+      SALE_STAFF_NAME: c["Field Sale Repersentative"] || "",
     };
   } catch {
     return {};
@@ -106,7 +110,6 @@ const createOrderSchema = z.object({
   contactPerson: z.string().optional().default(""),
   contactNo: z.string().optional().default(""),
   orderGivenBy: z.string().optional().default(""),
-  saleStaffName: z.string().optional().default(""),
   billingAddress: z.string().optional().default(""),
   billingState: z.string().optional().default(""),
   billingPincode: z.string().optional().default(""),
@@ -349,7 +352,6 @@ ordersRouter.post("/", async (req, res, next) => {
         CONTACT_PERSON: body.contactPerson,
         CONTACT_NO: body.contactNo,
         ORDER_GIVEN_BY: body.orderGivenBy,
-        SALE_STAFF_NAME: body.saleStaffName,
         BILLING_ADDRESS: body.billingAddress,
         BILLING_STATE: body.billingState,
         BILLING_PINCODE: body.billingPincode,

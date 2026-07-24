@@ -118,7 +118,6 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
   const columns: Column<OrderRecord>[] = [
     { key: "status", header: "Status", render: (o) => <StatusBadge status={o.STATUS} /> },
     { key: "timestamp", header: "Timestamp", render: (o) => formatTimestamp(o.CREATED_AT) },
-    { key: "tally", header: "Tally", render: () => "Tally 1 (Registered)" },
     { key: "orderType", header: "Order Type", render: (o) => o.ORDER_TYPE },
     {
       key: "paymentType",

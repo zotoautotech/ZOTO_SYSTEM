@@ -171,6 +171,12 @@ directly with the service account, no impersonation needed there).
 
 ## Known gotchas
 
+- **`CUSTOMER MASTER T1`'s "Field Sale Repersentative" column is misspelled in the live
+  sheet** (not "Representative") — `getBuyerFields()` in `Backend/src/routes/orders.ts`
+  reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. If a
+  lookup against this sheet silently returns blank, suspect a header-spelling mismatch
+  first — dump the tab's actual headers rather than assuming the "obviously correct"
+  spelling.
 - **`readTable` (`Backend/src/services/sheets.ts`) tolerates a missing tab** — if a tab
   referenced by code doesn't exist yet in the live sheet, the Sheets API throws "Unable to
   parse range", which `readTable` now catches and treats as an empty table instead of

@@ -4,6 +4,25 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-24
 
+- **Frontend now revalidates `index.html` on every load instead of relying on a hard
+  refresh.** Added explicit `Cache-Control` headers in `Frontend/vercel.json`:
+  `no-cache, must-revalidate` for `/` and `/index.html`, `public, max-age=31536000,
+  immutable` for hashed `/assets/*` files. Without this, a client whose browser cached an
+  old `index.html` (which references the old build's hashed JS/CSS by filename) could keep
+  serving a stale build indefinitely on normal navigation — a doer reported missing a
+  feature that was actually live for everyone else. Assets are safe to cache forever since
+  Vite content-hashes their filenames; only the HTML shell needed the no-cache treatment.
+- **Removed the hardcoded "Tally 1 (Registered)" placeholder** from the Punch Order list
+  column and the Order Detail "Order Details" section — it never reflected anything real.
+- **Sale Staff Name now actually auto-fills.** `getBuyerFields()` in
+  `Backend/src/routes/orders.ts` was reading `CUSTOMER MASTER T1`'s "Field Sale
+  Representative" column, but the live sheet's header is spelled "Field Sale
+  **Repersentative**" — the lookup always missed and the field stayed blank. Fixed to read
+  the actual (misspelled) header; also removed the old manual `saleStaffName` input from the
+  create-order payload since it's now fully auto-picked from the customer master, not
+  user-entered. Verified against the live sheet: punching an order for CUST-0006 now
+  correctly fills "Abhishek".
+
 - **Self-service password change**, and a permanent fix for "Order not found" on every
   order. Added `POST /auth/change-password` (requires current password, writes to the
   caller's own `Employee Id` row's `Password` cell — row is matched on the JWT, not a
