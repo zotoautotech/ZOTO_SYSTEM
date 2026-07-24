@@ -4,10 +4,11 @@ import { env } from "../config/env.js";
 import { getPermissions } from "../services/permissions.js";
 
 export interface AuthUser {
-  email: string;
+  employeeId: string;
   name: string;
-  role: string;
   modules: string[] | "ALL";
+  canAdd: boolean;
+  canEdit: boolean;
   canDelete: boolean;
 }
 
@@ -35,23 +36,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
-    }
-    if (!roles.includes(req.user.role) && req.user.role !== "Admin") {
-      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Role not permitted for this action" } });
-    }
-    next();
-  };
-}
-
 /**
- * Gates a route by USERS.MODULES, AppSheet-style: permissions are read LIVE from
- * the sheet (15s cache) on every request rather than trusted from the JWT, so an
- * admin editing the MODULES cell takes effect within seconds — no re-login needed.
- * A missing/inactive USERS row means access was revoked entirely.
+ * Gates a route by USERS.Permissions_Process, AppSheet-style: permissions are read
+ * LIVE from the sheet (15s cache) on every request rather than trusted from the JWT,
+ * so an admin editing the Permissions_Process cell takes effect within seconds — no
+ * re-login needed. A missing Employee Id row means access was revoked entirely.
  */
 export function requireModule(moduleKey: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -59,7 +48,7 @@ export function requireModule(moduleKey: string) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
     }
     try {
-      const perms = await getPermissions(req.user.email);
+      const perms = await getPermissions(req.user.employeeId);
       if (!perms) {
         return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
       }
@@ -85,7 +74,7 @@ export async function requireCanDelete(req: Request, res: Response, next: NextFu
     return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
   }
   try {
-    const perms = await getPermissions(req.user.email);
+    const perms = await getPermissions(req.user.employeeId);
     if (!perms?.canDelete) {
       return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not permitted to delete orders" } });
     }

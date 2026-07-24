@@ -6,11 +6,12 @@ import { useIsCompact, useIsMobile } from "../lib/responsive";
 
 const zotoLogo = "/zoto-logo.png";
 
-function MailIcon() {
+function IdIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 7l9 6 9-6" />
+      <circle cx="9" cy="12" r="2" />
+      <path d="M14 10h5M14 14h3" />
     </svg>
   );
 }
@@ -25,7 +26,7 @@ function LockIcon() {
 }
 
 export function Login() {
-  const [email, setEmail] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
   const [password, setPasswordInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,11 +40,11 @@ export function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
+      await login(employeeId, password);
       navigate("/");
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
-      setError(detail ?? "Email not recognized or incorrect password.");
+      setError(detail ?? "ID not recognized or incorrect password.");
     } finally {
       setLoading(false);
     }
@@ -152,7 +153,7 @@ export function Login() {
         >
           <h2 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 700 }}>Login</h2>
           <p style={{ margin: "0 0 32px", color: "#5c5f6a", fontSize: 14 }}>
-            Sign in with your work email and password.
+            Sign in with your ID and password.
           </p>
 
           <form onSubmit={onSubmit}>
@@ -167,7 +168,7 @@ export function Login() {
                 marginBottom: 8,
               }}
             >
-              Email
+              ID
             </label>
             <div
               style={{
@@ -182,15 +183,15 @@ export function Login() {
               }}
             >
               <span style={{ opacity: 0.5, display: "flex" }}>
-                <MailIcon />
+                <IdIcon />
               </span>
               <input
-                type="email"
+                type="text"
                 required
                 autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@theairtrap.com"
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                placeholder="Employee ID"
                 style={{
                   flex: 1,
                   background: "transparent",

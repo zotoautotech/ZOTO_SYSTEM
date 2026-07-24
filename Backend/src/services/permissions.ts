@@ -3,6 +3,8 @@ import { readTable } from "./sheets.js";
 
 export interface UserPermissions {
   modules: string[] | "ALL";
+  canAdd: boolean;
+  canEdit: boolean;
   canDelete: boolean;
 }
 
@@ -41,7 +43,7 @@ function normalize(name: string): string {
 export function parseModules(raw: string | undefined): string[] | "ALL" {
   const value = (raw ?? "").trim();
   if (!value || value.toUpperCase() === "ALL") return "ALL";
-  // "Admin" anywhere in the list = full access, matching the old sheet's Process column.
+  // "Admin" anywhere in the list = full access, matching the USERS sheet's Permissions_Process column.
   const parts = value.split(",").map((m) => m.trim()).filter(Boolean);
   if (parts.some((p) => normalize(p) === "admin")) return "ALL";
   const keys = parts
@@ -61,18 +63,20 @@ export function parseBool(raw: string | undefined): boolean {
 
 /**
  * Live permission lookup, AppSheet-style: reads the USERS sheet (short TTL cache)
- * every time instead of trusting stale JWT claims, so editing MODULES/CAN_DELETE
- * in the sheet takes effect within seconds — no re-login needed.
- * Returns null if the user row is missing or inactive (treat as access revoked).
+ * every time instead of trusting stale JWT claims, so editing Permissions_Process/
+ * CAN_ADD/CAN_EDIT/CAN_DELETE in the sheet takes effect within seconds — no
+ * re-login needed. Returns null if the Employee Id row is missing.
  */
-export async function getPermissions(email: string): Promise<UserPermissions | null> {
+export async function getPermissions(employeeId: string): Promise<UserPermissions | null> {
   const users = await readTable(env.sheets.transactions, "USERS", { ttlMs: 15_000 });
   const user = users.find(
-    (u) => u.EMAIL?.toLowerCase() === email.toLowerCase() && u.ACTIVE === "Yes"
+    (u) => u["Employee Id"]?.trim().toLowerCase() === employeeId.trim().toLowerCase()
   );
   if (!user) return null;
   return {
-    modules: parseModules(user.MODULES),
+    modules: parseModules(user.Permissions_Process),
+    canAdd: parseBool(user.CAN_ADD),
+    canEdit: parseBool(user.CAN_EDIT),
     canDelete: parseBool(user.CAN_DELETE),
   };
 }

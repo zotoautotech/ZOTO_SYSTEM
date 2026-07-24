@@ -112,7 +112,8 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 export function Settings() {
   const { user } = useAuth();
-  const initials = (user?.name || user?.email || "?").slice(0, 2).toUpperCase();
+  const initials = (user?.name || user?.employeeId || "?").slice(0, 2).toUpperCase();
+  const role = user?.modules === "ALL" ? "Admin" : "User";
 
   return (
     <div style={{ maxWidth: 680, marginTop: 24, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -158,7 +159,7 @@ export function Settings() {
                 fontWeight: 600,
               }}
             >
-              {user?.role ?? "User"}
+              {role}
             </span>
             <p className="text-muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
               View and manage your personal information and account details.
@@ -194,8 +195,8 @@ export function Settings() {
           </p>
         </div>
         <InfoRow icon={<PersonIcon />} label="Name" value={user?.name} />
-        <InfoRow icon={<MailIcon />} label="Email" value={user?.email} />
-        <InfoRow icon={<BadgeIcon />} label="Role" value={user?.role} />
+        <InfoRow icon={<MailIcon />} label="ID" value={user?.employeeId} />
+        <InfoRow icon={<BadgeIcon />} label="Role" value={role} />
       </div>
     </div>
   );

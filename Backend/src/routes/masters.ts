@@ -165,7 +165,7 @@ mastersRouter.post("/customers", async (req, res, next) => {
 
     await appendRow(env.sheets.customerBilling, "Customer Addresses", {
       Timestamp: now,
-      Useremail: req.user!.email,
+      Useremail: req.user!.employeeId,
       "Customer ID": custId,
       "Address ID": `${custId}-ADDR-01`,
       "Address Type": "Billing",
@@ -183,7 +183,7 @@ mastersRouter.post("/customers", async (req, res, next) => {
     if (body.contactPersonName) {
       await appendRow(env.sheets.customerBilling, "Customer Contacts", {
         Timestamp: now,
-        Useremail: req.user!.email,
+        Useremail: req.user!.employeeId,
         "Customer ID": custId,
         "Contact ID": `${custId}-CONT-01`,
         "Contact Person Name": body.contactPersonName,
@@ -284,7 +284,7 @@ mastersRouter.post("/goods", async (req, res, next) => {
 
     await appendRow(env.sheets.fg, "MASTER OF FG INVENTORY", {
       TIMESTAMP: now,
-      USEREMAIL: req.user!.email,
+      USEREMAIL: req.user!.employeeId,
       "FG ID": fgId,
       "PART NO.": body.partNo,
       SEGMENT: body.segment,

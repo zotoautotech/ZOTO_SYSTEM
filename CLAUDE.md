@@ -61,14 +61,24 @@ prod (local dev proxies relative `/api/v1` to the Backend dev server instead).
 
 ## Auth & Permissions
 
-JWT-based (`Backend/src/middleware/auth.ts`, `JWT_SECRET` env var). Permissions are read
-**live** from the `USERS` sheet on every request (not trusted from the JWT), so an admin
-edit to a user's row takes effect within seconds:
-- `MODULES` column — comma-separated module keys (or blank/`ALL` = unrestricted, fail-open).
+Login is by **Employee Id + Password** (not email) against the `USERS` tab — columns
+`Employee Id`, `Password`, `Name`, `Permissions_Process`, `CAN_ADD`, `CAN_EDIT`, `CAN_DELETE`
+(exact header text, matched case-insensitively on `Employee Id`; password is plain text,
+matched exactly). JWT-based (`Backend/src/middleware/auth.ts`, `JWT_SECRET` env var);
+`AuthUser`/JWT payload carries `employeeId`/`name`/`modules`/`canAdd`/`canEdit`/`canDelete` —
+no `email`/`role` fields anymore. The Login page's field is labelled "ID", not "Email"
+(`Frontend/src/pages/Login.tsx`).
+
+Permissions are read **live** from the `USERS` sheet on every request (not trusted from the
+JWT), so an admin edit to a user's row takes effect within seconds:
+- `Permissions_Process` column — comma-separated module/process names (or blank/`ALL` =
+  unrestricted, fail-open). `"Admin"` anywhere in the list = full access (`modules: "ALL"`).
   Aliases old Process names case-insensitively (`Sale Order` etc.) — see `permissions.ts`.
-- `CAN_DELETE` column — gates the Punch Order list's bulk-delete (fail-closed: blank = no
-  access, since it's irreversible).
-Both are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
+- `CAN_ADD` / `CAN_EDIT` / `CAN_DELETE` columns — `Yes`/`true`/`1` = granted. Only
+  `CAN_DELETE` is currently wired to a route guard (Punch Order list's bulk-delete,
+  fail-closed: blank = no access, since it's irreversible); `CAN_ADD`/`CAN_EDIT` are parsed
+  and exposed on `req.user`/the frontend `AuthUser` but not yet gating any route/UI.
+All four are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
 
 ## Google Sheets (source of truth)
 

@@ -287,11 +287,11 @@ ordersRouter.post("/", async (req, res, next) => {
         // ORDER_ITEMS uses Timestamp/Useremail (not CREATED_AT/BY); include both — the
         // extra CREATED_* keys below are harmlessly ignored (no matching header).
         Timestamp: now,
-        Useremail: req.user!.email,
+        Useremail: req.user!.employeeId,
         CREATED_AT: now,
-        CREATED_BY: req.user!.email,
+        CREATED_BY: req.user!.employeeId,
         UPDATED_AT: now,
-        UPDATED_BY: req.user!.email,
+        UPDATED_BY: req.user!.employeeId,
         ROW_VERSION: "1",
       });
     }
@@ -313,9 +313,9 @@ ordersRouter.post("/", async (req, res, next) => {
         UOM: plan.uom,
         STATUS: "PENDING",
         CREATED_AT: now,
-        CREATED_BY: req.user!.email,
+        CREATED_BY: req.user!.employeeId,
         UPDATED_AT: now,
-        UPDATED_BY: req.user!.email,
+        UPDATED_BY: req.user!.employeeId,
         ROW_VERSION: "1",
       });
     }
@@ -329,7 +329,7 @@ ordersRouter.post("/", async (req, res, next) => {
       punchToSheet({
         ORDER_ID: orderId,
         CREATED_AT: now,
-        CREATED_BY: req.user!.email,
+        CREATED_BY: req.user!.employeeId,
         PO_NO: body.poNo,
         PO_DATE: body.poDate,
         PO_ATTACHMENT_URL: body.poAttachmentUrl,
@@ -447,7 +447,7 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "PUNCH_DISCOUNT_ID");
     await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
       TIMESTAMP: now,
-      USEREMAIL: req.user!.email,
+      USEREMAIL: req.user!.employeeId,
       ORDER_ID: req.params.id,
       PUNCH_DISCOUNT_ID: punchDiscountId,
       DISCOUNT_REASON: body.reason,
@@ -494,7 +494,7 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
         ...order,
         // ...then set the sale-order-specific fields (these win over the spread).
         CREATED_AT: now,
-        CREATED_BY: req.user!.email,
+        CREATED_BY: req.user!.employeeId,
         ORDER_ID: req.params.id,
         SALE_ORDER_ID: saleOrderId,
         SO_NO: body.soNo,
@@ -515,7 +515,7 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", {
         ...item,
         Timestamp: now,
-        Useremail: req.user!.email,
+        Useremail: req.user!.employeeId,
         SALE_ORDER_ID: saleOrderId,
         SALE_ORDER_ITEM_ID: soItemIds[i],
       });
@@ -527,7 +527,7 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       ORDER_TAB,
       "ORDER_ID",
       req.params.id,
-      punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.email })
+      punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.employeeId })
     );
 
     res.json({ orderId: req.params.id, saleOrderId });
@@ -620,8 +620,8 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
             DISCOUNT_PCT: String(item.discountPct), BASIC_AMOUNT: money(lineBasic), GST_SLAB_PCT: String(item.gstSlabPct),
             CGST: money(cgst), SGST: money(sgst), IGST: "0.00", TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
             SPECIAL_INSTRUCTIONS: item.specialInstructions, PACKING_REQUIREMENTS: item.packingRequirements, NOTES: item.notes,
-            STATUS: "PENDING", Timestamp: now, Useremail: req.user!.email, CREATED_AT: now, CREATED_BY: req.user!.email,
-            UPDATED_AT: now, UPDATED_BY: req.user!.email, ROW_VERSION: "1",
+            STATUS: "PENDING", Timestamp: now, Useremail: req.user!.employeeId, CREATED_AT: now, CREATED_BY: req.user!.employeeId,
+            UPDATED_AT: now, UPDATED_BY: req.user!.employeeId, ROW_VERSION: "1",
           });
         }
 
@@ -649,16 +649,16 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
       }
 
       await Promise.all([
-        updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
-        updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+        updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
+        updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
       ]);
       return res.json({ orderId: req.params.id, status: "PENDING" });
     }
 
     const confirmed = body.outcome === "Confirmed";
     await Promise.all([
-      updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ STATUS: "COMPLETED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
-      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.email })),
+      updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ STATUS: "COMPLETED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
+      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
     ]);
     res.json({ orderId: req.params.id, status: "COMPLETED", nextStage: confirmed ? "dispatch-approval" : undefined });
   } catch (err) {
@@ -677,7 +677,7 @@ ordersRouter.post("/:id/stage", async (req, res, next) => {
       ORDER_TAB,
       "ORDER_ID",
       req.params.id,
-      punchToSheet({ APPROVAL_REMARKS: remarks ?? "", CREATED_BY: req.user!.email })
+      punchToSheet({ APPROVAL_REMARKS: remarks ?? "", CREATED_BY: req.user!.employeeId })
     );
     res.json({ orderId: req.params.id, currentStage: toStage });
   } catch (err) {

@@ -608,7 +608,7 @@ export function Layout() {
           <div style={{ position: "relative" }}>
             <button
               onClick={() => setAccountMenuOpen((o) => !o)}
-              title={user?.email ?? "Account"}
+              title={user?.name ?? "Account"}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -635,7 +635,7 @@ export function Layout() {
                   flexShrink: 0,
                 }}
               >
-                {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
+                {(user?.name || user?.employeeId || "?").slice(0, 1).toUpperCase()}
               </span>
               {!isMobile && (
                 <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>{user?.name ?? "Account"}</span>

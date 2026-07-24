@@ -3,16 +3,17 @@ import { isAxiosError } from "axios";
 import { api } from "./api";
 
 export interface AuthUser {
-  email: string;
+  employeeId: string;
   name: string;
-  role: string;
   modules: string[] | "ALL";
+  canAdd: boolean;
+  canEdit: boolean;
   canDelete: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (employeeId: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -29,8 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  async function login(email: string, password: string) {
-    const res = await api.post("/auth/login", { email, password });
+  async function login(employeeId: string, password: string) {
+    const res = await api.post("/auth/login", { employeeId, password });
     localStorage.setItem("zoto_token", res.data.token);
     localStorage.setItem("zoto_user", JSON.stringify(res.data.user));
     setUser(res.data.user);
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.email]);
+  }, [user?.employeeId]);
 
   return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
 }

@@ -2,6 +2,21 @@
 
 Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each entry names the affected area and links back to the git commit for full detail.
 
+## 2026-07-24
+
+- **Login switched from Email to Employee ID.** The `USERS` sheet was restructured (by hand)
+  to `Employee Id`/`Password`/`Name`/`Permissions_Process`/`CAN_ADD`/`CAN_EDIT`/`CAN_DELETE`
+  columns, replacing the old `EMAIL`/`ROLE`/`MODULES`/`ACTIVE` shape. Remapped
+  `Backend/src/routes/auth.ts`, `services/permissions.ts`, and `middleware/auth.ts` to match
+  (JWT/`AuthUser` now carries `employeeId` instead of `email`/`role`; `Permissions_Process`
+  parses the same way `MODULES` did, "Admin" still means full access). Removed the unused
+  self-service `/auth/set-password` route (dead code — the new sheet ships every row with a
+  password already set, and nothing in the frontend called it). Login page's "Email" field
+  is now "ID" (`Frontend/src/pages/Login.tsx`); Settings page shows the ID instead of an
+  email address. Verified against the live sheet: both an Admin row and a restricted
+  (`Permissions_Process: "Home,Sales CRR,Order Punch,SO Confirmation"`) row log in correctly
+  with the right module scoping.
+
 ## 2026-07-23
 
 - **Removed Production/Remarks/Sample module cards** — matches the confirmed 12-module set.
