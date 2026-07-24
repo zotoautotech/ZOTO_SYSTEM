@@ -215,3 +215,17 @@ export async function listDispatchApprovals(status?: string) {
   const res = await api.get<OrderRecord[]>("/orders/dispatch-approvals", { params: { status } });
   return res.data;
 }
+
+export interface DispatchApprovalPayload {
+  outcome: "Dispatch Today" | "Dispatch Extended" | "Short Quantity" | "Excess Quantity";
+  approvedQty?: number;
+  shortQty?: number;
+  excessQty?: number;
+  nextExtendedDate?: string;
+  remarks: string;
+}
+
+export async function submitDispatchApproval(orderId: string, payload: DispatchApprovalPayload) {
+  const res = await api.post<{ orderId: string; status: string }>(`/orders/${orderId}/dispatch-approval`, payload);
+  return res.data;
+}

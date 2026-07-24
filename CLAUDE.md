@@ -120,7 +120,20 @@ queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome
   CHANGES`, stays in the pending SO Confirmation queue.
 - **Cancelled** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: CANCELLED`.
 
-Dispatch Approval itself (beyond the pending queue) has no detail form yet.
+Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
+/orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
+is what `?status=COMPLETED` on that same GET route filters on).
+
+**`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch_Approval`** are separate,
+pre-built append-only snapshot/audit-log tabs (human-readable headers, mapped in
+`Backend/src/routes/soConfirmationMap.ts`) — **not** the live source of truth, which stays
+`ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` exactly as above (nothing reads
+these three tabs back into the app). One full snapshot row is appended to `SO_Confirmation`
++ one row per item to `SO_Confirmation_Items` on every `/so-confirmation` submit (any
+outcome); one row per item is appended to `Dispatch_Approval` on every
+`/dispatch-approval` submit. Item snapshots are sourced from `SALE_ORDER_ITEMS` (not
+`ORDER_ITEMS`) so `SALE_ORDER_ITEM_ID` is always populated. `DispatchApprovalForm.tsx` now
+actually persists (previously UI-only) via this route.
 
 ## IDs
 

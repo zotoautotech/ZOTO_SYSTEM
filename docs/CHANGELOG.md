@@ -4,6 +4,28 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-24
 
+- **Dispatch Approval now persists, and SO Confirmation / Dispatch Approval log to their new
+  dedicated sheet tabs.** The sheet grew three new pre-built tabs — `SO_Confirmation`,
+  `SO_Confirmation_Items`, `Dispatch_Approval` — with their own human-readable columns
+  (Seller/Buyer/Billing/Shipping/Consignee/Logistics/GST sections, matching ORDER_PUNCH's
+  style). Added `soConfirmationMap.ts` (write-only field maps) and wired both routes to
+  append one snapshot row per submit: `POST /orders/:id/so-confirmation` now also appends to
+  `SO_Confirmation` (+ one row per item to `SO_Confirmation_Items`, sourced from
+  `SALE_ORDER_ITEMS` so `SALE_ORDER_ITEM_ID` carries through) for every outcome
+  (Confirmed/Changes/Cancelled); added a new `POST /orders/:id/dispatch-approval` route that
+  appends one row per item to `Dispatch_Approval` and flips `ORDER_PUNCH.STATUS` to
+  `DISPATCH APPROVAL COMPLETED`. These three tabs are append-only audit logs — the live
+  source of truth is unchanged (`ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS`
+  keep being read/written exactly as before; nothing reads the new tabs back into the app).
+  `DispatchApprovalForm.tsx` (previously UI-only, explicitly deferred) now actually saves via
+  this route and navigates back to the queue. Verified against the live sheet end-to-end:
+  punched a test order through discount → sale order form → SO Confirmation (Confirmed) →
+  Dispatch Approval (Dispatch Today / Short Quantity), confirming each stage's snapshot row
+  lands correctly including `SALE_ORDER_ITEM_ID`/`Sale Order No.` linkage.
+  *(Also flagged, not fixed here: `GET /orders/:id` currently 500s for every order because it
+  unconditionally reads a `DISPATCH_PLAN` tab that doesn't exist in the live sheet — spun off
+  as a separate task.)*
+
 - **Login switched from Email to Employee ID.** The `USERS` sheet was restructured (by hand)
   to `Employee Id`/`Password`/`Name`/`Permissions_Process`/`CAN_ADD`/`CAN_EDIT`/`CAN_DELETE`
   columns, replacing the old `EMAIL`/`ROLE`/`MODULES`/`ACTIVE` shape. Remapped

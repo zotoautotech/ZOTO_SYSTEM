@@ -5,6 +5,7 @@ import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type Sheet
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
+import { dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -557,6 +558,62 @@ const soConfirmationSchema = z.object({
   changes: confirmationChangesSchema.optional(),
 });
 
+/**
+ * Appends a full snapshot of this SO Confirmation decision to SO_Confirmation +
+ * SO_Confirmation_Items — an append-only audit log, not the live source of truth
+ * (that stays ORDER_PUNCH/SALE_ORDERS/ORDER_ITEMS, updated separately above/below).
+ */
+async function logSoConfirmation(
+  orderId: string,
+  finalPunch: SheetRow,
+  saleOrderId: string,
+  items: SheetRow[],
+  outcome: string,
+  remarks: string,
+  payment: { receivedPaymentAmount?: string; paymentAmountPct?: string; paymentAttachmentUrl?: string },
+  userEmployeeId: string
+) {
+  const now = new Date().toISOString();
+  const confId = await nextId("CONF", "SO_Confirmation", "Conf_ID");
+  await appendRow(
+    env.sheets.transactions,
+    "SO_Confirmation",
+    soConfirmationToSheet({
+      ...finalPunch,
+      CREATED_AT: now,
+      CREATED_BY: userEmployeeId,
+      ORDER_ID: orderId,
+      SALE_ORDER_ID: saleOrderId,
+      CONF_ID: confId,
+      CONFIRMATION: outcome,
+      RECEIVED_PAYMENT_AMOUNT: payment.receivedPaymentAmount ?? "",
+      PAYMENT_AMOUNT_PCT: payment.paymentAmountPct ?? "",
+      PAYMENT_ATTACHMENT_URL: payment.paymentAttachmentUrl ?? "",
+      CONFIRMATION_REMARKS: remarks,
+      STATUS: outcome,
+    })
+  );
+
+  if (items.length === 0) return;
+  const confItemIds = await nextIds("CONFI", "SO_Confirmation_Items", "Conf Item ID", items.length);
+  for (const [i, item] of items.entries()) {
+    await appendRow(
+      env.sheets.transactions,
+      "SO_Confirmation_Items",
+      soConfirmationItemToSheet({
+        ...item,
+        CREATED_AT: now,
+        CREATED_BY: userEmployeeId,
+        ORDER_ID: orderId,
+        SALE_ORDER_ID: saleOrderId,
+        CONF_ID: confId,
+        CONF_ITEM_ID: confItemIds[i],
+        STATUS: outcome,
+      })
+    );
+  }
+}
+
 /** Saves the SO Confirmation decision. Confirmed orders advance to Dispatch Approval;
  * cancelled orders finish in this queue; requested changes update both source rows and stay pending. */
 ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
@@ -652,6 +709,19 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
         updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
       ]);
+
+      const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id);
+      await logSoConfirmation(
+        req.params.id,
+        { ...existingPunch, ...saleOrderFromSheet(saleOrder), ...(withoutUndefined as SheetRow), ...amountFields },
+        saleOrder.SALE_ORDER_ID,
+        snapshotItems,
+        "Changes",
+        body.remarks,
+        {},
+        req.user!.employeeId
+      );
+
       return res.json({ orderId: req.params.id, status: "PENDING" });
     }
 
@@ -660,7 +730,112 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
       updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ STATUS: "COMPLETED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
       updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
     ]);
+
+    const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id);
+    await logSoConfirmation(
+      req.params.id,
+      { ...punchFromSheet(punch), ...saleOrderFromSheet(saleOrder), STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED" },
+      saleOrder.SALE_ORDER_ID,
+      snapshotItems,
+      confirmed ? "Confirmed" : "Cancelled",
+      body.remarks,
+      {
+        receivedPaymentAmount: body.receivedPaymentAmount,
+        paymentAmountPct: body.paymentAmountPct,
+        paymentAttachmentUrl: body.paymentAttachmentUrl,
+      },
+      req.user!.employeeId
+    );
+
     res.json({ orderId: req.params.id, status: "COMPLETED", nextStage: confirmed ? "dispatch-approval" : undefined });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const dispatchApprovalSchema = z.object({
+  outcome: z.enum(["Dispatch Today", "Dispatch Extended", "Short Quantity", "Excess Quantity"]),
+  approvedQty: z.number().optional(),
+  shortQty: z.number().optional(),
+  excessQty: z.number().optional(),
+  nextExtendedDate: z.string().optional(),
+  remarks: z.string().min(1),
+});
+
+/** Saves the Dispatch Approval decision: appends one Dispatch_Approval row per item
+ * (audit log — same append-only pattern as SO Confirmation) and marks the order done
+ * so it drops out of the pending Dispatch Approval queue. */
+ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
+  try {
+    const body = dispatchApprovalSchema.parse(req.body);
+    const [punchRows, items] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, "SALE_ORDER_ITEMS"),
+    ]);
+    const punch = punchRows.find((row) => row.ORDER_ID === req.params.id);
+    if (!punch) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+    }
+    const order = punchFromSheet(punch);
+    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id);
+
+    const now = new Date().toISOString();
+    const qtyField =
+      body.outcome === "Dispatch Today" ? { APPROVED_QTY: body.approvedQty }
+      : body.outcome === "Short Quantity" ? { SHORT_QTY: body.shortQty }
+      : body.outcome === "Excess Quantity" ? { EXCESS_QTY: body.excessQty }
+      : {};
+
+    const dispatchIds = await nextIds("DA", "Dispatch_Approval", "Dispatch_iD", Math.max(orderItems.length, 1));
+    const rowsToWrite = orderItems.length > 0 ? orderItems : [{ ITEM_ID: "", SALE_ORDER_ITEM_ID: "" } as SheetRow];
+    for (const [i, item] of rowsToWrite.entries()) {
+      await appendRow(
+        env.sheets.transactions,
+        "Dispatch_Approval",
+        dispatchApprovalToSheet({
+          CREATED_AT: now,
+          CREATED_BY: req.user!.employeeId,
+          ORDER_ID: req.params.id,
+          ITEM_ID: item.ITEM_ID ?? "",
+          SALE_ORDER_ITEM_ID: item.SALE_ORDER_ITEM_ID ?? "",
+          DISPATCH_ID: dispatchIds[i],
+          CUST_ID: order.CUST_ID,
+          CUSTOMER_NAME: order.CUSTOMER_NAME,
+          BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,
+          TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER,
+          SALE_TYPE: order.SALE_TYPE,
+          BUYER_GSTIN: order.BUYER_GSTIN,
+          SEGMENT: item.SEGMENT ?? "",
+          CATEGORY: item.CATEGORY ?? "",
+          PART_NAME: item.PART_NAME ?? "",
+          PART_NO: item.PART_NO ?? "",
+          SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
+          PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
+          NOTES: item.NOTES ?? "",
+          ORDER_QTY: item.QTY ?? "",
+          UOM: item.UOM ?? "NOS",
+          DISPATCH_APPROVAL: body.outcome,
+          ...(Object.fromEntries(
+            Object.entries(qtyField)
+              .filter(([, v]) => v !== undefined)
+              .map(([k, v]) => [k, money(v as number)])
+          ) as SheetRow),
+          NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
+          DISPATCH_REMARKS: body.remarks,
+          STATUS: body.outcome,
+        })
+      );
+    }
+
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      req.params.id,
+      punchToSheet({ STATUS: "DISPATCH APPROVAL COMPLETED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })
+    );
+
+    res.json({ orderId: req.params.id, status: "DISPATCH APPROVAL COMPLETED" });
   } catch (err) {
     next(err);
   }

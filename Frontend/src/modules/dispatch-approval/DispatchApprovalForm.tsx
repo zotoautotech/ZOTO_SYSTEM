@@ -2,9 +2,12 @@ import { useState } from "react";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
+import { submitDispatchApproval } from "../../lib/ordersApi";
 
 interface Props {
+  orderId: string;
   onClose: () => void;
+  onSaved: () => void;
 }
 
 type Outcome = "Dispatch Today" | "Dispatch Extended" | "Short Quantity" | "Excess Quantity" | "";
@@ -17,8 +20,8 @@ const DISPATCH_APPROVAL_OPTIONS = [
 ];
 
 /**
- * UI-only first phase of the Dispatch Approval form, matching the reference's per-outcome
- * field set and live red-border validation.
+ * Dispatch Approval form matching the reference's per-outcome field set and live
+ * red-border validation. Saves via POST /orders/:id/dispatch-approval.
  *
  * Available Stock Quantity is a placeholder (disabled, "0.00") until a real Inventory
  * Management System is connected — Balance Dispatch Quantity is the only stock-derived
@@ -26,7 +29,7 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * quantity), so quantity validation only enforces against Balance when it's actually
  * known (> 0); once inventory is wired, Available Stock should feed in the same way.
  */
-export function DispatchApprovalForm({ onClose }: Props) {
+export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
@@ -34,6 +37,8 @@ export function DispatchApprovalForm({ onClose }: Props) {
   const [excessQty, setExcessQty] = useState("");
   const [nextExtendedDate, setNextExtendedDate] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   // Placeholder until Inventory Management System is connected — see comment above.
   const availableStockQty = 0;
@@ -55,6 +60,26 @@ export function DispatchApprovalForm({ onClose }: Props) {
     if (outcome === "Short Quantity") return !qtyError(shortQty, "Short");
     if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess");
     return false;
+  }
+
+  async function handleSave() {
+    if (!canSave() || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await submitDispatchApproval(orderId, {
+        outcome: outcome as Exclude<Outcome, "">,
+        approvedQty: outcome === "Dispatch Today" ? Number(approvedQty) : undefined,
+        shortQty: outcome === "Short Quantity" ? Number(shortQty) : undefined,
+        excessQty: outcome === "Excess Quantity" ? Number(excessQty) : undefined,
+        nextExtendedDate: outcome === "Dispatch Extended" ? nextExtendedDate : undefined,
+        remarks,
+      });
+      onSaved();
+    } catch {
+      setError("Could not save — please try again.");
+      setSaving(false);
+    }
   }
 
   return (
@@ -148,6 +173,8 @@ export function DispatchApprovalForm({ onClose }: Props) {
           {outcome && (
             <TextField label="Dispatch Remarks" required value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           )}
+
+          {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 
         <div
@@ -160,11 +187,11 @@ export function DispatchApprovalForm({ onClose }: Props) {
             background: "var(--color-bg-page)",
           }}
         >
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={onClose} disabled={!canSave()}>
-            Save
+          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave() || saving}>
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

@@ -422,7 +422,18 @@ export function OrderDetail() {
         />
       )}
 
-      {showDispatchApprovalForm && <DispatchApprovalForm onClose={() => setShowDispatchApprovalForm(false)} />}
+      {showDispatchApprovalForm && (
+        <DispatchApprovalForm
+          orderId={orderId!}
+          onClose={() => setShowDispatchApprovalForm(false)}
+          onSaved={() => {
+            setShowDispatchApprovalForm(false);
+            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+            queryClient.invalidateQueries({ queryKey: ["dispatchApprovals"] });
+            navigate("/modules/dispatch-approval");
+          }}
+        />
+      )}
     </div>
   );
 }
