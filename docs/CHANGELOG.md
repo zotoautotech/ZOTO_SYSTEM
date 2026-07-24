@@ -4,6 +4,15 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-24
 
+- **Buyer GSTIN now auto-fills from the customer master too.** The Punch form never had a
+  manual GSTIN input at all, so `BUYER_GSTIN` was always saved blank; `getBuyerFields()`
+  now also picks it from `CUSTOMER MASTER T1`'s "Company GSTIN NO." column (found via the
+  same `getBuyerFields()` that was just fixed for Sale Staff Name — same root cause pattern:
+  a field the form silently sent as `""`, overriding whatever the auto-fill spread had set).
+  Removed the now-dead `buyerGstin` field from the create-order payload/schema; SO
+  Confirmation's Changes flow keeps its own editable Buyer GSTIN field for corrections after
+  the fact. Verified against the live sheet: punching for CUST-0006 now correctly fills
+  `33AADCV8736A1ZI`.
 - **Frontend now revalidates `index.html` on every load instead of relying on a hard
   refresh.** Added explicit `Cache-Control` headers in `Frontend/vercel.json`:
   `no-cache, must-revalidate` for `/` and `/index.html`, `public, max-age=31536000,

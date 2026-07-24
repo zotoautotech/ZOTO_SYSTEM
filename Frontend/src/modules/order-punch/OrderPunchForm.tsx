@@ -73,7 +73,6 @@ export function OrderPunchForm() {
         advancePct: form.paymentType === "Advance" ? form.advancePct : undefined,
         custId: form.custId,
         customerName: form.customerName,
-        buyerGstin: form.buyerGstin,
         clientClassification: form.clientClassification || undefined,
         billingAddress: form.billingAddress,
         billingState: form.billingState,

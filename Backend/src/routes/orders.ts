@@ -54,6 +54,8 @@ async function getBuyerFields(custId: string): Promise<SheetRow> {
       BUYER_EMAIL: c["REGISTERED EMAIL ID"] || "",
       BUYER_CONTACT: c["REGISTERED MOBILE NO."] || "",
       PAYMENT_TERMS: c["Payment Terms With Days"] || "",
+      // Auto-picked, not user-entered — the punch form has no GSTIN input of its own.
+      BUYER_GSTIN: c["Company GSTIN NO."] || "",
       // Auto-picked from the customer master (not user-entered) — only the Sales
       // Representative's Name column, not the "customer with id" field next to it.
       // NB: the live sheet's header is actually misspelled "Repersentative".
@@ -104,7 +106,6 @@ const createOrderSchema = z.object({
   advancePct: z.number().min(0).max(100).optional(),
   custId: z.string().optional().default(""),
   customerName: z.string().optional().default(""),
-  buyerGstin: z.string().optional().default(""),
   clientClassification: z.enum(["Existing", "New", "Prospective"]).optional(),
   thisOrderPaymentTerms: z.string().optional().default(""),
   contactPerson: z.string().optional().default(""),
@@ -347,7 +348,6 @@ ordersRouter.post("/", async (req, res, next) => {
         CUST_ID: body.custId,
         CUSTOMER_NAME: body.customerName,
         ...buyer,
-        BUYER_GSTIN: body.buyerGstin,
         THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
         CONTACT_PERSON: body.contactPerson,
         CONTACT_NO: body.contactNo,

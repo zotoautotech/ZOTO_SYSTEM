@@ -176,7 +176,9 @@ directly with the service account, no impersonation needed there).
   reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. If a
   lookup against this sheet silently returns blank, suspect a header-spelling mismatch
   first — dump the tab's actual headers rather than assuming the "obviously correct"
-  spelling.
+  spelling. `BUYER_GSTIN` is also auto-picked there now, from "Company GSTIN NO." (correctly
+  spelled) — the Punch form has no manual GSTIN input of its own; it's only editable later,
+  as a correction, in SO Confirmation's Changes flow.
 - **`readTable` (`Backend/src/services/sheets.ts`) tolerates a missing tab** — if a tab
   referenced by code doesn't exist yet in the live sheet, the Sheets API throws "Unable to
   parse range", which `readTable` now catches and treats as an empty table instead of

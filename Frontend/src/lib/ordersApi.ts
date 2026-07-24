@@ -91,7 +91,6 @@ export interface NewOrderPayload {
   advancePct?: number;
   custId?: string;
   customerName?: string;
-  buyerGstin?: string;
   clientClassification?: "Existing" | "New" | "Prospective";
   billingAddress?: string;
   billingState?: string;
