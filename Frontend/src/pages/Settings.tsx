@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { isAxiosError } from "axios";
 import { useAuth } from "../lib/auth";
 
 function PersonIcon() {
@@ -43,6 +44,125 @@ function CopyIcon() {
       <rect x="9" y="9" width="12" height="12" rx="2" />
       <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
     </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+function passwordInputStyle(): React.CSSProperties {
+  return {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid var(--color-border)",
+    background: "var(--color-bg-page)",
+    color: "var(--color-text)",
+    fontSize: 14,
+    outline: "none",
+  };
+}
+
+function ChangePasswordCard() {
+  const { changePassword } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess(false);
+    if (newPassword.length < 4) {
+      setError("New password must be at least 4 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("New password and confirmation don't match.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ?? "Could not change password.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: "8px 24px 24px" }}>
+      <div style={{ padding: "16px 0", borderBottom: "1px solid var(--color-border)" }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Change Password</h3>
+        <p className="text-muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+          Update the password for your ID. Takes effect on your next login.
+        </p>
+      </div>
+      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 360, paddingTop: 16 }}>
+        <div>
+          <label style={{ display: "block", fontSize: 12, color: "var(--color-text-muted)", marginBottom: 6 }}>
+            Current Password
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <LockIcon />
+            <input
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              style={passwordInputStyle()}
+            />
+          </div>
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 12, color: "var(--color-text-muted)", marginBottom: 6 }}>
+            New Password
+          </label>
+          <input
+            type="password"
+            required
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            style={passwordInputStyle()}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 12, color: "var(--color-text-muted)", marginBottom: 6 }}>
+            Confirm New Password
+          </label>
+          <input
+            type="password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={passwordInputStyle()}
+          />
+        </div>
+
+        {error && <p style={{ color: "#d32f2f", fontSize: 13, margin: 0 }}>{error}</p>}
+        {success && <p style={{ color: "#2e7d32", fontSize: 13, margin: 0 }}>Password updated.</p>}
+
+        <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: "flex-start" }}>
+          {saving ? "Saving…" : "Update Password"}
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -198,6 +318,8 @@ export function Settings() {
         <InfoRow icon={<MailIcon />} label="ID" value={user?.employeeId} />
         <InfoRow icon={<BadgeIcon />} label="Role" value={role} />
       </div>
+
+      <ChangePasswordCard />
     </div>
   );
 }

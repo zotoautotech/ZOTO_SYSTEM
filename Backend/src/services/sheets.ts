@@ -30,12 +30,24 @@ export async function readTable(
   }
 
   const sheets = await getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${tab}!A${headerRow}:ZZ`,
-  });
-
-  const rows = res.data.values ?? [];
+  let rows: string[][];
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${tab}!A${headerRow}:ZZ`,
+    });
+    rows = (res.data.values as string[][] | undefined) ?? [];
+  } catch (err) {
+    // A tab that doesn't exist yet (never created, or referenced speculatively by code
+    // written ahead of the sheet) shouldn't 500 the whole request — treat it as empty,
+    // same as an existing-but-blank tab. Any other error still throws.
+    const message = (err as { errors?: { message?: string }[] })?.errors?.[0]?.message ?? "";
+    if (message.startsWith("Unable to parse range")) {
+      rows = [];
+    } else {
+      throw err;
+    }
+  }
   if (rows.length === 0) return [];
 
   const headers = rows[0].map((h) => String(h ?? "").trim());

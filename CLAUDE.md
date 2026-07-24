@@ -79,6 +79,10 @@ JWT), so an admin edit to a user's row takes effect within seconds:
   fail-closed: blank = no access, since it's irreversible); `CAN_ADD`/`CAN_EDIT` are parsed
   and exposed on `req.user`/the frontend `AuthUser` but not yet gating any route/UI.
 All four are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
+Passwords are the one exception: a logged-in doer can self-service change their own password
+via Settings (`POST /auth/change-password`, requires the current password, writes straight
+back to their `Employee Id` row's `Password` cell — nobody else's row can be targeted since
+the row is matched on the JWT's own `employeeId`, not a request param).
 
 ## Google Sheets (source of truth)
 
@@ -167,6 +171,12 @@ directly with the service account, no impersonation needed there).
 
 ## Known gotchas
 
+- **`readTable` (`Backend/src/services/sheets.ts`) tolerates a missing tab** — if a tab
+  referenced by code doesn't exist yet in the live sheet, the Sheets API throws "Unable to
+  parse range", which `readTable` now catches and treats as an empty table instead of
+  bubbling up as a 500. This is what fixed `GET /orders/:id` permanently 500ing ("Order not
+  found" in the UI) because it unconditionally read a `DISPATCH_PLAN` tab that was never
+  created on the live sheet. Any other Sheets API error still throws normally.
 - **`vercel env add` via a PowerShell pipe silently prepends a BOM** (`﻿`) to the value
   on this machine — happened twice, broke domain-wide delegation both times
   (`invalid_grant: Invalid email or User ID`). Don't pipe values into it. If an env var needs

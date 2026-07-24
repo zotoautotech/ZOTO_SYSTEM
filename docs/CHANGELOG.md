@@ -4,6 +4,23 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-24
 
+- **Self-service password change**, and a permanent fix for "Order not found" on every
+  order. Added `POST /auth/change-password` (requires current password, writes to the
+  caller's own `Employee Id` row's `Password` cell — row is matched on the JWT, not a
+  request param, so nobody can target another account) plus a Change Password card on the
+  Settings page. While testing found and fixed a real bug this surfaced: the frontend's
+  global 401 interceptor (`Frontend/src/lib/api.ts`) was treating a wrong-current-password
+  401 the same as an expired session, silently logging the user out — added an allowlist
+  (`/auth/login`, `/auth/change-password`) so those endpoints' own 401s just show an inline
+  error instead. Separately, `readTable` (`Backend/src/services/sheets.ts`) now tolerates a
+  referenced-but-nonexistent sheet tab (catches the Sheets API's "Unable to parse range"
+  error and returns `[]` instead of throwing) — this is what made `GET /orders/:id` 500 for
+  *every* order ("Order not found" in the UI), because it unconditionally read a
+  `DISPATCH_PLAN` tab that was never created on the live sheet. Verified both fixes against
+  the live sheet/app: order detail loads correctly now, and a full change-password round
+  trip (wrong password rejected without logout → correct change → login with new password →
+  reverted back) all behaved correctly.
+
 - **Dispatch Approval now persists, and SO Confirmation / Dispatch Approval log to their new
   dedicated sheet tabs.** The sheet grew three new pre-built tabs — `SO_Confirmation`,
   `SO_Confirmation_Items`, `Dispatch_Approval` — with their own human-readable columns

@@ -15,10 +15,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Endpoints whose own 401s mean "that request was rejected" (wrong password, etc.),
+// not "the session/token is invalid" — those shouldn't trigger a global logout.
+const AUTH_ACTION_PATHS = ["/auth/login", "/auth/change-password"];
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const url: string = err.config?.url ?? "";
+    const isAuthAction = AUTH_ACTION_PATHS.some((p) => url.includes(p));
+    if (err.response?.status === 401 && !isAuthAction) {
       localStorage.removeItem("zoto_token");
       localStorage.removeItem("zoto_user");
       if (window.location.pathname !== "/login") {

@@ -15,6 +15,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   login: (employeeId: string, password: string) => Promise<void>;
   logout: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -41,6 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("zoto_token");
     localStorage.removeItem("zoto_user");
     setUser(null);
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string) {
+    await api.post("/auth/change-password", { currentPassword, newPassword });
   }
 
   // Live permission refresh: poll /auth/me while logged in so sheet edits to
@@ -73,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.employeeId]);
 
-  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, changePassword }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

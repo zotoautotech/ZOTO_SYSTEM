@@ -2,7 +2,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { readTable } from "../services/sheets.js";
+import { readTable, updateRow } from "../services/sheets.js";
 import { getPermissions, parseBool, parseModules } from "../services/permissions.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -67,6 +67,37 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
       canEdit: perms.canEdit,
       canDelete: perms.canDelete,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(4),
+});
+
+/**
+ * Self-service password change: the doer edits their own Password cell in the USERS
+ * tab (row matched on their own JWT `employeeId`, so nobody can target another row).
+ * Requires the current password to match first.
+ */
+authRouter.post("/change-password", requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+    const users = await readTable(env.sheets.transactions, "USERS", { refresh: true });
+    const user = users.find(
+      (u) => u["Employee Id"]?.trim().toLowerCase() === req.user!.employeeId.trim().toLowerCase()
+    );
+    if (!user) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
+    }
+    if (user.Password !== currentPassword) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Current password is incorrect" } });
+    }
+
+    await updateRow(env.sheets.transactions, "USERS", "Employee Id", user["Employee Id"], { Password: newPassword });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
