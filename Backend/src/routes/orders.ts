@@ -403,21 +403,24 @@ const discountSchema = z
     message: "discountPct is required for Percentage, discountRs is required for Rupees",
   });
 
-// Matches the old ADC system's "Order Punch Discount" tab (Timestamp, Useremail, Punch ID,
-// Punch Discount ID, Discount Reason, Description, Discount Type/%/Rs, Status) — created
-// automatically on first use since it isn't part of the current sheet's pre-built tabs.
-const DISCOUNT_LOG_TAB = "ORDER_PUNCH_DISCOUNT";
+// Matches the live sheet's pre-built "Order Punch Discount" tab exactly (headers dumped
+// from the sheet directly — note "Discount Reasion" is the tab's own typo, not ours, and
+// "Discount Details"/"ITEM_ID" are present for a future per-item discount but unused today
+// since discounts are still applied at the order level).
+const DISCOUNT_LOG_TAB = "Order Punch Discount";
 const DISCOUNT_LOG_HEADERS = [
-  "TIMESTAMP",
-  "USEREMAIL",
+  "Timestamp",
+  "Useremail",
   "ORDER_ID",
-  "PUNCH_DISCOUNT_ID",
-  "DISCOUNT_REASON",
-  "DESCRIPTION",
-  "DISCOUNT_TYPE",
-  "DISCOUNT_PCT",
-  "DISCOUNT_RS",
-  "STATUS",
+  "ITEM_ID",
+  "Punch Discount ID",
+  "Discount Details",
+  "Discount Reasion",
+  "Description",
+  "Default Discount on",
+  "Discount (Rs)",
+  "Discount (%)",
+  "Status",
 ];
 
 /** Applies the Sale Order discount, recalculates TOTAL_AMOUNT, logs the action to the
@@ -452,18 +455,18 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     );
 
     await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
-    const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "PUNCH_DISCOUNT_ID");
+    const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "Punch Discount ID");
     await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
-      TIMESTAMP: now,
-      USEREMAIL: req.user!.employeeId,
+      Timestamp: now,
+      Useremail: req.user!.employeeId,
       ORDER_ID: req.params.id,
-      PUNCH_DISCOUNT_ID: punchDiscountId,
-      DISCOUNT_REASON: body.reason,
-      DESCRIPTION: body.description,
-      DISCOUNT_TYPE: body.type,
-      DISCOUNT_PCT: body.type === "Percentage" ? String(body.discountPct) : "",
-      DISCOUNT_RS: money(discountRs),
-      STATUS: "PENDING SALE ORDER",
+      "Punch Discount ID": punchDiscountId,
+      "Discount Reasion": body.reason,
+      Description: body.description,
+      "Default Discount on": body.type,
+      "Discount (Rs)": money(discountRs),
+      "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
+      Status: "PENDING SALE ORDER",
     });
 
     res.json({ orderId: req.params.id, discountRs: money(discountRs), totalAmount: money(totalAmount) });
@@ -775,9 +778,12 @@ const dispatchApprovalSchema = z.object({
 ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
   try {
     const body = dispatchApprovalSchema.parse(req.body);
-    const [punchRows, items] = await Promise.all([
+    const [punchRows, items, saleOrders, soConfirmations, soConfirmationItems] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "SALE_ORDER_ITEMS"),
+      readTable(env.sheets.transactions, "SALE_ORDERS"),
+      readTable(env.sheets.transactions, "SO_Confirmation"),
+      readTable(env.sheets.transactions, "SO_Confirmation_Items"),
     ]);
     const punch = punchRows.find((row) => row.ORDER_ID === req.params.id);
     if (!punch) {
@@ -785,6 +791,20 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
     }
     const order = punchFromSheet(punch);
     const orderItems = items.filter((i) => i.ORDER_ID === req.params.id);
+
+    // Dispatch_Approval links back to the SO_Confirmation record (Conf_ID/Conf Item ID),
+    // not ORDER_ID/ITEM_ID directly — SO_Confirmation itself only has SALE_ORDER_ID, so
+    // resolve order -> SALE_ORDER_ID -> the "Confirmed" SO_Confirmation row -> Conf_ID ->
+    // per-item Conf Item ID via SO_Confirmation_Items.
+    const saleOrderId = saleOrders.find((s) => s.ORDER_ID === req.params.id)?.SALE_ORDER_ID;
+    const matchingConfirmations = soConfirmations.filter((c) => c.SALE_ORDER_ID === saleOrderId);
+    const confId =
+      [...matchingConfirmations].reverse().find((c) => c.Confirmation === "Confirmed")?.Conf_ID ??
+      matchingConfirmations.at(-1)?.Conf_ID ??
+      "";
+    const confItemIdBySaleOrderItemId = new Map(
+      soConfirmationItems.filter((ci) => ci.Conf_ID === confId).map((ci) => [ci.SALE_ORDER_ITEM_ID, ci["Conf Item ID"]])
+    );
 
     const now = new Date().toISOString();
     const qtyField =
@@ -802,9 +822,8 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
         dispatchApprovalToSheet({
           CREATED_AT: now,
           CREATED_BY: req.user!.employeeId,
-          ORDER_ID: req.params.id,
-          ITEM_ID: item.ITEM_ID ?? "",
-          SALE_ORDER_ITEM_ID: item.SALE_ORDER_ITEM_ID ?? "",
+          CONF_ID: confId,
+          CONF_ITEM_ID: confItemIdBySaleOrderItemId.get(item.SALE_ORDER_ITEM_ID) ?? "",
           DISPATCH_ID: dispatchIds[i],
           CUST_ID: order.CUST_ID,
           CUSTOMER_NAME: order.CUSTOMER_NAME,

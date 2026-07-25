@@ -2,6 +2,28 @@
 
 Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each entry names the affected area and links back to the git commit for full detail.
 
+## 2026-07-25
+
+- **Fixed 3 sheet-schema-drift bugs found in a QA pass after the user restructured
+  `Order Punch Discount`/`SO_Confirmation_Items`/`Dispatch_Approval` on the live sheet:**
+  1. The discount audit log was writing to an orphaned auto-created `ORDER_PUNCH_DISCOUNT`
+     tab instead of the user's real (renamed, restructured) `Order Punch Discount` tab —
+     order totals were still correct, but the audit trail was invisible. Fixed the tab
+     name/headers in `orders.ts` to match the live tab exactly.
+  2. `Dispatch_Approval` rows were saving with a blank `Conf_ID`/`Conf Item ID` — the tab's
+     actual link back to `SO_Confirmation` — because `dispatchApprovalToSheet()` still
+     mapped `ORDER_ID`/`ITEM_ID`/`SALE_ORDER_ITEM_ID`, columns that no longer exist on that
+     tab. Fixed `/:id/dispatch-approval` to resolve the real chain (order →
+     `SALE_ORDERS.SALE_ORDER_ID` → the matching `Confirmed` `SO_Confirmation` row's
+     `Conf_ID` → each item's `Conf Item ID` via `SO_Confirmation_Items`) and populate both.
+  3. Cleaned up the now-dead `ORDER_ID`/`ITEM_ID` map entries in `soConfirmationMap.ts` for
+     `SO_Confirmation`/`SO_Confirmation_Items` (harmless before — `appendRow` just drops
+     unmatched keys — but stale and confusing to read).
+  Verified all three live: a full Punch→Discount→Sale Order→SO Confirmation→Dispatch
+  Approval run now shows the discount row in the correct tab, and `Dispatch_Approval`'s
+  `Conf_ID`/`Conf Item ID` correctly resolve and match the `SO_Confirmation`/
+  `SO_Confirmation_Items` rows they came from.
+
 ## 2026-07-24
 
 - **Built the remaining 8 pipeline stages end-to-end** (PDI, Transport, Transport Reached,

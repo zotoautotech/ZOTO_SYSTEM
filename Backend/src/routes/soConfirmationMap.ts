@@ -12,7 +12,7 @@ import type { SheetRow } from "../services/sheets.js";
 export const SO_CONFIRMATION_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  ORDER_ID: "ORDER_ID",
+  // No ORDER_ID column on this tab — SALE_ORDER_ID is the join key (unique per order).
   SALE_ORDER_ID: "SALE_ORDER_ID",
   CONF_ID: "Conf_ID",
 
@@ -104,8 +104,7 @@ export const SO_CONFIRMATION_MAP: Record<string, string> = {
 export const SO_CONFIRMATION_ITEMS_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  ORDER_ID: "ORDER_ID",
-  ITEM_ID: "ITEM_ID",
+  // No ORDER_ID/ITEM_ID columns on this tab — SALE_ORDER_ID/SALE_ORDER_ITEM_ID are the join keys.
   SALE_ORDER_ID: "SALE_ORDER_ID",
   SALE_ORDER_ITEM_ID: "SALE_ORDER_ITEM_ID",
   CONF_ID: "Conf_ID",
@@ -138,9 +137,10 @@ export const SO_CONFIRMATION_ITEMS_MAP: Record<string, string> = {
 export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  ORDER_ID: "ORDER_ID",
-  ITEM_ID: "ITEM_ID",
-  SALE_ORDER_ITEM_ID: "SALE_ORDER_ITEM_ID",
+  // No ORDER_ID/ITEM_ID/SALE_ORDER_ITEM_ID columns on this tab — it links back to the
+  // SO_Confirmation record instead, via Conf_ID/Conf Item ID (looked up in orders.ts).
+  CONF_ID: "Conf_ID",
+  CONF_ITEM_ID: "Conf Item ID",
   DISPATCH_ID: "Dispatch_iD",
 
   CUST_ID: "CUST ID",

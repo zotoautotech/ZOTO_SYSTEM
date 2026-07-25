@@ -130,8 +130,12 @@ Three spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
   and a copy of each `ORDER_ITEMS` row respectively. Mapped via `SALE_ORDER_MAP` (reuses
   `ORDER_PUNCH_MAP`, only the discount column name differs). `SALE_ORDER_ITEMS` uses the
   *same* column names as `ORDER_ITEMS` — no translation needed there.
-- `ORDER_PUNCH_DISCOUNT` — audit log of every discount applied, auto-created on first use
-  via `ensureSheetTab()` (additive only, never touches existing tabs).
+- `Order Punch Discount` — pre-built audit log of every discount applied (headers: `Timestamp`,
+  `Useremail`, `ORDER_ID`, `ITEM_ID`, `Punch Discount ID`, `Discount Reasion` [tab's own
+  typo], `Description`, `Default Discount on`, `Discount (Rs)`, `Discount (%)`, `Status`).
+  `ensureSheetTab()` is still called defensively but the tab already exists live — don't
+  confuse this with the old auto-created `ORDER_PUNCH_DISCOUNT` name, which is now dead/
+  orphaned (a past mismatch, since fixed).
 - `COUNTERS` — leftover from the old sequential-ID scheme, no longer written to (see IDs
   below). Don't delete it — just not the ID source anymore.
 - `CRR DD` — dropdown value lists (e.g. Sale Type: Order/Sample/Return Order/Pilot Lot).
@@ -141,7 +145,7 @@ Three spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
 punch save), `BILLING STRATEGY MASTER`.
 
 **Pipeline so far:** Punch (`ORDER_PUNCH`, `STATUS: PENDING`) → discount applied
-(`STATUS: PENDING SALE ORDER`, logged to `ORDER_PUNCH_DISCOUNT`) → Sale Order form uploaded
+(`STATUS: PENDING SALE ORDER`, logged to `Order Punch Discount`) → Sale Order form uploaded
 (`STATUS: SALE ORDER`, full row written to `SALE_ORDERS`/`SALE_ORDER_ITEMS`) → SO Confirmation
 queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome:
 - **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
@@ -177,6 +181,18 @@ outcome); one row per item is appended to `Dispatch_Approval` on every
 `/dispatch-approval` submit. Item snapshots are sourced from `SALE_ORDER_ITEMS` (not
 `ORDER_ITEMS`) so `SALE_ORDER_ITEM_ID` is always populated. `DispatchApprovalForm.tsx` now
 actually persists (previously UI-only) via this route.
+
+**These three tabs have no `ORDER_ID`/`ITEM_ID` columns of their own** — they link to each
+other (and back to the order) via `SALE_ORDER_ID` → `Conf_ID` → `Conf Item ID` instead:
+`SO_Confirmation` is keyed by `SALE_ORDER_ID`; `SO_Confirmation_Items` by `SALE_ORDER_ID` +
+`SALE_ORDER_ITEM_ID` + `Conf_ID` + `Conf Item ID`; `Dispatch_Approval` by `Conf_ID` +
+`Conf Item ID` only. The `/:id/dispatch-approval` route resolves this chain itself (order →
+`SALE_ORDERS.SALE_ORDER_ID` → the matching `Confirmed` `SO_Confirmation` row's `Conf_ID` →
+each item's `Conf Item ID` via `SO_Confirmation_Items`) since `Dispatch_Approval` can't be
+joined back to an order any other way. If a discount/SO-Confirmation/Dispatch-Approval row
+ever writes blank where an ID is expected, check this chain first — a header rename on any
+one of these three tabs breaks the whole lookup silently (writes go through even with a
+blank join key, since `appendRow` just drops any key that isn't a real header).
 
 ## IDs
 
