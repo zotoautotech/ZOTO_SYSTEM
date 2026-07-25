@@ -4,7 +4,10 @@ export type SheetRow = Record<string, string>;
 
 type CacheEntry = { data: SheetRow[]; expiresAt: number };
 const cache = new Map<string, CacheEntry>();
-const DEFAULT_TTL_MS = 30_000;
+// Every write path (appendRow/updateRow/deleteRows) busts this tab's cache entry
+// immediately, so a long read TTL costs nothing on correctness — it only cuts how
+// often an idle GET has to make a live Sheets API round trip (typically 300-800ms).
+const DEFAULT_TTL_MS = 5 * 60_000;
 
 function cacheKey(spreadsheetId: string, tab: string, headerRow: number) {
   return `${spreadsheetId}::${tab}::${headerRow}`;

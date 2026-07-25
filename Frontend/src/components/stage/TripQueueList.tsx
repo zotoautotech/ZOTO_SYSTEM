@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { DataTable, type Column } from "../DataTable";
 import { StatusBadge } from "../StatusBadge";
@@ -30,6 +30,7 @@ export function TripQueueList({
   const { data: trips = [], isLoading } = useQuery({
     queryKey: ["trips", moduleKey, showCompleted],
     queryFn: () => listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
+    placeholderData: keepPreviousData,
   });
 
   const normalizedQuery = query.trim().toLowerCase();

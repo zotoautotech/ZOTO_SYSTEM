@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
@@ -21,6 +21,7 @@ export function DispatchApprovalList() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["dispatchApprovals", showCompleted],
     queryFn: () => listDispatchApprovals(showCompleted ? "COMPLETED" : undefined),
+    placeholderData: keepPreviousData,
   });
 
   const customers = useMemo(() => {

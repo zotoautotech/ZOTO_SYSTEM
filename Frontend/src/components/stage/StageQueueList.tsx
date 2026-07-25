@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CustomerFilterPanel } from "../CustomerFilterPanel";
 import { DataTable, type Column } from "../DataTable";
@@ -23,6 +23,7 @@ export function StageQueueList({ stage }: { stage: StageDef }) {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["stageOrders", stage.key, showCompleted],
     queryFn: () => listStageOrders(stage.key, showCompleted ? "COMPLETED" : undefined),
+    placeholderData: keepPreviousData,
   });
 
   const customers = useMemo(() => {
