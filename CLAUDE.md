@@ -160,39 +160,55 @@ Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `PO
 /orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
 is what `?status=COMPLETED` on that same GET route filters on).
 
-From there, the generic stage pipeline (see Frontend structure above) carries the order
-through: `DISPATCH APPROVAL COMPLETED → PDI COMPLETED → TRANSPORT ASSIGNED → TRANSPORT
-REACHED → STOCK RELEASED → TAX INVOICE COMPLETED → DISPATCHED → LR COLLECTED → DELIVERED`.
-Each arrow is one `POST /orders/:id/<stageKey>` call (`pdi`/`transport`/`transport-reached`/
-`stock-release`/`tax-invoice`/`dispatch`/`collect-lr`/`delivery`), appending one row to that
-stage's own tab and advancing `ORDER_PUNCH.STATUS` to the next stage's trigger value. `GET
-/orders/<stageKey>?status=COMPLETED` mirrors the existing pattern — but note each stage's
-"Completed" view only shows orders **currently sitting** at that exact status; once the
-order advances to the next stage it leaves the previous stage's Completed view too (same
-already-existing behavior as SO Confirmation/Dispatch Approval, not a bug).
+Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
+/orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
+is what `?status=COMPLETED` on that same GET route filters on), appending one row per item
+to **`Dispatch Items Approval`** (renamed from `Dispatch_Approval` in the sheet's "final"
+pass — see Known gotchas).
 
-**`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch_Approval`** are separate,
+From there, two simple single-order stages (`Backend/src/routes/stageConfig.ts` /
+`stageRoutes.ts`, `Frontend/src/lib/stages.ts`): `DISPATCH APPROVAL COMPLETED → PDI
+COMPLETED → PRE TRANSPORT COMPLETED` (`POST /orders/:id/pdi`, `POST
+/orders/:id/pre-transport`, one row per item appended to `PDI`/`Pre Transport`). Both are
+"per-item" stages — `StageConfig.perItem: true` — auto-filling buyer/order snapshot fields
+via `orderSnapshotToSheet()` (`tripMap.ts`), same helper the trip system below uses.
+
+**From `PRE TRANSPORT COMPLETED` onward, everything is trip-level, not order-level** —
+`Backend/src/routes/tripRoutes.ts` (mounted at `/api/v1/transport-trips`, separate from
+`ordersRouter`). One truck/invoice/dispatch/LR/delivery can carry **several orders at
+once** (via the `Transport_SO`/`Tax_Invoice_SO` junction tabs), matching the old ADC system
+exactly (`docs/Report.md`) — this is a deliberate, user-confirmed design choice, not a
+simplification. Lifecycle:
+1. `POST /transport-trips` — create a trip (vehicle details), mints `Transport_ID`.
+2. `POST /transport-trips/:id/orders` — attach one or more orders (from `GET
+   /transport-trips/eligible-orders`, `STATUS === "PRE TRANSPORT COMPLETED"`). Appends one
+   `Transport_SO` row per order + one `Transport_Products` row per item, sets
+   `ORDER_PUNCH.STATUS: TRANSPORT ASSIGNED` for every attached order.
+3. `.../reached`, `.../stock-release`, `.../tax-invoice`, `.../pre-dispatch`,
+   `.../vehicle-dispatch`, `.../dispatch`, `.../lr`, `.../delivery` — each appends to its
+   own tab (`Transport_Reached`, `STOCK_RELEASE`, `TAX_INVOICE`+`Tax_Invoice_SO`+
+   `Tax_Invoice_Products`, `Pre Dispatch`, `Vehicle Dispatch`, `Dispatch`, `LR`,
+   `DELIVERY`) and **cascades the resulting `ORDER_PUNCH.STATUS` to every order attached to
+   the trip** (`TRANSPORT REACHED → STOCK RELEASED → TAX INVOICE COMPLETED → PRE DISPATCH
+   COMPLETED → VEHICLE DISPATCH COMPLETED → DISPATCHED → LR COLLECTED → DELIVERED`).
+   `Dispatch`/`LR`/`DELIVERY` have no `ORDER_ID` column at all (trip/dispatch-level only) —
+   `LR`/`Delivery` resolve which `Dispatch ID` to attach to via the trip's own latest
+   `Dispatch` row, not a lookup from the order.
+`Backend/src/routes/tripMap.ts` — `orderSnapshotToSheet()`/`vehicleSnapshotToSheet()`, the
+shared buyer/billing/shipping/consignee/GST/logistics/vehicle column spread reused by every
+trip-family tab (they all repeat the same ~30 denormalized columns; `appendRow` silently
+drops whichever don't exist on a given tab, so one spread works everywhere).
+**Frontend for the trip system does not exist yet** — `tripRoutes.ts` is verified end-to-end
+via API only so far; the "Transport" module UI still needs a trip list/detail + multi-order
+picker, not just a form (unlike every other module so far).
+
+**`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch Items Approval`** are separate,
 pre-built append-only snapshot/audit-log tabs (human-readable headers, mapped in
 `Backend/src/routes/soConfirmationMap.ts`) — **not** the live source of truth, which stays
 `ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` exactly as above (nothing reads
-these three tabs back into the app). One full snapshot row is appended to `SO_Confirmation`
-+ one row per item to `SO_Confirmation_Items` on every `/so-confirmation` submit (any
-outcome); one row per item is appended to `Dispatch_Approval` on every
-`/dispatch-approval` submit. Item snapshots are sourced from `SALE_ORDER_ITEMS` (not
-`ORDER_ITEMS`) so `SALE_ORDER_ITEM_ID` is always populated. `DispatchApprovalForm.tsx` now
-actually persists (previously UI-only) via this route.
-
-**All three tabs carry `ORDER_ID` directly** (`SO_Confirmation_Items`/`Dispatch_Approval`
-also carry `ITEM_ID`) — a star-schema join key added specifically so every table can be
-filtered straight to "this order" without resolving through `SALE_ORDER_ID`/`Conf_ID`/
-`Conf Item ID` chains. `SO_Confirmation`/`SO_Confirmation_Items` still also carry
-`SALE_ORDER_ID`/`SALE_ORDER_ITEM_ID`/`Conf_ID`/`Conf Item ID` for uniqueness/audit/display,
-but those are no longer load-bearing for joins — `/:id/dispatch-approval` writes
-`ORDER_ID`/`ITEM_ID` straight through with no cross-tab lookup at all (an earlier version
-of this route resolved `Conf_ID`/`Conf Item ID` through 3 table reads; that's gone —
-`Dispatch_Approval`'s `Conf_ID`/`Conf Item ID` columns are intentionally left blank now).
-If you add a 4th snapshot/audit tab like these, give it `ORDER_ID`/`ITEM_ID` columns from
-day one rather than inventing another multi-hop chain.
+these three tabs back into the app). All three carry `ORDER_ID` directly (`SO_Confirmation_
+Items`/`Dispatch Items Approval` also carry `ITEM_ID`) as the join key — see the next
+paragraph for why this matters.
 
 ## IDs
 
@@ -226,6 +242,20 @@ directly with the service account, no impersonation needed there).
 
 ## Known gotchas
 
+- **A "final" pass on the transactions sheet silently renamed almost every `ORDER_PUNCH`/
+  `SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` header** from `Underscore_Style` to
+  `"Space Style"` (e.g. `Cutomer_Name` → `Cutomer Name`, `PART_NO` written by code → real
+  header `"Part No."`). This broke ~67 of 71 `ORDER_PUNCH_MAP` entries and **all** of
+  `ORDER_ITEMS`' fields at once (the item-writing code used literal `ALL_CAPS` keys with no
+  translation map at all, since it used to match 1:1). Fixed by regenerating
+  `orderPunchMap.ts` against live headers and adding `Backend/src/routes/itemMap.ts`
+  (`itemToSheet`/`itemFromSheet`) — **every** place that reads or writes `ORDER_ITEMS`/
+  `SALE_ORDER_ITEMS` now must go through `itemFromSheet`/`itemToSheet`, not raw
+  `readTable`/`appendRow`. If item fields (Part No./Price/Qty/amounts) come back blank
+  after any future sheet edit, dump the tab's real headers and diff against `itemMap.ts`/
+  `orderPunchMap.ts` first — don't assume the map is still correct just because it
+  typechecks (a wrong string literal is a silent runtime failure, not a compile error).
+  `Dispatch_Approval` was also renamed to `Dispatch Items Approval` in the same pass.
 - **`CUSTOMER MASTER T1`'s "Field Sale Repersentative" column is misspelled in the live
   sheet** (not "Representative") — `getBuyerFields()` in `Backend/src/routes/orders.ts`
   reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. If a

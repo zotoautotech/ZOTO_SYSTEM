@@ -2,6 +2,44 @@
 
 Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each entry names the affected area and links back to the git commit for full detail.
 
+## 2026-07-25 (2)
+
+- **Critical fix: `ORDER_ITEMS`/`SALE_ORDER_ITEMS` writes were almost entirely blank** (Part
+  No., Part Name, Price, Quantity, Basic/Tax/Total Amount — everything except
+  ORDER_ID/ITEM_ID/Timestamp/Useremail/CGST/SGST/IGST). Root cause: the live sheet's
+  "final" pass renamed `ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` headers
+  from `Underscore_Style` to `"Space Style"` (e.g. `Cutomer_Name` → `Cutomer Name`), but
+  `orderPunchMap.ts` still targeted the old header text (67 of 71 entries wrong) and the
+  item-writing/reading code had no translation map at all (it used to match the internal
+  `ALL_CAPS` field names 1:1 against the old headers). Fixed by regenerating
+  `ORDER_PUNCH_MAP`/`SALE_ORDER_MAP` against the live headers and adding
+  `Backend/src/routes/itemMap.ts` (`itemToSheet`/`itemFromSheet`), applied at every read/
+  write site across `orders.ts`, `stageRoutes.ts`, and the new `tripRoutes.ts`. Also found
+  and fixed: `Dispatch_Approval` was renamed to `Dispatch Items Approval` in the same pass
+  (updated the tab name + `Disp Conf Item ID` id column throughout). Verified against the
+  live sheet: a full Punch → Discount → Sale Order → SO Confirmation → Dispatch Approval →
+  PDI → Pre Transport → full Transport trip run now shows correct Part No./Part Name/Price/
+  Quantity/amounts on every tab, at every stage.
+
+- **Built the Transport trip system** (`Backend/src/routes/tripRoutes.ts`, mounted at
+  `/api/v1/transport-trips`) — the pipeline stages after Pre Transport (`TRANSPORT`
+  through `DELIVERY`) turned out to be trip-level on the "final" sheet, not order-level: one
+  truck/invoice/dispatch/LR/delivery can carry several orders at once via
+  `Transport_SO`/`Tax_Invoice_SO` junction tabs, exactly matching the old ADC system
+  (`docs/Report.md`) — a user-confirmed design choice, not a simplification. Lifecycle:
+  create a trip → attach one or more `PRE TRANSPORT COMPLETED` orders → reached → stock
+  release → tax invoice → pre-dispatch → vehicle dispatch → dispatch → LR → delivery, each
+  step appending to its own tab and cascading `ORDER_PUNCH.STATUS` to every order on the
+  trip. `Backend/src/routes/tripMap.ts` provides the shared buyer/billing/logistics/vehicle
+  snapshot spread reused by every trip-family tab (`appendRow` drops whichever columns a
+  given tab doesn't have, so one spread works for all of them). The old single-order
+  `transport`/`transport-reached`/`tax-invoice`/`dispatch`/`collect-lr`/`delivery` stage
+  configs were removed from `stageConfig.ts`/`stages.ts` (superseded by the trip system);
+  `pdi` and `pre-transport` remain as the two simple per-item stages before a trip exists.
+  Verified end-to-end via API: a test order walked through the entire trip lifecycle to
+  `DELIVERED` with correct data at every tab. **Frontend UI for this module is not built
+  yet** — next step.
+
 ## 2026-07-25
 
 - **Added `ORDER_ID`/`ITEM_ID` directly to `SO_Confirmation`/`SO_Confirmation_Items`/

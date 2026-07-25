@@ -7,6 +7,7 @@ import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { registerStageRoutes } from "./stageRoutes.js";
+import { itemFromSheet, itemToSheet } from "./itemMap.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -19,7 +20,7 @@ const ORDER_TAB = "ORDER_PUNCH";
 
 /** Reads the single ZOTO seller branch (SALLER_MASTER, one row) to auto-fill the order's
  * Seller Details section on save. Returns internal-keyed seller fields (blank on failure). */
-async function getSellerFields(): Promise<SheetRow> {
+export async function getSellerFields(): Promise<SheetRow> {
   try {
     const rows = await readTable(env.sheets.customerBilling, "SALLER_MASTER", { ttlMs: 5 * 60_000 });
     const branch = rows.find((r) => r["ADC Firm ID"]) ?? rows[0];
@@ -215,7 +216,7 @@ ordersRouter.get("/:id", async (req, res, next) => {
     }
     res.json({
       order: punchFromSheet(sheetOrder),
-      items: items.filter((i) => i.ORDER_ID === req.params.id),
+      items: items.filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet),
       dispatchPlan: dispatchPlan.filter((d) => d.ORDER_ID === req.params.id),
     });
   } catch (err) {
@@ -294,20 +295,13 @@ ordersRouter.post("/", async (req, res, next) => {
         PACKING_REQUIREMENTS: item.packingRequirements,
         NOTES: item.notes,
         STATUS: "PENDING",
-        // ORDER_ITEMS uses Timestamp/Useremail (not CREATED_AT/BY); include both — the
-        // extra CREATED_* keys below are harmlessly ignored (no matching header).
-        Timestamp: now,
-        Useremail: req.user!.employeeId,
         CREATED_AT: now,
         CREATED_BY: req.user!.employeeId,
-        UPDATED_AT: now,
-        UPDATED_BY: req.user!.employeeId,
-        ROW_VERSION: "1",
       });
     }
 
     for (const row of itemRows) {
-      await appendRow(env.sheets.transactions, "ORDER_ITEMS", row);
+      await appendRow(env.sheets.transactions, "ORDER_ITEMS", itemToSheet(row));
     }
 
     const dspIds = await nextIds("DSP", "DISPATCH_PLAN", "DSP_ID", body.dispatchPlan.length);
@@ -687,18 +681,17 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
             DISCOUNT_PCT: String(item.discountPct), BASIC_AMOUNT: money(lineBasic), GST_SLAB_PCT: String(item.gstSlabPct),
             CGST: money(cgst), SGST: money(sgst), IGST: "0.00", TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
             SPECIAL_INSTRUCTIONS: item.specialInstructions, PACKING_REQUIREMENTS: item.packingRequirements, NOTES: item.notes,
-            STATUS: "PENDING", Timestamp: now, Useremail: req.user!.employeeId, CREATED_AT: now, CREATED_BY: req.user!.employeeId,
-            UPDATED_AT: now, UPDATED_BY: req.user!.employeeId, ROW_VERSION: "1",
+            STATUS: "PENDING", CREATED_AT: now, CREATED_BY: req.user!.employeeId,
           });
         }
 
         await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", [req.params.id]);
         for (const row of newItemRows) {
-          await appendRow(env.sheets.transactions, "ORDER_ITEMS", row);
+          await appendRow(env.sheets.transactions, "ORDER_ITEMS", itemToSheet(row));
         }
         await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
         for (const row of newItemRows) {
-          await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...row, SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
+          await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...itemToSheet(row), SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
         }
 
         const totalAmount = basicAmount + taxAmount - discountRs;
@@ -720,7 +713,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
       ]);
 
-      const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id);
+      const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
       await logSoConfirmation(
         req.params.id,
         { ...existingPunch, ...saleOrderFromSheet(saleOrder), ...(withoutUndefined as SheetRow), ...amountFields },
@@ -741,7 +734,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
       updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
     ]);
 
-    const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id);
+    const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
     await logSoConfirmation(
       req.params.id,
       { ...punchFromSheet(punch), ...saleOrderFromSheet(saleOrder), STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED" },
@@ -787,7 +780,7 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
     const order = punchFromSheet(punch);
-    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id);
+    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
 
     const now = new Date().toISOString();
     const qtyField =
@@ -796,12 +789,12 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
       : body.outcome === "Excess Quantity" ? { EXCESS_QTY: body.excessQty }
       : {};
 
-    const dispatchIds = await nextIds("DA", "Dispatch_Approval", "Dispatch_iD", Math.max(orderItems.length, 1));
+    const dispatchIds = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", Math.max(orderItems.length, 1));
     const rowsToWrite = orderItems.length > 0 ? orderItems : [{ ITEM_ID: "", SALE_ORDER_ITEM_ID: "" } as SheetRow];
     for (const [i, item] of rowsToWrite.entries()) {
       await appendRow(
         env.sheets.transactions,
-        "Dispatch_Approval",
+        "Dispatch Items Approval",
         dispatchApprovalToSheet({
           CREATED_AT: now,
           CREATED_BY: req.user!.employeeId,
