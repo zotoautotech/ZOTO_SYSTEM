@@ -338,7 +338,91 @@ Expand-link pattern rather than a full separate list view per level.
 **Pending Dispatch list**: order-level. Columns: Status, Timestamp, CUST ID, Customer Name,
 Delivery Mode, Transport Mode, Transporter Name, Vehicle type, Vehicle No., Vehicle Size
 (Ft), Driver Name. Header actions: "Dispatch Form" icon button + red "Completed…" toggle.
-(Form itself not captured yet — list only.)
+
+**Vehicle Dispatch Form** (this is what "Dispatch Form" opens) — 2 tabs, wizard style
+(`Cancel`/`Next ›` on tab 1, `‹ Prev`/`Cancel`/`Save` on tab 2):
+- Tab **Vehicle Details**: **Transport_ID\*** — searchable dropdown (options shown as
+  vehicle numbers, e.g. `DL01LAL7041`). **Selecting it auto-fills every other field on this
+  tab as read-only**, pulled straight from the trip: Vehicle Arrange for, Send Through, Sale
+  Type, Vehicle type, Vehicle No., Vehicle Size (Ft), Driver Name, Driver Contact No. —
+  confirms these should never be re-entered by the doer, only looked up (matches our
+  `vehicleSnapshotToSheet()` approach).
+- Tab **Dispatch Details**: **Dispatched\*** toggle Yes/No. **When Yes**, reveals: Freight
+  Charges\* (₹), Other Charges by ADC\* (₹), **Payment Status\*** — 3-way toggle `Prepaid by
+  ADC` / `Postpaid by ADC` / `Pay at Customer` (richer than our current free-text
+  `paymentStatus` field — should be a fixed enum), Dispatch Description\* (text). Below
+  that: a **Parts** table (Part No., Billing Part No., Part Name, Part Description, Segment,
+  Category, …) listing every item on the trip, read-only reference — and a **"Dispatch
+  entries\*"** picker with a red **New** button that opens a separate nested **Dispatch
+  Form** (see next).
+
+**Dispatch Form** (nested, opened via "Dispatch entries" → New — this is the actual
+`Dispatch`/gate-out record, one per... likely one per Pre Dispatch ID / order on the trip):
+single tab "Dispatch Details". Fields: **Pre Dispatch ID** — searchable dropdown (options
+shown as customer names, e.g. "VIJAYS ENERGY INDUSTRIES (INDIA) PVT LTD" — so Pre Dispatch
+ID is picked per-order, not typed), **Dispatch Gate Pass\*** (PDF dropzone), **Dispatch
+Description\*** (text). Footer `Cancel`/`Save`.
+
+**So "Dispatch" is actually 3 nested levels too**: Vehicle Dispatch Form (trip-level,
+Transport_ID) → Dispatch Details tab lists Parts + a "Dispatch entries" picker → per-entry
+Dispatch Form (Pre Dispatch ID + Gate Pass + Description). Our current single flat
+`POST /transport-trips/:id/dispatch` (one call, one Dispatch row) needs to become "one
+Dispatch row per order/Pre-Dispatch-ID on the trip", each with its own gate pass, not one
+shared gate pass for the whole trip.
+
+**Dispatch detail** (order-level, opened from Pending Delivery list — confirms Dispatch
+records display grouped by order even though captured per-trip): header `DISP-{id}` +
+timestamp + "Delivery Form"/"Update Log" action icons.
+- **Buyer Details**: Customer Name, Business Segment, Type of Customer, Buyer GSTIN No.,
+  Buyer Contact No., Payment Terms, This Order Payment Terms, Contact Person Name, Contact
+  Person Contact No., Sale Staff Name, Order given by, Ship to Consignee
+- **Consignee Details** (empty in example)
+- **GST Details**: Basic Amount, Tax Amount, Total Amount
+- **Dispatch Details**: Dispatched, Dispatch Gate Pass (file), Freight Charges, Other
+  Charges, Dispatch Description
+- **Billing Address** / **Shipping Address** cards (Line 1/2, State, Pin code, Country, Is
+  Shipping Address Same)
+- **Logistics Details**: Delivery Mode, Freight Paid by, Transport Mode
+- **Vehicle Details**: Vehicle type, Vehicle No., Vehicle Size (Ft), Driver Name, Driver
+  Contact No., Freight Charge
+- **Items** — inline mini-table (Part No., Part Name, Total Qty of Order, Quantity, Unit,
+  Load Qty…) with **Expand** link — same inline-child-table pattern as Tax Invoice (§9.5).
+
+### 9.7 LR (Lorry Receipt)
+
+**LR Form**: single tab "LR Details". Fields, in order: **LR No.\*** (text), **LR Date\***
+(date), **LR Attachment\*** (PDF dropzone), **LR Charges\*** (₹), **Payment Status\***
+(dropdown — options not captured, likely same 3-way Prepaid/Postpaid/Pay-at-Customer style
+as Vehicle Dispatch), **Other Charges\*** (₹), **LR Remarks** (text, not required),
+**"Provide LR to the Customer\*"** — a **camera/photo-capture** widget (not a file
+dropzone like every other attachment field) — confirms this one field is meant to be shot
+live with a device camera (proof the physical LR was handed over), not uploaded from disk.
+
+### 9.8 Delivery
+
+**Pending Delivery list**: order-level, `Status` column shows values like "Pasted" (their
+term once dispatched/posted). Columns: Status, Timestamp, Cutomer Name, Delivery Mode,
+Freight Paid by, Transport Mode, Transporter Name, Basic Amount, Tax Amount, Total Amount,
+Due Del[ivery]… Header: red "Completed…" toggle.
+
+**Delivery Form**: single tab "Delivery Details". **Delivered\*** toggle Yes/No branches
+the whole form:
+- **Delivered = Yes**: **Goods Receipt Note (GRN) Attachment\*** (PDF dropzone — named GRN,
+  not "Receiving Attachment" like our current field), **Any Charges\*** toggle Yes/No.
+  - **Any Charges = Yes**: reveals Amount\* (₹), Freight Charges to Transporter\* (₹),
+    Charge Description\* (text), then Delivery Remarks (text, not required).
+  - **Any Charges = No**: only GRN Attachment + Delivery Remarks — Amount/Freight/Charge
+    Description fields don't appear at all.
+- **Delivered = No**: **Reason\*** (text), **Expected Delivery Date\*** (date), then the
+  same Amount\*/Freight Charges to Transporter\*/Charge Description\*/Delivery Remarks set
+  as the Yes branch (no GRN Attachment or Any Charges toggle in this branch — Amount/
+  Freight/Charge Description appear unconditionally when not delivered).
+
+Our current `delivery` stage form is flatter (delivered/receivingAttachmentUrl/anyCharges/
+amount/chargeDescription/remarks, no branching) — needs the same conditional-field
+restructure as Delivery Reached and Vehicle Dispatch: field name should become "Goods
+Receipt Note (GRN) Attachment", and a `Delivered = No` branch (Reason + Expected Delivery
+Date) doesn't exist in our schema at all yet.
 
 ---
 
