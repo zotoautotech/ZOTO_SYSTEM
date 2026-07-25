@@ -2,6 +2,25 @@
 
 Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each entry names the affected area and links back to the git commit for full detail.
 
+## 2026-07-25 (4)
+
+- **Built the HOME app launcher**, replacing the `/` route's static "Coming soon" with a
+  real tile grid matching the old AppSheet HOME screen (After Sales, Checklist, Delegation,
+  IMS, NPD Designs, ONE, Purchase, Sales CRR, Training Videos, HRMS, …). Sourced from a new,
+  separate spreadsheet the user shared (`ZOTO_HOME_SHEET_ID`, tab `ZOTO HOME`) — columns
+  `Name`/`View`/`Image`/`Email Permisssions/ Employee ID`/`Filter` — not hardcoded, so
+  editing that sheet changes the launcher with no deploy. New: `Backend/src/routes/home.ts`
+  (`GET /api/v1/home/tiles`, filters tiles by the permissions column the same fail-open way
+  `USERS.Permissions_Process` works), `Frontend/src/lib/homeApi.ts`, `Frontend/src/pages/
+  Home.tsx`. Every tile routes to `/home/:view` → the existing `ComingSoon.tsx` (now shows
+  the specific tile's name via router `state` instead of a generic message) **except** the
+  tile named `SALES CRR-ZOTO-V1`, which is the one sub-app actually built — it routes to the
+  real `/modules` grid instead. `Layout.tsx`'s breadcrumb logic, which previously hardcoded
+  "SALES CRR" as the root crumb for every non-home route, now roots on "HOME" for `/home/*`
+  paths instead. Verified live: the tile grid renders with the real sheet icons, a
+  placeholder tile shows its own "under construction" message, and the Sales CRR tile still
+  opens the full working module grid.
+
 ## 2026-07-25 (3)
 
 - **Built the Transport trip frontend** — the UI for the trip system added in the previous

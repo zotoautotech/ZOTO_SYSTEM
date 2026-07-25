@@ -27,6 +27,25 @@ npx.cmd vercel --prod
 Deploy Backend whenever `Backend/` changed; Frontend whenever `Frontend/` changed. Check
 `git status`/the diff to know which (or both).
 
+## HOME (app launcher)
+
+The `/` route is a ZOTO-wide app launcher, not part of the Sales CRR module — mirrors the
+old AppSheet setup where one HOME app fanned out to every business process (After Sales,
+Checklist, Delegation, IMS, NPD Designs, ONE, Purchase, Sales CRR, Training Videos, HRMS,
+…) as its own separate sub-app. Tiles come from a **fourth, separate spreadsheet**
+(`ZOTO_HOME_SHEET_ID` env var, tab `ZOTO HOME` — columns `Name`, `View` (a GUID or slug used
+as the URL segment), `Image` (icon URL), `Email Permisssions/ Employee ID` (blank = visible
+to everyone, else a comma-separated Employee Id allowlist — same fail-open convention as
+`USERS.Permissions_Process`), `Filter`), not hardcoded — a new sheet row shows up on next
+page load with no deploy. Backend: `Backend/src/routes/home.ts` (`GET /api/v1/home/tiles`,
+5 min cache since this data changes rarely). Frontend: `Frontend/src/pages/Home.tsx` renders
+the tile grid (same `NavCard`-style layout as `ModuleHome.tsx`); every tile navigates to
+`/home/:view` → `ComingSoon.tsx` (now reads the tile's name from router `state` to show
+"`{name}` is under construction" instead of the generic message) **except** the tile whose
+`Name` starts with `"SALES CRR"`, which routes to `/modules` — the one sub-app actually built
+so far. Adding a 2nd real sub-app later means special-casing its tile name in `Home.tsx`'s
+`hrefFor()` the same way, not building a new launcher.
+
 ## Frontend structure
 
 `Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
@@ -152,8 +171,10 @@ the row is matched on the JWT's own `employeeId`, not a request param).
 
 ## Google Sheets (source of truth)
 
-Three spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
-`CUSTOMER_BILLING_SHEET_ID`, `TRANSPORT_SHEET_ID`, `FG_SHEET_ID`).
+Four spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
+`CUSTOMER_BILLING_SHEET_ID`, `TRANSPORT_SHEET_ID`, `FG_SHEET_ID`, `ZOTO_HOME_SHEET_ID` — the
+last one is the HOME app-launcher tile list, see the HOME section above, unrelated to Sales
+CRR order data).
 
 **Transactions sheet** — key tabs:
 - `ORDER_PUNCH` — the order header (renamed from `ORDERS`, human-readable column names like

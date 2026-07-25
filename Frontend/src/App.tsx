@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ModuleHome } from "./pages/ModuleHome";
+import { Home } from "./pages/Home";
 import { ComingSoon } from "./pages/ComingSoon";
 import { PlaceholderModule } from "./pages/PlaceholderModule";
 import { Login } from "./pages/Login";
@@ -42,7 +43,8 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<ComingSoon />} />
+        <Route index element={<Home />} />
+        <Route path="home/:view" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/punch-order" element={<OrderPunchList />} />

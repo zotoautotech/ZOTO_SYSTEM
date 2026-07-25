@@ -186,9 +186,13 @@ export function Layout() {
   // you can jump back to any step — not just the immediate parent.
   const pathSegments = location.pathname.split("/").filter(Boolean);
   const crumbs: { label: string; to: string }[] =
-    location.pathname === "/" ? [{ label: "HOME", to: "/" }] : [{ label: "SALES CRR", to: "/modules" }];
+    location.pathname === "/"
+      ? [{ label: "HOME", to: "/" }]
+      : pathSegments[0] === "home"
+        ? [{ label: "HOME", to: "/" }]
+        : [{ label: "SALES CRR", to: "/modules" }];
   pathSegments.forEach((seg, i) => {
-    if (seg === "modules") return;
+    if (seg === "modules" || seg === "home") return;
     crumbs.push({
       label: seg === "items" ? "Order Punch Items View" : seg.replace(/-/g, " "),
       to: "/" + pathSegments.slice(0, i + 1).join("/"),
