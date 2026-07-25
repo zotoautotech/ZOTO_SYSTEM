@@ -8,11 +8,17 @@ import type { SheetRow } from "../services/sheets.js";
  * field name -> the tab's exact header text. Section-header spacer columns ("Buyer
  * Details", "GST Details", etc., matching ORDER_PUNCH's grey-header pattern) are left
  * blank on purpose — they're not part of any map here.
+ *
+ * All three tabs carry ORDER_ID (and ITEM_ID for line-item rows) directly — the star-
+ * schema join key added so every table can be filtered straight to "this order" without
+ * resolving through SALE_ORDER_ID/Conf_ID/Conf Item ID chains. Those stage-specific IDs
+ * (Conf_ID, Conf Item ID, Dispatch_iD) still exist for uniqueness/audit/display, but
+ * they're no longer load-bearing for joins.
  */
 export const SO_CONFIRMATION_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  // No ORDER_ID column on this tab — SALE_ORDER_ID is the join key (unique per order).
+  ORDER_ID: "ORDER_ID",
   SALE_ORDER_ID: "SALE_ORDER_ID",
   CONF_ID: "Conf_ID",
 
@@ -104,7 +110,8 @@ export const SO_CONFIRMATION_MAP: Record<string, string> = {
 export const SO_CONFIRMATION_ITEMS_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  // No ORDER_ID/ITEM_ID columns on this tab — SALE_ORDER_ID/SALE_ORDER_ITEM_ID are the join keys.
+  ORDER_ID: "ORDER_ID",
+  ITEM_ID: "ITEM_ID",
   SALE_ORDER_ID: "SALE_ORDER_ID",
   SALE_ORDER_ITEM_ID: "SALE_ORDER_ITEM_ID",
   CONF_ID: "Conf_ID",
@@ -137,10 +144,8 @@ export const SO_CONFIRMATION_ITEMS_MAP: Record<string, string> = {
 export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   CREATED_AT: "Timestamp",
   CREATED_BY: "Useremail",
-  // No ORDER_ID/ITEM_ID/SALE_ORDER_ITEM_ID columns on this tab — it links back to the
-  // SO_Confirmation record instead, via Conf_ID/Conf Item ID (looked up in orders.ts).
-  CONF_ID: "Conf_ID",
-  CONF_ITEM_ID: "Conf Item ID",
+  ORDER_ID: "ORDER_ID",
+  ITEM_ID: "ITEM_ID",
   DISPATCH_ID: "Dispatch_iD",
 
   CUST_ID: "CUST ID",

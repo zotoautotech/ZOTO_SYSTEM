@@ -182,17 +182,17 @@ outcome); one row per item is appended to `Dispatch_Approval` on every
 `ORDER_ITEMS`) so `SALE_ORDER_ITEM_ID` is always populated. `DispatchApprovalForm.tsx` now
 actually persists (previously UI-only) via this route.
 
-**These three tabs have no `ORDER_ID`/`ITEM_ID` columns of their own** — they link to each
-other (and back to the order) via `SALE_ORDER_ID` → `Conf_ID` → `Conf Item ID` instead:
-`SO_Confirmation` is keyed by `SALE_ORDER_ID`; `SO_Confirmation_Items` by `SALE_ORDER_ID` +
-`SALE_ORDER_ITEM_ID` + `Conf_ID` + `Conf Item ID`; `Dispatch_Approval` by `Conf_ID` +
-`Conf Item ID` only. The `/:id/dispatch-approval` route resolves this chain itself (order →
-`SALE_ORDERS.SALE_ORDER_ID` → the matching `Confirmed` `SO_Confirmation` row's `Conf_ID` →
-each item's `Conf Item ID` via `SO_Confirmation_Items`) since `Dispatch_Approval` can't be
-joined back to an order any other way. If a discount/SO-Confirmation/Dispatch-Approval row
-ever writes blank where an ID is expected, check this chain first — a header rename on any
-one of these three tabs breaks the whole lookup silently (writes go through even with a
-blank join key, since `appendRow` just drops any key that isn't a real header).
+**All three tabs carry `ORDER_ID` directly** (`SO_Confirmation_Items`/`Dispatch_Approval`
+also carry `ITEM_ID`) — a star-schema join key added specifically so every table can be
+filtered straight to "this order" without resolving through `SALE_ORDER_ID`/`Conf_ID`/
+`Conf Item ID` chains. `SO_Confirmation`/`SO_Confirmation_Items` still also carry
+`SALE_ORDER_ID`/`SALE_ORDER_ITEM_ID`/`Conf_ID`/`Conf Item ID` for uniqueness/audit/display,
+but those are no longer load-bearing for joins — `/:id/dispatch-approval` writes
+`ORDER_ID`/`ITEM_ID` straight through with no cross-tab lookup at all (an earlier version
+of this route resolved `Conf_ID`/`Conf Item ID` through 3 table reads; that's gone —
+`Dispatch_Approval`'s `Conf_ID`/`Conf Item ID` columns are intentionally left blank now).
+If you add a 4th snapshot/audit tab like these, give it `ORDER_ID`/`ITEM_ID` columns from
+day one rather than inventing another multi-hop chain.
 
 ## IDs
 

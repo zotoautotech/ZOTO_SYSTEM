@@ -778,12 +778,9 @@ const dispatchApprovalSchema = z.object({
 ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
   try {
     const body = dispatchApprovalSchema.parse(req.body);
-    const [punchRows, items, saleOrders, soConfirmations, soConfirmationItems] = await Promise.all([
+    const [punchRows, items] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "SALE_ORDER_ITEMS"),
-      readTable(env.sheets.transactions, "SALE_ORDERS"),
-      readTable(env.sheets.transactions, "SO_Confirmation"),
-      readTable(env.sheets.transactions, "SO_Confirmation_Items"),
     ]);
     const punch = punchRows.find((row) => row.ORDER_ID === req.params.id);
     if (!punch) {
@@ -791,20 +788,6 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
     }
     const order = punchFromSheet(punch);
     const orderItems = items.filter((i) => i.ORDER_ID === req.params.id);
-
-    // Dispatch_Approval links back to the SO_Confirmation record (Conf_ID/Conf Item ID),
-    // not ORDER_ID/ITEM_ID directly — SO_Confirmation itself only has SALE_ORDER_ID, so
-    // resolve order -> SALE_ORDER_ID -> the "Confirmed" SO_Confirmation row -> Conf_ID ->
-    // per-item Conf Item ID via SO_Confirmation_Items.
-    const saleOrderId = saleOrders.find((s) => s.ORDER_ID === req.params.id)?.SALE_ORDER_ID;
-    const matchingConfirmations = soConfirmations.filter((c) => c.SALE_ORDER_ID === saleOrderId);
-    const confId =
-      [...matchingConfirmations].reverse().find((c) => c.Confirmation === "Confirmed")?.Conf_ID ??
-      matchingConfirmations.at(-1)?.Conf_ID ??
-      "";
-    const confItemIdBySaleOrderItemId = new Map(
-      soConfirmationItems.filter((ci) => ci.Conf_ID === confId).map((ci) => [ci.SALE_ORDER_ITEM_ID, ci["Conf Item ID"]])
-    );
 
     const now = new Date().toISOString();
     const qtyField =
@@ -822,8 +805,8 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
         dispatchApprovalToSheet({
           CREATED_AT: now,
           CREATED_BY: req.user!.employeeId,
-          CONF_ID: confId,
-          CONF_ITEM_ID: confItemIdBySaleOrderItemId.get(item.SALE_ORDER_ITEM_ID) ?? "",
+          ORDER_ID: req.params.id,
+          ITEM_ID: item.ITEM_ID ?? "",
           DISPATCH_ID: dispatchIds[i],
           CUST_ID: order.CUST_ID,
           CUSTOMER_NAME: order.CUSTOMER_NAME,

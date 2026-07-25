@@ -4,6 +4,20 @@ Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each ent
 
 ## 2026-07-25
 
+- **Added `ORDER_ID`/`ITEM_ID` directly to `SO_Confirmation`/`SO_Confirmation_Items`/
+  `Dispatch_Approval`** (new header cells appended to each tab's row 1, additive only —
+  same discipline as `ensureSheetTab`), replacing the `SALE_ORDER_ID → Conf_ID → Conf Item
+  ID` resolver chain that caused the blank-`Conf_ID` bug fixed earlier today. Every table
+  can now be filtered straight to "this order" with one column, no cross-tab lookup.
+  `/:id/dispatch-approval` dropped its 3-table resolver (`SALE_ORDERS`/`SO_Confirmation`/
+  `SO_Confirmation_Items` reads, ~15 lines) entirely — `ORDER_ID`/`ITEM_ID` are already in
+  scope at every point these rows get written. `Dispatch_Approval`'s `Conf_ID`/`Conf Item
+  ID` columns are now intentionally left blank (superseded by `ORDER_ID`/`ITEM_ID` as the
+  join key); `SO_Confirmation`/`SO_Confirmation_Items` still populate `Conf_ID`/`Conf Item
+  ID` for audit/display, just no longer need to for joining. Verified live: a full
+  Punch→Sale Order→SO Confirmation→Dispatch Approval run correctly populated `ORDER_ID`/
+  `ITEM_ID` on every row across all three tabs.
+
 - **Fixed 3 sheet-schema-drift bugs found in a QA pass after the user restructured
   `Order Punch Discount`/`SO_Confirmation_Items`/`Dispatch_Approval` on the live sheet:**
   1. The discount audit log was writing to an orphaned auto-created `ORDER_PUNCH_DISCOUNT`
