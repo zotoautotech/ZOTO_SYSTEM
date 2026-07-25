@@ -154,6 +154,198 @@ Defined once in `Frontend/src/lib/responsive.ts` (`useMediaQuery`, `useIsCompact
 - **Drag-resize is desktop-only.** The sidebar rail, the customer filter panel, and `OrderItemsView`'s per-column resize are all mouse-event-only (`onMouseDown` + `window` `mousemove`/`mouseup`) with no touch-event equivalent. Rather than port them to touch gestures, they're simply not rendered/attached below the relevant breakpoint, and touch users get sensible fixed default widths instead. This was an explicit user decision, not an oversight.
 - **A 16-column spreadsheet (`OrderItemsView`) is not redesigned into cards on mobile** — it stays a horizontally-scrollable table. The ask was "usable," not "redesigned."
 
+## 9. Old Frontend Screen Reference — Transport → Delivery pipeline (capture only, not yet built)
+
+Screenshots of the old **SALES CRR-ADC-V5** AppSheet frontend, captured batch-by-batch as
+build reference for the new Transport/Tax Invoice/Dispatch/LR/Delivery module (currently
+backend-only, see `Backend/src/routes/tripRoutes.ts`). **Reference only — do not build
+against this section until explicitly told to.**
+
+### 9.1 Nested Transport structure (3 levels)
+
+```
+Transport Main Form  (the trip — TRANSPORT tab)
+  └─ "Select Sale Orders" picker (+ New)  →  Transport Form  (one order on this trip — Transport_SO tab)
+        Tab "Sale Order Details": pick the Sale Order (single searchable dropdown)
+        Tab "Logistics Details": per-order logistics override
+          └─ "Select Products & Quantity" picker (+ New)  →  Transport Items Form (Transport_Products tab, "Load Limit Details" tab)
+             "Selected Items Count" rollup shown back on the Logistics Details tab
+```
+
+AppSheet's standard nested-detail-view pattern (parent form has an inline "related list +
+New button" that opens a child form, which can itself nest another picker) — confirms
+`Transport` → `Transport_SO` → `Transport_Products` is a genuine 3-level parent/child/
+grandchild relationship in the UI, not just in the sheet schema.
+
+**Transport Main Form** — title "Transport Main Form", tab "Vehicle Details", footer at
+**top** of modal (Cancel outline / Save red — differs from every other form built so far,
+which puts the footer at the bottom). Fields, in order:
+1. **Send Through\*** — 5-way toggle: `Courier` / `Porter` / `Transporter` / `Cust. Vehicle`
+   / `Local Vehicle`.
+2. **Vehicle Arrange for\*** — 3-way toggle: `Customer` / `Transporter booking` /
+   `Multi Location`, with a note block explaining each:
+   > Customer - If material direct dispatch to customer.
+   > Transport Booking - If material dispatch for transport booking.
+   > Multi location - If material dispatch by multiple points (Mostly used in Karol Bagh)
+3. **Transporter ID\*** — searchable dropdown (live transporter-master lookup, e.g.
+   "DELHIVERY SMALL WORLD", "RAHUL GOOD CARRIERS") — **only shown when Send Through =
+   Transporter**.
+4. **Vehicle type\*** — searchable dropdown, fixed list: `2/3/4/6/8/10/12 Wheeler`.
+5. **Vehicle No.\*** — text
+6. **Vehicle Size (Ft)\*** — number (`0` placeholder)
+7. **Driver Name\*** — text
+8. **Driver Contact No.\*** — text
+9. **Freight Applicable On Invoice?\*** — toggle `N`/`Y`. **When Y**, reveals:
+   - **Freight Charge\*** — currency (₹, `0.00`)
+   - **Freight GST Applicable\*** — toggle `Yes`/`No`
+10. **Description** — text (not required)
+11. **"Select Sale Orders here that will transport through this vehicle."\*** — inline
+    picker, red **New** button opens the child Transport Form.
+
+**Transport Form** (child modal, opened via New) — 2 tabs, wizard style (`Cancel` / `Next ›`
+on tab 1, `‹ Prev` / `Cancel` / `Save` on tab 2):
+- Tab **Sale Order Details**: "Select Sale Order \*" — single searchable dropdown (one
+  order at a time, not multi-select).
+- Tab **Logistics Details**:
+  1. **Preferred Delivery Mode\*** — same 5-way toggle as Send Through — a **per-order**
+     override, independent of the trip-level Send Through.
+  2. Helper text: *"Select the party that ultimately bears the freight expense (who will
+     finally pay for the transportation cost)."*
+  3. **Freight Paid by\*** — toggle `ADC` / `Customer`.
+  4. Helper text: *"Select the stage at which the freight payment is made to the
+     transporter."*
+  5. **Freight Paid at\*** — toggle `Pay at ADC` / `Pay at Customer` (answers what the
+     helper text above it was labeling).
+  6. **"Select Products & Quantity here that will Dispatch in this vehicle."** + red **New**
+     button → opens **Transport Items Form** (single tab "Load Limit Details" — fields not
+     captured yet, form was empty/unpopulated in the screenshot taken).
+  7. **Selected Items Count** — read-only rollup (`0.00000`), updates as products are added.
+
+**Design implication:** two logistics layers exist — trip-level (Send Through, Freight
+Applicable On Invoice, Freight Charge, Freight GST Applicable — on the Main Form) and
+per-order-on-this-trip (Preferred Delivery Mode, Freight Paid by, Freight Paid at — on the
+child form's Logistics tab). `Transport_SO`'s real sheet columns already anticipate both
+layers; the new build hasn't exposed the per-order override in any form yet, and currently
+auto-attaches an order's full item list rather than letting the doer pick products/qty.
+
+### 9.2 Pre Transport (Pending Transport) — item-level list + detail
+
+**Pending Transport list**: breadcrumb `SALES CRR > Pending Transport`, standard customer
+filter panel + table. **This is an item-level list, not order-level** — one row per pending
+line item. Columns: Timestamp, CUST ID, Customer Name, Balance Quantity, Balance BOX
+Quantity, Unit, NUG/BOX Quantity, Packing Type, Part No., Old Part No., Part Name, Part
+Desc[ription]… Header actions: checkmark toggle, red **"Arrange Ve[hicle]"** button (opens
+Transport Main Form), filter icon, bulk-select checkbox icon.
+
+**Pre Transport item detail** (opened from a list row, title = Part Name): header
+`PRE-TPT-{id}` + timestamp + red "Update Log" button. Card layout:
+- **Buyer Details**: CUST ID, Customer Name, Business Segment, Type of Customer, Buyer
+  GSTIN No.
+- **Special Instructions**: Packing Requirements (e.g. "need to create nug")
+- **Goods Details**: Part No., Old Part No., Part Name, Part Description, Segment,
+  Category, Sub Category, Paint, Standard Part, PDF
+- **Load Limit Details**: Quantity, Box Quantity, Balance Quantity, Balance BOX Quantity,
+  Unit, NUG/BOX Quantity, Packing Type, NUG/BOX Marka Code
+
+### 9.3 Transport Reached Form
+
+2 tabs: **Transport Reach Details** (default active) / **Vehicle Details** (only reachable
+if a new vehicle is needed).
+- **Transport Reached\*** — toggle `Yes`/`No`.
+  - **If No**: reveals **Expected DateTime\*** (datetime picker) and **Reason\*** (text) on
+    the same tab; footer is `Cancel`/`Save` (no second tab needed).
+  - **If Yes**: reveals **Same Vehicle\*** — toggle `Yes`/`No`.
+    - **Same Vehicle = Yes**: footer `Cancel`/`Save` (done, no new vehicle to capture).
+    - **Same Vehicle = No**: footer becomes `Cancel`/`Next ›`, advancing to the **Vehicle
+      Details** tab: Vehicle type\* (searchable dropdown, same 2–20 Wheeler list as
+      elsewhere but longer here: up to `20 Wheeler`), Vehicle No.\*, Vehicle Size (Ft) (not
+      required here), Driver Name (not required here), Driver Contact No.\*. Footer
+      `‹ Prev`/`Cancel`/`Save`.
+
+This is a materially richer conditional structure than our current single-tab
+`transport-reached` stage form (`reached`/`sameVehicle`/`expectedDateTime`/`reason`/
+`remarks` all shown flat) — the old UI branches into up to 3 different footer/field
+combinations depending on the two toggle answers.
+
+### 9.4 Stock Release
+
+**Pending Stock Release list**: item-level (like Pre Transport). Columns: Part No., Billing
+Part No., Part Name, Part Description, Vehicle type, Vehicle No., Vehicle Size (Ft), Load
+Qty, Unit, Load Boxes. Red "Completed…" toggle, standard list chrome.
+
+**Stock Release item detail**: header `TPT-PD-{id}` (a `Transport_Pd_ID`) + timestamp.
+- **Goods Details**: Part No., Billing Part No., Part Name, Part Description, Segment,
+  Category, Sub Category, Paint, Standard Part
+- **Special Instructions** (empty in example)
+- **Vehicle Details**: Vehicle type, Vehicle No., Vehicle Size (Ft), Driver Name, Driver
+  Contact No.
+- **Load Limit Details**: Load Qty, Unit, Load Boxes
+- A **"Stock Release Form"** action icon opens the form below.
+
+**Stock Release Form**: single tab "Stock Release Details". Fields: **From** (dropdown,
+options not captured), **Description** (text), **Signature** (signature-pad widget — draw
+with mouse/touch, shown with a sample scribble). Footer `Cancel`/`Save`. Notably: no visible
+`Type`/`Release Quantity` fields in this capture — either scrolled past or those are
+auto-computed rather than doer-entered (our current backend has `releaseType`/
+`releaseQuantity` as inputs; may need to drop `releaseType` as a manual field and keep only
+From/Description/Signature, or the real form has more fields below the fold).
+
+### 9.5 Tax Invoice
+
+**Pending Tax Invoice list**: order-level (not item-level, unlike PDI/Transport/Stock
+Release). Columns: Status, Tally, Cutomer Name, Buyer GSTIN No., Freight Paid by, Freight
+Paid at, Transport Mode, Transporter Name, Transporter GSTIN, Vehicle type, Vehicle No.,
+Vehicle Size (Ft), Freight Applicable On Invoice, Freight Charge.
+
+**Upload Tax Invoice Form** (modal): Tax Invoice No.\* (text), Tax Invoice Date (date), Tax
+Invoice Attachment (PDF dropzone), Tax Invoice Remarks (text), **E-Way Bill Applicable**
+toggle Yes/No — **when Yes**, reveals E-Way Bill No. (text), E-Way Bill Date (date), E-Way
+Bill Attachment (PDF dropzone), E-Way Bill Remarks (text). Matches our current
+`tax-invoice` stage fields closely, but confirms E-Way Bill fields should be conditionally
+hidden until "Applicable" is toggled on, not always shown.
+
+**Tax Invoice detail**: header `INVC-{id}` + timestamp + "Upload Tax Invoice Form" / "Update
+Log" action icons.
+- **GST Details**: Invoice Discount (Rs), Basic Amount, Tax Amount, Total Amount, GP /
+  Invoice, GP / Invoice (%) — **GP (gross profit) fields are computed/shown here**, not in
+  our current schema.
+- **Vehicle Details**: Vehicle type, Vehicle No., Vehicle Size (Ft), Driver Name, Freight
+  Applicable On Invoice, Freight GST (%), Freight GST Amount.
+- **Logistics Details**: Delivery Mode, Freight Paid by, Freight Paid at, Transport Mode,
+  Transporter Type, Transporter ID, Transporter Name, PAN, Transporter Contact No.,
+  Transporter Person Name, Transporter Person Contact No., Transporter Address.
+- **"All SO's of this Tax Invoice"** — inline mini-table (Customer Name, Sale Order No.,
+  Sale Order Date, Sale Order Remarks) with an **Expand** link — this is exactly
+  `Tax_Invoice_SO`'s rows for the invoice, shown inline on the parent detail rather than as
+  a separate route. Same pattern for items:
+- **"All Products of this Tax Invoice"** — inline mini-table (Timestamp, Part No., Old Part
+  No., Part Name, Part Desc…) with Expand — `Tax_Invoice_Products`' rows.
+- **Buyer Details**: Tally, CUST ID, Customer Name, Marka Code, Business Segment, Type of
+  Customer, Buyer GSTIN No., Buyer Email ID, Buyer Contact No., Payment Type, Payment
+  Terms, This Order Payment Terms, Contact Person Name, Contact Person Contact No., Sale
+  Staff Name, Order given by, Ship to Consignee.
+- **Billing Address** / **Shipping Address** / **Consignee Details** cards (Line 1/2, State,
+  Pin code, Country each; Is Shipping Address Same flag).
+
+**Design implication:** parent detail pages for trip-level tabs (Tax Invoice, and presumably
+Dispatch) show their attached child rows (SO-level and item-level) **inline as expandable
+mini-tables**, not as a separate route the doer navigates to. Our current plan of a flat
+trip detail page listing attached orders should adopt this same inline-mini-table +
+Expand-link pattern rather than a full separate list view per level.
+
+### 9.6 Dispatch
+
+**Pending Dispatch list**: order-level. Columns: Status, Timestamp, CUST ID, Customer Name,
+Delivery Mode, Transport Mode, Transporter Name, Vehicle type, Vehicle No., Vehicle Size
+(Ft), Driver Name. Header actions: "Dispatch Form" icon button + red "Completed…" toggle.
+(Form itself not captured yet — list only.)
+
+---
+
+*(Further batches: user will send more screenshots in follow-up messages — append here
+under new `9.x` subsections, not in a separate file. Do not begin implementation until the
+user explicitly says to build.)*
+
 ### Verification method
 
 Checked via a local Vite dev server (not the deployed site) at four widths — 375×812, 430×932, 768×1024, 1280×800 — using `resize_window` + `getComputedStyle`/`getBoundingClientRect` reads (more reliable ground-truth than this particular browser tool's screenshot pixel scaling, which has a display-only quirk unrelated to actual page layout — confirmed by cross-checking a visually-odd tablet screenshot against `getBoundingClientRect`, which showed the login card correctly centered with equal left/right gaps). Confirmed zero `document.documentElement.scrollWidth > window.innerWidth` overflow at every checked width on every checked page. Desktop (1280×800) values were spot-checked against the pre-change numbers (sidebar 208px, header grid track sizes, search 480px, login card 460px/40px 44px padding, logo 140px/-90px/56px) and matched exactly — the "locked" requirement holds. Authenticated pages (`OrderDetail`, `OrderItemsView`, order forms) were checked structurally with a synthetic local-only `localStorage` session (no real backend running against local dev, so no production data or credentials involved) since the assistant has no real login credentials; a full pass with real order data is worth a spot-check by the user on the next deploy.
