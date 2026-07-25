@@ -136,5 +136,109 @@ show — not a separate "create trip" step followed by a separate "attach orders
 
 ---
 
-*(Next batch: user will send 5 more screenshots in a follow-up message — append here, not
+## Batch 2 (5 screenshots) — clarifies the nested Transport structure
+
+This batch reveals the real structure is **three nested levels**, not one flat form:
+
+```
+Transport Main Form  (the trip — Transport tab)
+  └─ "Select Sale Orders" picker (+ New)  →  Transport Form  (one Sale Order attached to this trip — Transport_SO tab)
+        Tab "Sale Order Details": pick the Sale Order
+        Tab "Logistics Details": per-order logistics override
+          └─ "Select Products & Quantity" picker (+ New)  →  (a 3rd, unseen-so-far form — Transport_Products tab, per item load qty)
+             "Selected Items Count" shown as a rollup back on the Logistics Details tab
+```
+
+This is AppSheet's standard nested-detail-view pattern (parent form has an inline
+"related list + New button" that opens a child form, which can itself have another nested
+picker) — confirms `Transport` → `Transport_SO` → `Transport_Products` is a genuine
+3-level parent/child/grandchild relationship in the UI, not just in the sheet schema.
+
+### 1. Transport Main Form — Transporter ID dropdown (Send Through = Transporter)
+
+Same form as Batch 1 #4/#5, but with the **Transporter ID\*** field's searchable dropdown
+open, showing it's a live search against a transporter master list. Sample options visible:
+DELHIVERY SMALL WORLD, Jharkhand Bengal Freight Carrier Private Limited, THE PROFESSIONAL
+COURIERS, RAHUL GOOD CARRIERS, DELHI SHIMLA GOODS CARRIERS, MANOJ CARGO CARRIERS (+ one
+partially obscured). Confirms **Transporter ID only appears when Send Through =
+Transporter** (already noted in Batch 1) and is a proper searchable master lookup, not a
+free-text field.
+
+### 2. Transport Main Form — Vehicle type dropdown
+
+Same form, **Vehicle type\*** dropdown open. Fixed option list: `2 Wheeler`, `3 Wheeler`,
+`4 Wheeler`, `6 Wheeler`, `8 Wheeler`, `10 Wheeler`, `12 Wheeler`. Also a searchable
+dropdown widget (same style as Transporter ID), even though the list is short/fixed —
+consistent widget choice across the form rather than a plain `<select>`.
+
+### 3. Transport Main Form — Send Through = Cust. Vehicle, Freight = Y (conditional fields)
+
+Confirms two more conditional-field layers beyond what Batch 1 showed:
+- With `Send Through = Cust. Vehicle`, no Transporter ID field (matches: only "Transporter"
+  choice needs it).
+- **Freight Applicable On Invoice? = Y** reveals two more fields that don't show when N:
+  - **Freight Charge\*** — currency input (₹ prefix, `0.00` placeholder)
+  - **Freight GST Applicable\*** — 2-way toggle `Yes` / `No` (Yes selected here)
+
+Full conditional field order for this form now confirmed: Send Through → [Transporter ID if
+Transporter] → Vehicle Arrange for → Vehicle type → Vehicle No. → Vehicle Size (Ft) →
+Driver Name → Driver Contact No. → Freight Applicable On Invoice? → [Freight Charge +
+Freight GST Applicable if Y] → Description → Select Sale Orders picker.
+
+### 4. Transport Form (child modal) — "Sale Order Details" tab
+
+Opened by tapping **New** on the Main Form's "Select Sale Orders" picker. Stacked on top of
+the Main Form (both visible, parent dimmed). Two tabs: **Sale Order Details** (active, red
+underline) / **Logistics Details**. Header: "Select Sale Order \*" — a single searchable
+dropdown (not multi-select) showing customer/order names as options (e.g. "MANJU
+ENTERPRISES PATNA"). Footer: **Cancel** / **Next ›** (red) — this is a wizard-style 2-tab
+form, Next advances rather than Save.
+
+**So attaching an order to a trip is: tap New → search-select one Sale Order → Next →** (see
+next screenshot).
+
+### 5. Transport Form (child modal) — "Logistics Details" tab
+
+Second tab of the same child form. Footer now: **‹ Prev** / **Cancel** / **Save** (Next is
+gone, this is the last tab). Fields:
+1. **Preferred Delivery Mode\*** — same 5-way toggle as Send Through
+   (Courier/Porter/Transporter/Cust. Vehicle/Local Vehicle) — `Cust. Vehicle` selected here.
+   This is a **per-order** override of delivery mode, separate from the trip-level Send
+   Through set on the Main Form.
+2. Helper text: *"Select the party that ultimately bears the freight expense (who will
+   finally pay for the transportation cost)."*
+3. **Freight Paid by\*** — 2-way toggle `ADC` / `Customer` (`ADC` selected).
+4. Helper text: *"Select the stage at which the freight payment is made to the
+   transporter."* — labels the *next* section (no separate toggle control appeared before
+   the next field in this screenshot; may be scrolled past, or this text labels "Select
+   Products" itself as the "stage" selection.)
+5. **"Select Products & Quantity here that will Dispatch in this vehicle."** + a red **New**
+   button — the item/product-level picker (opens a 3rd-level form, not captured yet, that
+   presumably matches `Transport_Products`: item, load quantity, box quantity, etc.).
+6. **Selected Items Count** — a read-only rollup field (`0.00000`), auto-updated as products
+   get added via the New picker above.
+
+### Design implications for our build
+
+- The new Transport module needs a genuinely nested flow, not a single flat form. Minimum
+  viable mapping to what we already built (`tripRoutes.ts`'s `POST /transport-trips` then
+  `POST /:id/orders`) is close in spirit but currently order-level-only for the attach step
+  — the real UI lets the doer additionally pick per-order **logistics overrides** (delivery
+  mode / freight-paid-by per order, distinct from the trip-level ones) and a **per-order
+  item/quantity selection** (not just "attach the whole order with all its items", which is
+  what our backend currently does automatically).
+- Two logistics layers exist: trip-level (Send Through, Freight Applicable On Invoice,
+  Freight Charge, Freight GST Applicable — on the Main Form) and per-order-on-this-trip
+  (Preferred Delivery Mode, Freight Paid by — on the child Transport Form's Logistics tab).
+  Our current `tripMap.ts`/`Transport_SO` write already has columns for both layers
+  (`Transport_SO` has its own `Preferred Delivery Mode`/`Freight Paid by` distinct from
+  `TRANSPORT`'s `Vehicle Arrange for`/etc.) — the sheet schema already anticipated this, we
+  just haven't exposed the per-order override in any form yet.
+- Searchable-dropdown is the standard control for any master lookup (Transporter ID, Vehicle
+  type, Select Sale Order) — matches our existing `SearchableSelect` component, not a plain
+  `<select>`.
+
+---
+
+*(Next batch: user will send more screenshots in a follow-up message — append here, not
 in a new file. Do not begin implementation until the user explicitly says "build".)*
