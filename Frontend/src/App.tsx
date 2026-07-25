@@ -17,6 +17,10 @@ import { SoConfirmationList } from "./modules/so-confirmation/SoConfirmationList
 import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprovalList";
 import { StageQueueList } from "./components/stage/StageQueueList";
 import { STAGES } from "./lib/stages";
+import { TripQueueList } from "./components/stage/TripQueueList";
+import { TripDetail } from "./modules/transport/TripDetail";
+import { TransportList } from "./modules/transport/TransportList";
+import { TRIP_STAGES } from "./lib/tripStages";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -61,6 +65,16 @@ export default function App() {
         {STAGES.map((stage) => (
           <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
         ))}
+        <Route path="modules/transport" element={<TransportList />} />
+        <Route path="modules/transport/:transportId" element={<TripDetail />} />
+        {TRIP_STAGES.flatMap((stage) => [
+          <Route
+            key={`${stage.key}-list`}
+            path={`modules/${stage.key}`}
+            element={<TripQueueList moduleKey={stage.key} label={stage.label} prevStatus={stage.prevStatus} nextStatus={stage.nextStatus} />}
+          />,
+          <Route key={`${stage.key}-detail`} path={`modules/${stage.key}/:transportId`} element={<TripDetail />} />,
+        ])}
         <Route path="modules/:moduleKey/:orderId" element={<OrderDetail />} />
         <Route path="modules/:moduleKey/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/:moduleKey/:orderId/items/:itemId" element={<OrderItemDetail />} />

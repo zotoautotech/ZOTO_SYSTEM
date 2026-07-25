@@ -17,10 +17,10 @@ export interface StageDef {
 }
 
 /**
- * Mirrors Backend/src/routes/stageConfig.ts field-for-field — drives both the generic
- * queue list (StageQueueList) and the generic save form (StageForm) for every stage after
- * Dispatch Approval. See docs/Report.md for where these stages came from (the old ADC CRR
- * pipeline) and CLAUDE.md for the STATUS chain.
+ * PDI and Pre Transport are the two simple single-order stages between Dispatch Approval
+ * and the trip system (see Frontend/src/lib/tripStages.ts, modules/transport/) — mirrors
+ * Backend/src/routes/stageConfig.ts field-for-field. Transport onward is trip-level, not
+ * order-level, and lives in its own module/route set.
  */
 export const STAGES: StageDef[] = [
   {
@@ -39,104 +39,16 @@ export const STAGES: StageDef[] = [
     ],
   },
   {
-    key: "transport",
-    label: "Transport",
+    key: "pre-transport",
+    label: "Pre Transport",
     prevStatus: "PDI COMPLETED",
-    nextStatus: "TRANSPORT ASSIGNED",
+    nextStatus: "PRE TRANSPORT COMPLETED",
     fields: [
-      { key: "vehicleArrangeFor", label: "Vehicle Arrange for", type: "text", required: true },
-      { key: "vehicleType", label: "Vehicle Type", type: "text" },
-      { key: "vehicleNo", label: "Vehicle No.", type: "text" },
-      { key: "vehicleSize", label: "Vehicle Size (Ft)", type: "text" },
-      { key: "driverName", label: "Driver Name", type: "text" },
-      { key: "driverContactNo", label: "Driver Contact No.", type: "text" },
-      { key: "freightApplicableOnInvoice", label: "Freight Applicable On Invoice?", type: "yesno" },
-      { key: "freightCharge", label: "Freight Charge", type: "number" },
-      { key: "remarks", label: "Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "transport-reached",
-    label: "Transport Reached",
-    prevStatus: "TRANSPORT ASSIGNED",
-    nextStatus: "TRANSPORT REACHED",
-    fields: [
-      { key: "reached", label: "Transport Reached", type: "yesno", required: true },
-      { key: "sameVehicle", label: "Same Vehicle", type: "yesno" },
-      { key: "expectedDateTime", label: "Expected Date/Time", type: "datetime-local" },
-      { key: "reason", label: "Reason", type: "text" },
-      { key: "remarks", label: "Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "stock-release",
-    label: "Stock Release",
-    prevStatus: "TRANSPORT REACHED",
-    nextStatus: "STOCK RELEASED",
-    fields: [
-      { key: "releaseType", label: "Release Type", type: "text", required: true },
-      { key: "releaseQuantity", label: "Release Quantity", type: "number" },
-      { key: "releaseFrom", label: "Release From", type: "text" },
-      { key: "remarks", label: "Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "tax-invoice",
-    label: "Tax Invoice",
-    prevStatus: "STOCK RELEASED",
-    nextStatus: "TAX INVOICE COMPLETED",
-    fields: [
-      { key: "taxInvoiceNo", label: "Tax Invoice No.", type: "text", required: true },
-      { key: "taxInvoiceDate", label: "Tax Invoice Date", type: "date", required: true },
-      { key: "taxInvoiceAttachmentUrl", label: "Tax Invoice Attachment", type: "file" },
-      { key: "eWayBillApplicable", label: "E-Way Bill Applicable", type: "yesno" },
-      { key: "eWayBillNo", label: "E-Way Bill No.", type: "text" },
-      { key: "eWayBillDate", label: "E-Way Bill Date", type: "date" },
-      { key: "eWayBillAttachmentUrl", label: "E-Way Bill Attachment", type: "file" },
-      { key: "remarks", label: "Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "dispatch",
-    label: "Dispatch",
-    prevStatus: "TAX INVOICE COMPLETED",
-    nextStatus: "DISPATCHED",
-    fields: [
-      { key: "dispatched", label: "Dispatched", type: "yesno", required: true },
-      { key: "gatePassAttachmentUrl", label: "Dispatch Gate Pass", type: "file" },
-      { key: "freightCharges", label: "Freight Charges", type: "number" },
-      { key: "otherCharges", label: "Other Charges", type: "number" },
-      { key: "paymentStatus", label: "Payment Status", type: "text" },
-      { key: "remarks", label: "Dispatch Description", type: "text", required: true },
-    ],
-  },
-  {
-    key: "collect-lr",
-    label: "Collect LR",
-    prevStatus: "DISPATCHED",
-    nextStatus: "LR COLLECTED",
-    fields: [
-      { key: "lrNo", label: "LR No.", type: "text", required: true },
-      { key: "lrDate", label: "LR Date", type: "date", required: true },
-      { key: "lrAttachmentUrl", label: "LR Attachment", type: "file" },
-      { key: "lrCharges", label: "LR Charges", type: "number" },
-      { key: "paymentStatus", label: "Payment Status", type: "text" },
-      { key: "otherCharges", label: "Other Charges", type: "number" },
-      { key: "remarks", label: "LR Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "delivery",
-    label: "Delivery",
-    prevStatus: "LR COLLECTED",
-    nextStatus: "DELIVERED",
-    fields: [
-      { key: "delivered", label: "Delivered", type: "yesno", required: true },
-      { key: "receivingAttachmentUrl", label: "Receiving Attachment", type: "file" },
-      { key: "anyCharges", label: "Any Charges", type: "yesno" },
-      { key: "amount", label: "Amount", type: "number" },
-      { key: "chargeDescription", label: "Charge Description", type: "text" },
-      { key: "remarks", label: "Delivery Remarks", type: "text", required: true },
+      { key: "boxQuantity", label: "Box Quantity", type: "number", required: true },
+      { key: "packingType", label: "Packing Type", type: "text" },
+      { key: "nugOfThisCustomer", label: "NUG of this Customer", type: "text" },
+      { key: "packagingNug", label: "Packaging Nug", type: "text" },
+      { key: "packagingCode", label: "Packaging Code", type: "text" },
     ],
   },
 ];

@@ -2,6 +2,54 @@
 
 Running log of updates to the ZOTO Sales CRR app. Newest entries first. Each entry names the affected area and links back to the git commit for full detail.
 
+## 2026-07-25 (3)
+
+- **Built the Transport trip frontend** — the UI for the trip system added in the previous
+  entry (Transport through Delivery are trip-level, one truck/invoice/LR/delivery can carry
+  several orders). New files: `Frontend/src/lib/tripsApi.ts` (API client), `Frontend/src/lib/
+  tripStages.ts` (`TRIP_STAGES`, 6 entries mirroring the backend's status chain),
+  `Frontend/src/components/stage/TripQueueList.tsx` (one generic list for all 7
+  Transport-family modules), `Frontend/src/modules/transport/` — `TransportList.tsx`
+  (Transport module itself, "+ Arrange Vehicle" action), `CreateTripModal.tsx` ("Transport
+  Main Form" clone: Send Through/Vehicle Arrange for toggles, vehicle details), `TripDetail.tsx`
+  (shared detail page across all 7 routes, derives the current stage from the URL segment),
+  `AttachOrdersModal.tsx` (multi-select eligible-orders picker), and `forms/` with one form
+  component per stage (`ReachedForm`, `StockReleaseForm`, `TaxInvoiceForm`, `DispatchForm`,
+  `LRForm`, `DeliveryForm`) built from the old AppSheet frontend screenshots captured in
+  `docs/04-UIUX-BRIEF.md` §9. `DispatchForm` compresses the old UI's 3-level nested Vehicle
+  Dispatch flow into one screen, calling `pre-dispatch`→`vehicle-dispatch`→`dispatch`
+  sequentially on save.
+
+- **Fixed a routing collision that shadowed the new trip UI**: `Frontend/src/lib/stages.ts`
+  (frontend) still had the old 8-entry `STAGES` array including a `transport` key from
+  before the trip system existed, never trimmed down when the backend `stageConfig.ts` was
+  cut over earlier. `App.tsx` registered `{STAGES.map(...)}` (old `StageQueueList`) before
+  `<Route path="modules/transport" .../>` (new `TransportList`) — since both targeted the
+  identical literal path, React Router favored the first-declared one, so `/modules/
+  transport` kept showing the dead order-level queue. Fixed by trimming `stages.ts` down to
+  just `pdi` and `pre-transport` (matching the backend exactly), which also surfaced a
+  second bug: `pre-transport` had never had a frontend entry at all, despite being fully
+  implemented on the backend — added it, plus its missing tile in `Frontend/src/lib/
+  modules.ts`.
+
+- **Fixed: `POST /:transportId/lr` never advanced `TRANSPORT.Status`** to `"LR COLLECTED"`
+  (`Backend/src/routes/tripRoutes.ts`) — every other trip-stage handler updates the
+  `TRANSPORT` row's `Status` column before cascading to attached orders; `/lr` cascaded the
+  orders but skipped the trip-row update, so the trip stayed stuck showing the Collect LR
+  form as still-pending forever (`/delivery`, called next, requires a `Dispatch` row to
+  exist and would eventually succeed regardless, but the trip's own status/queue placement
+  would stay wrong permanently). Found via live UI walkthrough — the Collect LR queue kept
+  showing the trip as pending after a successful save. One-line fix, added the same
+  `updateRow(..., "TRANSPORT", ..., { Status: "LR COLLECTED" })` call every other handler
+  already has.
+
+- Verified the entire trip UI end-to-end live, through the browser (not curl): created a
+  trip via `CreateTripModal`, attached a real `PRE TRANSPORT COMPLETED` test order via
+  `AttachOrdersModal`, then submitted all 6 stage forms in sequence
+  (Reached→Stock Release→Tax Invoice→Dispatch→Collect LR→Delivery), confirming each save
+  advanced the trip out of its current queue and into the next, with the sheet writes
+  visible via network-request inspection at each step.
+
 ## 2026-07-25 (2)
 
 - **Critical fix: `ORDER_ITEMS`/`SALE_ORDER_ITEMS` writes were almost entirely blank** (Part

@@ -193,7 +193,10 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
   }
 });
 
-const remarksSchema = z.object({ remarks: z.string().min(1) });
+// Not every stage form in the reference UI has a mandatory catch-all remarks field (e.g.
+// Transport Reached only requires Reason when Reached=No) — kept optional here so the
+// backend doesn't force a field the real UX doesn't always show.
+const remarksSchema = z.object({ remarks: z.string().optional().default("") });
 
 tripsRouter.post("/:transportId/reached", async (req, res, next) => {
   try {
@@ -277,6 +280,7 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
     }
 
     const orderIds = [...new Set(productRows.map((p) => p.ORDER_ID))];
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "STOCK RELEASED" });
     await cascadeStatus(orderIds, "STOCK RELEASED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, status: "STOCK RELEASED" });
   } catch (err) {
@@ -382,6 +386,7 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
       }
     }
 
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
     await cascadeStatus(attached.map((a) => a.orderId), "TAX INVOICE COMPLETED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, invoiceId, status: "TAX INVOICE COMPLETED" });
   } catch (err) {
@@ -411,6 +416,7 @@ tripsRouter.post("/:transportId/pre-dispatch", async (req, res, next) => {
       Status: "COMPLETED",
     });
 
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "PRE DISPATCH COMPLETED" });
     await cascadeStatus(attached.map((a) => a.orderId), "PRE DISPATCH COMPLETED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, preDispatchId, status: "PRE DISPATCH COMPLETED" });
   } catch (err) {
@@ -454,6 +460,7 @@ tripsRouter.post("/:transportId/vehicle-dispatch", async (req, res, next) => {
       Status: "COMPLETED",
     });
 
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "VEHICLE DISPATCH COMPLETED" });
     await cascadeStatus(attached.map((a) => a.orderId), "VEHICLE DISPATCH COMPLETED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, vehicleDispatchId, status: "VEHICLE DISPATCH COMPLETED" });
   } catch (err) {
@@ -540,6 +547,7 @@ tripsRouter.post("/:transportId/lr", async (req, res, next) => {
       Status: "COLLECTED",
     });
 
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "LR COLLECTED" });
     await cascadeStatus(attached.map((a) => a.orderId), "LR COLLECTED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, lrId, status: "LR COLLECTED" });
   } catch (err) {
@@ -554,7 +562,10 @@ tripsRouter.post("/:transportId/delivery", async (req, res, next) => {
       receivingAttachmentUrl: z.string().optional().default(""),
       anyCharges: z.string().optional().default(""),
       amount: z.number().optional(),
+      freightChargesToTransporter: z.number().optional(),
       chargeDescription: z.string().optional().default(""),
+      reason: z.string().optional().default(""),
+      expectedDeliveryDate: z.string().optional().default(""),
     }).merge(remarksSchema);
     const body = schema.parse(req.body);
     const transport = await getTransportRow(req.params.transportId);
@@ -574,9 +585,12 @@ tripsRouter.post("/:transportId/delivery", async (req, res, next) => {
       ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
       ...vehicleSnapshotToSheet(transport),
       Delivered: body.delivered,
+      Reason: body.reason,
+      "Expected Delivery Date": body.expectedDeliveryDate,
       "Receiving Attachment": body.receivingAttachmentUrl,
       "Any Charges": body.anyCharges,
       Amount: body.amount !== undefined ? String(body.amount) : "",
+      "Freight Charges to Transporter": body.freightChargesToTransporter !== undefined ? String(body.freightChargesToTransporter) : "",
       "Charge Description": body.chargeDescription,
       "Delivery Remarks": body.remarks,
       Status: "DELIVERED",

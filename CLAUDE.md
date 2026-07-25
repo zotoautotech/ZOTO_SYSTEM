@@ -54,18 +54,18 @@ action rail opens `DispatchApprovalForm.tsx` — Dispatch Approval dropdown (Dis
 Dispatch Extended / Short Quantity / Excess Quantity) with live validation, persists via
 `POST /orders/:id/dispatch-approval`.
 
-**The 8 stages after Dispatch Approval** (PDI, Transport, Transport Reached, Stock Release,
-Tax Invoice, Dispatch, Collect LR, Delivery — reverse-engineered from the old CRR system,
-see `docs/Report.md`) are all driven by one generic, config-based implementation instead of
-8 bespoke module folders:
-- `Frontend/src/lib/stages.ts` — `STAGES` array, one `StageDef` per stage: `key` (also the
-  URL segment and API path), `label`, `prevStatus`/`nextStatus` (the `ORDER_PUNCH.STATUS`
-  values that gate its pending queue and that it advances to), and a `fields[]` list driving
-  the form (types: `text`/`number`/`date`/`datetime-local`/`yesno`/`file`).
-- `Frontend/src/components/stage/StageQueueList.tsx` — the one list component for all 8
+**PDI and Pre Transport** are the two simple, single-order stages between Dispatch Approval
+and the trip system below, driven by one generic, config-based implementation:
+- `Frontend/src/lib/stages.ts` — `STAGES` array (just `pdi`/`pre-transport` now — the other
+  6 entries this array used to hold were superseded by the trip system, see below), one
+  `StageDef` per stage: `key` (also the URL segment and API path), `label`, `prevStatus`/
+  `nextStatus` (the `ORDER_PUNCH.STATUS` values that gate its pending queue and that it
+  advances to), and a `fields[]` list driving the form (types: `text`/`number`/`date`/
+  `datetime-local`/`yesno`/`file`).
+- `Frontend/src/components/stage/StageQueueList.tsx` — the one list component for both
   (same Completed-toggle/customer-filter pattern as every other queue), rendered via
   `App.tsx`'s `STAGES.map(...)` route generation.
-- `Frontend/src/components/stage/StageForm.tsx` — the one modal form for all 8, rendering
+- `Frontend/src/components/stage/StageForm.tsx` — the one modal form for both, rendering
   whichever fields the `StageDef` declares.
 - `OrderDetail.tsx` derives `currentStage` from the URL's module segment and shows a single
   generic "Give `{label}` Form" action whenever `order.STATUS === currentStage.prevStatus` —
@@ -73,16 +73,54 @@ see `docs/Report.md`) are all driven by one generic, config-based implementation
 - Backend mirror: `Backend/src/routes/stageConfig.ts` (`STAGES`, one `StageConfig` per
   stage — tab name, ID prefix/column, prev/next status, fields) and `stageRoutes.ts`
   (`registerStageRoutes()`, called from `orders.ts` **before** the generic `GET /:id` route
-  so Express doesn't swallow e.g. `GET /pdi` as `:id="pdi"`). Each stage's tab
-  (`PDI`/`TRANSPORT`/`TRANSPORT_REACHED`/`STOCK_RELEASE`/`TAX_INVOICE`/`DISPATCH`/`LR`/
-  `DELIVERY`) is brand-new — plain internal `UPPER_SNAKE` headers, no translation-map file
-  needed (unlike `ORDER_PUNCH`/`SO_Confirmation`), created on first use via `ensureSheetTab`.
-  Adding a 9th stage later means one new entry in each `STAGES` array — no new components,
-  routes, or files.
+  so Express doesn't swallow e.g. `GET /pdi` as `:id="pdi"`). Each stage's tab (`PDI`,
+  `Pre Transport`) is brand-new — plain internal `UPPER_SNAKE` headers, no translation-map
+  file needed (unlike `ORDER_PUNCH`/`SO_Confirmation`), created on first use via
+  `ensureSheetTab`. **If frontend and backend `stages.ts`/`stageConfig.ts` ever drift out of
+  sync again, `App.tsx`'s static route for a leftover frontend-only key will silently shadow
+  whatever real module lives at that same URL** — this exact bug happened once already (see
+  Known gotchas) and cost a full debugging pass to catch, so always edit both files together.
+
+**Transport through Delivery** (Transport, Transport Reached, Stock Release, Tax Invoice,
+Dispatch, Collect LR, Delivery) are **trip-level, not order-level** — reverse-engineered from
+the old CRR/ADC system (`docs/Report.md`): one truck/invoice/dispatch/LR/delivery run (a
+"trip") can carry several orders at once, matched by the live sheet's `Transport_SO`/
+`Tax_Invoice_SO` junction tabs — a deliberate, user-confirmed design choice, not a
+simplification of the order-level pattern above.
+- Backend: `Backend/src/routes/tripRoutes.ts` (mounted at `/api/v1/transport-trips`) — full
+  lifecycle `create` → `attach orders` → `reached` → `stock-release` → `tax-invoice` →
+  `pre-dispatch` → `vehicle-dispatch` → `dispatch` → `lr` → `delivery`, each step appending a
+  row to its own tab and cascading `ORDER_PUNCH.STATUS` on every attached order. Every
+  handler except the very first (`create`) must also call `updateRow(.... "TRANSPORT", ...,
+  { Status: ... })` to advance the **trip's own** status column — this was missed once on
+  `/lr` (see Known gotchas) and silently stuck every trip forever in the Collect LR queue,
+  so when adding a new trip-stage handler, copy an existing one (e.g. `/dispatch` or
+  `/delivery`) rather than writing from scratch.
+  `Backend/src/routes/tripMap.ts` provides `orderSnapshotToSheet()`/`vehicleSnapshotToSheet()`
+  — one shared buyer/billing/logistics/vehicle snapshot object spread into every trip-family
+  tab's `appendRow` call (`appendRow` silently drops whichever keys a given tab doesn't have
+  as a column, so one spread safely works across tabs with different column sets).
+- Frontend: `Frontend/src/lib/tripsApi.ts` (API client), `Frontend/src/lib/tripStages.ts`
+  (`TRIP_STAGES`, 6 entries — Transport itself has no entry here, it's `TransportList.tsx`'s
+  own route since it's the only one with a create-trip action instead of a stage form),
+  `Frontend/src/components/stage/TripQueueList.tsx` (one generic list for all 7
+  Transport-family routes), `Frontend/src/modules/transport/` — `TransportList.tsx`
+  (wraps `TripQueueList` + `CreateTripModal`), `CreateTripModal.tsx` ("Transport Main Form"
+  clone), `TripDetail.tsx` (shared detail page across all 7 routes, derives the current
+  stage from the URL segment the same way `OrderDetail.tsx` does), `AttachOrdersModal.tsx`
+  (multi-select eligible-orders picker), `forms/` (one component per stage — `ReachedForm`,
+  `StockReleaseForm`, `TaxInvoiceForm`, `DispatchForm`, `LRForm`, `DeliveryForm`; field
+  layouts sourced from the old AppSheet frontend screenshots in `docs/04-UIUX-BRIEF.md` §9).
+  `DispatchForm` is a deliberate UI compression: the old frontend nested Vehicle Dispatch →
+  Dispatch Details → per-entry Dispatch Form 3 levels deep, but the doer-facing fields all
+  collapse onto one screen here, which calls `pre-dispatch`→`vehicle-dispatch`→`dispatch`
+  sequentially on save.
+
 `Frontend/src/lib/` holds the API clients (`ordersApi.ts` — includes the generic
 `listStageOrders(stageKey, status?)`/`submitStageForm(stageKey, orderId, payload)` used by
-all 8 stages, `mastersApi.ts`, `attachments.ts` for the upload-viewer flow, `api.ts` for the
-shared axios instance + auth header).
+the two order-level stages, `tripsApi.ts` for the trip system above, `mastersApi.ts`,
+`attachments.ts` for the upload-viewer flow, `api.ts` for the shared axios instance + auth
+header).
 
 Env: `Frontend/.env.local` needs `VITE_API_BASE_URL` pointing at the deployed Backend in
 prod (local dev proxies relative `/api/v1` to the Backend dev server instead).
@@ -270,6 +308,23 @@ directly with the service account, no impersonation needed there).
   bubbling up as a 500. This is what fixed `GET /orders/:id` permanently 500ing ("Order not
   found" in the UI) because it unconditionally read a `DISPATCH_PLAN` tab that was never
   created on the live sheet. Any other Sheets API error still throws normally.
+- **A stale frontend-only route can silently shadow a real one at the same URL.** React
+  Router resolves two `<Route>`s with the identical literal path by declaration order, not
+  by which one is "correct" — `Frontend/src/lib/stages.ts` once still had a leftover
+  `transport` entry from before the trip system existed, so `App.tsx`'s `{STAGES.map(...)}`
+  block registered `modules/transport` with the old dead `StageQueueList` *before* the real
+  `<Route path="modules/transport" element={<TransportList />} />`, and the old one silently
+  won. Caught only by an actual browser page-text check, not by typecheck. If a module route
+  ever renders unexpectedly stale content, check for a duplicate static path in `App.tsx`
+  before assuming a data/API bug.
+- **Every trip-stage backend handler (`Backend/src/routes/tripRoutes.ts`) must update the
+  `TRANSPORT` row's own `Status` column, not just cascade `ORDER_PUNCH.STATUS` on the
+  attached orders** — `/lr` once cascaded orders correctly but forgot the
+  `updateRow(..., "TRANSPORT", ..., { Status: "LR COLLECTED" })` call every other handler
+  has, so the trip stayed stuck showing "pending" in the Collect LR queue forever even
+  though the LR row had been written. Caught by a live UI walkthrough (resubmitting the form
+  never cleared the queue), not by curl testing alone. Copy an existing handler's status
+  update line when adding a new stage rather than writing one from scratch.
 - **`vercel env add` via a PowerShell pipe silently prepends a BOM** (`﻿`) to the value
   on this machine — happened twice, broke domain-wide delegation both times
   (`invalid_grant: Invalid email or User ID`). Don't pipe values into it. If an env var needs
