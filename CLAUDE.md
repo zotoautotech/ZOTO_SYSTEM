@@ -316,7 +316,16 @@ Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `PO
 /orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
 is what `?status=COMPLETED` on that same GET route filters on), appending one row per item
 to **`Dispatch Items Approval`** (renamed from `Dispatch_Approval` in the sheet's "final"
-pass — see Known gotchas).
+pass — see Known gotchas). `POST /orders/:id/so-confirmation`'s Confirmed/Cancelled branch
+also sets `ORDER_PUNCH.APPROVAL_TIME` (was mapped but never actually written before) — this
+is "SO Confirmation Time" on the Dispatch Approval queue's pending table, the moment the
+order entered that queue. **The pending Dispatch Approval table is item-level, not
+order-level** — `GET /orders/dispatch-approvals/items` (`Frontend/src/modules/dispatch-
+approval/DispatchApprovalList.tsx`) returns one row per item (SO Confirmation Time/Customer
+Name/Part Name/Order Quantity), matching the old CRR reference view; Available Stock/Short/
+Excess Quantity are shown as "—" there since they're only decided when the doer actually
+submits the approval form, not before. The Completed toggle stays the order-level table
+(`GET /orders/dispatch-approvals`, unchanged) since those three columns don't apply to it.
 
 From there, two simple single-order stages (`Backend/src/routes/stageConfig.ts` /
 `stageRoutes.ts`, `Frontend/src/lib/stages.ts`): `DISPATCH APPROVAL COMPLETED → PDI

@@ -233,6 +233,22 @@ export async function listDispatchApprovals(status?: string) {
   return res.data;
 }
 
+export interface DispatchApprovalItemRow {
+  ORDER_ID: string;
+  ITEM_ID: string;
+  SO_CONFIRMATION_TIME: string;
+  CUSTOMER_NAME: string;
+  PART_NAME: string;
+  ORDER_QTY: string;
+  UOM: string;
+}
+
+/** Item-level rows (one per item, not per order) for the pending Dispatch Approval table. */
+export async function listDispatchApprovalItems() {
+  const res = await api.get<DispatchApprovalItemRow[]>("/orders/dispatch-approvals/items");
+  return res.data;
+}
+
 export interface DispatchApprovalPayload {
   outcome: "Dispatch Today" | "Dispatch Extended" | "Short Quantity" | "Excess Quantity";
   approvedQty?: number;

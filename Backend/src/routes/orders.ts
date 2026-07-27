@@ -317,6 +317,39 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
   }
 });
 
+/** Item-level rows for the pending Dispatch Approval queue's table (SO Confirmation Time,
+ * Customer Name, Part Name, Order Quantity — one row per item, not per order, matching the
+ * old CRR reference view). Available Stock/Short/Excess Quantity aren't included here since
+ * they're only decided when the doer actually submits the approval, not before. */
+ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
+  try {
+    const [punchRows, itemRows] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, "ORDER_ITEMS"),
+    ]);
+    const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "DISPATCH APPROVAL");
+    const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
+    const rows = itemRows
+      .filter((i) => orderById.has(i.ORDER_ID))
+      .map(itemFromSheet)
+      .map((item) => {
+        const order = orderById.get(item.ORDER_ID)!;
+        return {
+          ORDER_ID: order.ORDER_ID,
+          ITEM_ID: item.ITEM_ID,
+          SO_CONFIRMATION_TIME: order.APPROVAL_TIME || "",
+          CUSTOMER_NAME: order.CUSTOMER_NAME || "",
+          PART_NAME: item.PART_NAME || "",
+          ORDER_QTY: item.QTY || "",
+          UOM: item.UOM || "",
+        };
+      });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Most recent order for a customer, used to autofill "Shipping = Same as Previous Order". */
 ordersRouter.get("/latest", async (req, res, next) => {
   try {
@@ -1183,9 +1216,12 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
     }
 
     const confirmed = body.outcome === "Confirmed";
+    const confirmedAt = new Date().toISOString();
     await Promise.all([
       updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ STATUS: "COMPLETED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
-      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
+      // APPROVAL_TIME ("SO Confirmation Time" on the Dispatch Approval queue) is set here —
+      // this is the moment the order actually enters that queue.
+      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, APPROVAL_TIME: confirmedAt, CREATED_BY: req.user!.employeeId })),
     ]);
 
     const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
