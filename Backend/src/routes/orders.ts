@@ -528,9 +528,11 @@ const discountItemSchema = z.object({
 // Yes -> either one lump amount split proportionally across every item ("Invoice" scope, the
 // original behavior), or an explicit Rs/% chosen per selected item ("Item" scope, each item's
 // own discount is exactly what the doer typed for it — no proportional splitting involved).
-// zod's discriminatedUnion rejects .refine()-wrapped branches, so the "type must have a
-// matching discountPct/discountRs" check is done by hand right after parsing instead.
-const discountSchema = z.discriminatedUnion("applicable", [
+// A plain z.union (not discriminatedUnion) — two branches both need applicable:true (differing
+// on `scope` instead), and zod's discriminatedUnion requires the discriminator value to be
+// unique across every branch; reusing `true` on two branches makes it throw at import time
+// ("Discriminator property applicable has duplicate value true"), taking the whole API down.
+const discountSchema = z.union([
   z.object({ applicable: z.literal(false) }),
   z.object({
     applicable: z.literal(true),
