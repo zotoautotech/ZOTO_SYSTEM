@@ -113,6 +113,7 @@ const newCustomerSchema = z.object({
   contactNo: z.string().optional().default(""),
   email: z.string().optional().default(""),
   paymentTermsDays: z.number().optional(),
+  fieldSaleRepresentative: z.string().optional().default(""),
   billingAddressLine1: z.string().min(1),
   billingAddressLine2: z.string().optional().default(""),
   billingCity: z.string().optional().default(""),
@@ -159,6 +160,7 @@ mastersRouter.post("/customers", async (req, res, next) => {
         "Billing STATE": body.billingState,
         "Billing PIN CODE": body.billingPincode,
         "Billing Contry": body.billingCountry,
+        "Field Sale Repersentative": body.fieldSaleRepresentative,
       },
       CUSTOMER_HEADER_ROW
     );
@@ -239,6 +241,23 @@ mastersRouter.get("/billing-strategies", async (req, res, next) => {
       refresh: refresh(req.query.refresh),
     });
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Master list of valid Sale/Field Representative names, maintained by hand in
+ * "Master Form_Apps_etc" (per its own cell note: "Its Manually Typing For Flow Sale Staff
+ * Name Master customer data n all") — used to populate the Add New Customer form's dropdown,
+ * whose selection is written to CUSTOMER MASTER T1's "Field Sale Repersentative" column
+ * (that tab's own misspelling, matches getBuyerFields()'s SALE_STAFF_NAME auto-fill read). */
+mastersRouter.get("/field-representatives", async (req, res, next) => {
+  try {
+    const rows = await readTable(env.sheets.customerBilling, "Master Form_Apps_etc", {
+      refresh: refresh(req.query.refresh),
+    });
+    const names = Array.from(new Set(rows.map((r) => r["Field Representative Person"]?.trim()).filter(Boolean)));
+    res.json(names);
   } catch (err) {
     next(err);
   }

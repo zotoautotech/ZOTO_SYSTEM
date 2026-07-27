@@ -84,6 +84,7 @@ export interface NewCustomerPayload {
   contactNo?: string;
   email?: string;
   paymentTermsDays?: number;
+  fieldSaleRepresentative?: string;
   billingAddressLine1: string;
   billingAddressLine2?: string;
   billingCity?: string;
@@ -139,6 +140,13 @@ export function dropdownValues(rows: DropdownRow[], column: string): string[] {
 
 export async function listBillingStrategies(): Promise<BillingStrategyRow[]> {
   const res = await api.get<BillingStrategyRow[]>("/masters/billing-strategies");
+  return res.data;
+}
+
+/** Master list of valid Sale/Field Representative names (hand-maintained in
+ * "Master Form_Apps_etc"), used for the Add New Customer form's dropdown. */
+export async function listFieldRepresentatives(): Promise<string[]> {
+  const res = await api.get<string[]>("/masters/field-representatives");
   return res.data;
 }
 

@@ -382,11 +382,16 @@ directly with the service account, no impersonation needed there).
   `Dispatch_Approval` was also renamed to `Dispatch Items Approval` in the same pass.
 - **`CUSTOMER MASTER T1`'s "Field Sale Repersentative" column is misspelled in the live
   sheet** (not "Representative") — `getBuyerFields()` in `Backend/src/routes/orders.ts`
-  reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. If a
-  lookup against this sheet silently returns blank, suspect a header-spelling mismatch
-  first — dump the tab's actual headers rather than assuming the "obviously correct"
-  spelling. `BUYER_GSTIN` is also auto-picked there now, from "Company GSTIN NO." (correctly
-  spelled) — the Punch form has no manual GSTIN input of its own; it's only editable later,
+  reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. The
+  **Add New Customer** modal's "Sale Representative" dropdown writes into this same column
+  (`POST /masters/customers`, `fieldSaleRepresentative`) — its options come from a *different*
+  tab, `Master Form_Apps_etc`'s "Field Representative Person" column (correctly spelled there;
+  that tab's own note literally says "manually typing for flow Sale Staff Name master... "),
+  exposed via `GET /masters/field-representatives`. If a lookup against this sheet silently
+  returns blank, suspect a header-spelling mismatch first — dump the tab's actual headers
+  rather than assuming the "obviously correct" spelling. `BUYER_GSTIN` is also auto-picked
+  there now, from "Company GSTIN NO." (correctly spelled) — the Punch form has no manual
+  GSTIN input of its own; it's only editable later,
   as a correction, in SO Confirmation's Changes flow.
 - **`readTable` (`Backend/src/services/sheets.ts`) tolerates a missing tab** — if a tab
   referenced by code doesn't exist yet in the live sheet, the Sheets API throws "Unable to

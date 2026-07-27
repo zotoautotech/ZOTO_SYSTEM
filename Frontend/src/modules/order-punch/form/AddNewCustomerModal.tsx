@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { isAxiosError } from "axios";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Modal } from "../../../components/Modal";
 import { TextField } from "../../../components/form/TextField";
-import { createCustomer } from "../../../lib/mastersApi";
+import { SearchableSelect } from "../../../components/form/SearchableSelect";
+import { createCustomer, listFieldRepresentatives } from "../../../lib/mastersApi";
 
 interface AddNewCustomerModalProps {
   onClose: () => void;
@@ -27,10 +28,18 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
     contactPersonName: "",
     contactNo: "",
     email: "",
+    fieldSaleRepresentative: "",
     billingAddressLine1: "",
     billingState: "",
     billingPincode: "",
   });
+
+  const { data: representatives = [], isLoading: representativesLoading } = useQuery({
+    queryKey: ["masters", "field-representatives"],
+    queryFn: listFieldRepresentatives,
+    staleTime: 60_000,
+  });
+  const representativeOptions = representatives.map((name) => ({ value: name, label: name }));
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -98,6 +107,14 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
           autoComplete="off"
           value={form.billingPincode}
           onChange={set("billingPincode")}
+        />
+        <SearchableSelect
+          label="Sale Representative"
+          value={form.fieldSaleRepresentative}
+          onChange={(v) => setForm((f) => ({ ...f, fieldSaleRepresentative: v }))}
+          options={representativeOptions}
+          loading={representativesLoading}
+          placeholder="Search representative…"
         />
         <TextField
           label="Contact Person Name"
