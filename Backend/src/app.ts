@@ -13,6 +13,17 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
 
+// Express auto-generates an ETag for every JSON response by default, so a browser doing a
+// conditional GET on an unchanged-looking body gets back a bare 304 and reuses whatever it
+// cached last — including a genuinely stale/empty response from before data existed. Given
+// this app's whole design is "read live from Sheets, don't trust a stale cache", API
+// responses must never be served from the browser's HTTP cache either.
+app.set("etag", false);
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 app.use(cors({ origin: env.allowedOrigin }));
 app.use(compression());
 app.use(express.json({ limit: "5mb" }));
