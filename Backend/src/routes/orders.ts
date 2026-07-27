@@ -181,7 +181,7 @@ function computeItemDiscountFields(item: SheetRow, cumulativeDiscountRs: number,
       SGST: money(sgst),
       IGST: money(igst),
       TAX_AMOUNT: money(lineTax),
-      TOTAL_AMOUNT: money(basicAmount + lineTax),
+      TOTAL_AMOUNT: money(roundOff(basicAmount + lineTax)),
     }),
   };
 }
@@ -423,7 +423,7 @@ ordersRouter.post("/", async (req, res, next) => {
         SGST: money(sgst),
         IGST: money(igst),
         TAX_AMOUNT: money(lineTax),
-        TOTAL_AMOUNT: money(lineBasic + lineTax),
+        TOTAL_AMOUNT: money(roundOff(lineBasic + lineTax)),
         SPECIAL_INSTRUCTIONS: item.specialInstructions,
         PACKING_REQUIREMENTS: item.packingRequirements,
         NOTES: item.notes,
@@ -517,17 +517,44 @@ ordersRouter.post("/", async (req, res, next) => {
   }
 });
 
-const discountSchema = z
-  .object({
+const discountItemSchema = z.object({
+  itemId: z.string().min(1),
+  type: z.enum(["Percentage", "Rupees"]),
+  discountPct: z.number().min(0).max(100).optional(),
+  discountRs: z.number().min(0).optional(),
+});
+
+// Discount Applicable: No -> zero discount, order still advances (just no reason/scope needed).
+// Yes -> either one lump amount split proportionally across every item ("Invoice" scope, the
+// original behavior), or an explicit Rs/% chosen per selected item ("Item" scope, each item's
+// own discount is exactly what the doer typed for it — no proportional splitting involved).
+// zod's discriminatedUnion rejects .refine()-wrapped branches, so the "type must have a
+// matching discountPct/discountRs" check is done by hand right after parsing instead.
+const discountSchema = z.discriminatedUnion("applicable", [
+  z.object({ applicable: z.literal(false) }),
+  z.object({
+    applicable: z.literal(true),
     reason: z.string().min(1),
     description: z.string().optional().default(""),
+    scope: z.literal("Invoice"),
     type: z.enum(["Percentage", "Rupees"]),
     discountPct: z.number().min(0).max(100).optional(),
     discountRs: z.number().min(0).optional(),
-  })
-  .refine((b) => (b.type === "Percentage" ? b.discountPct !== undefined : b.discountRs !== undefined), {
-    message: "discountPct is required for Percentage, discountRs is required for Rupees",
-  });
+  }),
+  z.object({
+    applicable: z.literal(true),
+    reason: z.string().min(1),
+    description: z.string().optional().default(""),
+    scope: z.literal("Item"),
+    items: z.array(discountItemSchema).min(1),
+  }),
+]);
+
+function requiresMatchingAmount(type: "Percentage" | "Rupees", discountPct?: number, discountRs?: number): string | null {
+  if (type === "Percentage" && discountPct === undefined) return "discountPct is required for Percentage";
+  if (type === "Rupees" && discountRs === undefined) return "discountRs is required for Rupees";
+  return null;
+}
 
 // Matches the live sheet's pre-built "Order Punch Discount" tab exactly (headers dumped
 // from the sheet directly — note "Discount Reasion" is the tab's own typo, not ours, and
@@ -557,6 +584,16 @@ const DISCOUNT_LOG_HEADERS = [
 ordersRouter.post("/:id/discount", async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
+    if (body.applicable && body.scope === "Invoice") {
+      const err = requiresMatchingAmount(body.type, body.discountPct, body.discountRs);
+      if (err) return res.status(400).json({ error: { code: "BAD_REQUEST", message: err } });
+    }
+    if (body.applicable && body.scope === "Item") {
+      for (const line of body.items) {
+        const err = requiresMatchingAmount(line.type, line.discountPct, line.discountRs);
+        if (err) return res.status(400).json({ error: { code: "BAD_REQUEST", message: `Item ${line.itemId}: ${err}` } });
+      }
+    }
     const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
     const order = orders.find((o) => o.ORDER_ID === req.params.id);
     if (!order) {
@@ -570,15 +607,78 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
 
     const orderBasicAmount = Number(order.BASIC_AMOUNT || 0);
     const orderTaxAmount = Number(order.TAX_AMOUNT || 0);
-    const discountRs = body.type === "Percentage" ? (orderBasicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
 
     let newBasicAmount = orderBasicAmount;
     let newTaxAmount = orderTaxAmount;
-    let totalAmount: number;
+    let discountRs = 0;
     const logRows: SheetRow[] = [];
     const itemUpdates: { itemId: string; patch: SheetRow }[] = [];
 
-    if (orderItems.length > 0) {
+    if (!body.applicable) {
+      // "Discount Applicable: No" — nothing to apportion, order still advances with zero
+      // discount. Still logs one row (blank ITEM_ID) so the discount-revert logic doesn't
+      // mistake "declined" for "log row got deleted" and bounce the order back to PENDING.
+      logRows.push({
+        Timestamp: now,
+        Useremail: req.user!.employeeId,
+        ORDER_ID: req.params.id,
+        "Discount Reasion": "No Discount Applied",
+        "Default Discount on": "",
+        "Discount (Rs)": "0.00",
+        "Discount (%)": "0.00",
+        Status: "PENDING SALE ORDER",
+      });
+    } else if (body.scope === "Item") {
+      const byId = new Map(orderItems.map((i) => [i.ITEM_ID, i]));
+      for (const line of body.items) {
+        if (!byId.has(line.itemId)) {
+          return res.status(400).json({ error: { code: "BAD_REQUEST", message: `Item ${line.itemId} does not belong to this order` } });
+        }
+      }
+      newBasicAmount = 0;
+      newTaxAmount = 0;
+      for (const item of orderItems) {
+        const line = body.items.find((l) => l.itemId === item.ITEM_ID);
+        if (!line) {
+          // Not selected for this discount — carry its current amounts through unchanged.
+          newBasicAmount += Number(item.BASIC_AMOUNT || 0);
+          newTaxAmount += Number(item.TAX_AMOUNT || 0);
+          continue;
+        }
+        const itemBasicAmount = Number(item.BASIC_AMOUNT || 0);
+        const itemDiscountRs = line.type === "Percentage" ? (itemBasicAmount * (line.discountPct ?? 0)) / 100 : line.discountRs ?? 0;
+        const priorDiscountRs = Number(item.DISCOUNT_RS || 0);
+        const cumulativeDiscountRs = priorDiscountRs + itemDiscountRs;
+        const priceQty = Number(item.PRICE || 0) * Number(item.QTY || 0);
+        const { basicAmount: itemNewBasicAmount, lineTax, patch } = computeItemDiscountFields(
+          item,
+          cumulativeDiscountRs,
+          order.BILLING_STATE || "",
+          order.SELLER_STATE || ""
+        );
+
+        newBasicAmount += itemNewBasicAmount;
+        newTaxAmount += lineTax;
+        discountRs += itemDiscountRs;
+        itemUpdates.push({ itemId: item.ITEM_ID, patch });
+
+        logRows.push({
+          Timestamp: now,
+          Useremail: req.user!.employeeId,
+          ORDER_ID: req.params.id,
+          ITEM_ID: item.ITEM_ID,
+          "Discount Reasion": body.reason,
+          Description: body.description,
+          "Default Discount on": line.type,
+          "Discount (Rs)": money(itemDiscountRs),
+          "Discount (%)": priceQty > 0 ? ((itemDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
+          Status: "PENDING SALE ORDER",
+        });
+      }
+    } else if (orderItems.length > 0) {
+      // Invoice scope — one lump amount split proportionally across every item, so each ends
+      // up with the same effective % off regardless of whether the doer entered a flat Rs or a %.
+      discountRs = body.type === "Percentage" ? (orderBasicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
       const itemsBasicTotal = orderItems.reduce((sum, i) => sum + Number(i.BASIC_AMOUNT || 0), 0);
       newBasicAmount = 0;
       newTaxAmount = 0;
@@ -616,12 +716,10 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           Status: "PENDING SALE ORDER",
         });
       }
-      // Discount is already baked into each item's (and so the resummed order's) basic amount.
-      totalAmount = roundOff(newBasicAmount + newTaxAmount);
     } else {
       // No items yet (partial punch) — nothing to apportion into, so the discount is applied
-      // straight against the order's own totals instead (basic/tax stay as-is, matching the
-      // pre-per-item behavior for this edge case).
+      // straight against the order's own totals instead (basic/tax stay as-is).
+      discountRs = body.type === "Percentage" ? (orderBasicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
       logRows.push({
         Timestamp: now,
         Useremail: req.user!.employeeId,
@@ -633,8 +731,11 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
         Status: "PENDING SALE ORDER",
       });
-      totalAmount = roundOff(orderBasicAmount + orderTaxAmount - discountRs);
+      newBasicAmount = orderBasicAmount - discountRs;
+      newTaxAmount = orderTaxAmount;
     }
+
+    const totalAmount = roundOff(newBasicAmount + newTaxAmount);
 
     // Write the audit-log entries BEFORE touching item/order rows — if the log write fails,
     // nothing else has changed yet, so the doer can just retry from a clean state.
@@ -886,7 +987,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
             SEGMENT: item.segment, CATEGORY: item.category, STRATEGY_ID: item.strategyId, PRICE: money(item.price),
             QTY: String(item.qty), UOM: item.uom, DISCOUNT_ON: item.discountOn, DISCOUNT_RS: money(item.discountRs),
             DISCOUNT_PCT: String(item.discountPct), BASIC_AMOUNT: money(lineBasic), GST_SLAB_PCT: String(item.gstSlabPct),
-            CGST: money(cgst), SGST: money(sgst), IGST: money(igst), TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
+            CGST: money(cgst), SGST: money(sgst), IGST: money(igst), TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(roundOff(lineBasic + lineTax)),
             SPECIAL_INSTRUCTIONS: item.specialInstructions, PACKING_REQUIREMENTS: item.packingRequirements, NOTES: item.notes,
             STATUS: "PENDING", CREATED_AT: now, CREATED_BY: req.user!.employeeId,
           });

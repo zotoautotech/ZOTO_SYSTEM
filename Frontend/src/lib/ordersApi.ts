@@ -119,13 +119,31 @@ export async function createOrder(payload: NewOrderPayload) {
   return res.data;
 }
 
-export interface OrderDiscountPayload {
-  reason: string;
-  description?: string;
+export interface OrderDiscountItemLine {
+  itemId: string;
   type: "Percentage" | "Rupees";
   discountPct?: number;
   discountRs?: number;
 }
+
+export type OrderDiscountPayload =
+  | { applicable: false }
+  | {
+      applicable: true;
+      reason: string;
+      description?: string;
+      scope: "Invoice";
+      type: "Percentage" | "Rupees";
+      discountPct?: number;
+      discountRs?: number;
+    }
+  | {
+      applicable: true;
+      reason: string;
+      description?: string;
+      scope: "Item";
+      items: OrderDiscountItemLine[];
+    };
 
 export async function applyOrderDiscount(orderId: string, payload: OrderDiscountPayload) {
   const res = await api.post<{ orderId: string; discountRs: string; totalAmount: string }>(
