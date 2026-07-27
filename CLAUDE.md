@@ -182,17 +182,31 @@ CRR order data).
   …) and translates via `Backend/src/routes/orderPunchMap.ts` (`punchToSheet`/
   `punchFromSheet`) on every read/write. No `CURRENT_STAGE` column exists — reads synthesize
   `CURRENT_STAGE: "Punch"`. **Pending vs Completed lists filter on `STATUS`, not
-  `CURRENT_STAGE`** (`STATUS === "SALE ORDER"` = completed).
+  `CURRENT_STAGE`** — Completed means the order has moved past the Punch/discount stage,
+  i.e. `STATUS` is anything other than `PENDING`/`PENDING SALE ORDER` (not narrowly
+  `=== "SALE ORDER"`, since SO Confirmation moves a confirmed order on to `DISPATCH APPROVAL`
+  and further — it doesn't sit at `SALE ORDER` forever, so a strict-equality filter made an
+  order that had progressed disappear from both the Pending and Completed views at once).
 - `ORDER_ITEMS` — line items, column names unchanged (`FG_ID`, `PART_NO`, `PRICE`, `QTY`, …).
 - `SALE_ORDERS` / `SALE_ORDER_ITEMS` — created when the Sale Order form is saved: a full
   copy of the punch order-header fields + carried discount + `SO_NO`/`SO_DATE`/attachment,
   and a copy of each `ORDER_ITEMS` row respectively. Mapped via `SALE_ORDER_MAP` (reuses
   `ORDER_PUNCH_MAP`, only the discount column name differs). `SALE_ORDER_ITEMS` uses the
   *same* column names as `ORDER_ITEMS` — no translation needed there.
-- `Order Punch Discount` — pre-built audit log of every discount applied (headers: `Timestamp`,
-  `Useremail`, `ORDER_ID`, `ITEM_ID`, `Punch Discount ID`, `Discount Reasion` [tab's own
-  typo], `Description`, `Default Discount on`, `Discount (Rs)`, `Discount (%)`, `Status`).
-  `ensureSheetTab()` is still called defensively but the tab already exists live — don't
+- `Order Punch Discount` — pre-built audit log of every discount applied (headers, dumped live
+  and kept current in `DISCOUNT_LOG_HEADERS`: `Timestamp`, `Useremail`, `ORDER_ID`, `ITEM_ID`,
+  `Punch Discount ID`, `Discount Details` [holds the form's free-text Description — there's no
+  separate `Description` column], `Discount Applicable` [Yes/No], `Discount Reason` [was
+  `Discount Reasion`, a typo, until a live sheet edit fixed the spelling but added a trailing
+  space — `sheets.ts` trims every header on both read and write, so the key our code actually
+  uses is the trimmed `Discount Reason`, not the raw sheet text], `Default Discount Type`
+  [Invoice/Item scope — **not** the same column as the next one], `Default Discount on`
+  [Percentage/Rupees], `Discount (Rs)`, `Discount (%)`, `Status`. This tab has drifted its
+  headers before **and did again** — a doer reported reason/description silently not
+  appearing after a form redesign, and the cause was exactly this kind of unannounced header
+  change; dump the tab's actual live headers before trusting any assumption about its columns,
+  including everything written here. `ensureSheetTab()` is still called defensively but the
+  tab already exists live — don't
   confuse this with the old auto-created `ORDER_PUNCH_DISCOUNT` name, which is now dead/
   orphaned (a past mismatch, since fixed). **`POST /orders/:id/discount` writes this log row
   BEFORE flipping `ORDER_PUNCH.STATUS`** (not after) — a real production case surfaced an

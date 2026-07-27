@@ -563,6 +563,12 @@ function requiresMatchingAmount(type: "Percentage" | "Rupees", discountPct?: num
 // "Discount Details"/"ITEM_ID" are present for a future per-item discount but unused today
 // since discounts are still applied at the order level).
 const DISCOUNT_LOG_TAB = "Order Punch Discount";
+// Dumped directly from the live tab via the Sheets API rather than assumed — the live header
+// is actually "Discount Reason " with a trailing space, but sheets.ts trims every header on
+// both read and write, so the key our own code sees/writes is the trimmed "Discount Reason".
+// There's no separate "Description" column (the form's Description goes into "Discount
+// Details" instead), and "Default Discount Type" (Invoice/Item scope) is a different column
+// from "Default Discount on" (Percentage/Rupees) — easy to conflate the two by name alone.
 const DISCOUNT_LOG_HEADERS = [
   "Timestamp",
   "Useremail",
@@ -570,8 +576,9 @@ const DISCOUNT_LOG_HEADERS = [
   "ITEM_ID",
   "Punch Discount ID",
   "Discount Details",
-  "Discount Reasion",
-  "Description",
+  "Discount Applicable",
+  "Discount Reason",
+  "Default Discount Type",
   "Default Discount on",
   "Discount (Rs)",
   "Discount (%)",
@@ -624,7 +631,9 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         Timestamp: now,
         Useremail: req.user!.employeeId,
         ORDER_ID: req.params.id,
-        "Discount Reasion": "No Discount Applied",
+        "Discount Applicable": "No",
+        "Discount Reason": "No Discount Applied",
+        "Default Discount Type": "",
         "Default Discount on": "",
         "Discount (Rs)": "0.00",
         "Discount (%)": "0.00",
@@ -669,8 +678,10 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           Useremail: req.user!.employeeId,
           ORDER_ID: req.params.id,
           ITEM_ID: item.ITEM_ID,
-          "Discount Reasion": body.reason,
-          Description: body.description,
+          "Discount Applicable": "Yes",
+          "Discount Reason": body.reason,
+          "Discount Details": body.description,
+          "Default Discount Type": "Item",
           "Default Discount on": line.type,
           "Discount (Rs)": money(itemDiscountRs),
           "Discount (%)": priceQty > 0 ? ((itemDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
@@ -710,8 +721,10 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           Useremail: req.user!.employeeId,
           ORDER_ID: req.params.id,
           ITEM_ID: item.ITEM_ID,
-          "Discount Reasion": body.reason,
-          Description: body.description,
+          "Discount Applicable": "Yes",
+          "Discount Reason": body.reason,
+          "Discount Details": body.description,
+          "Default Discount Type": "Invoice",
           "Default Discount on": body.type,
           "Discount (Rs)": money(itemDiscountRs),
           "Discount (%)": priceQty > 0 ? ((itemDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
@@ -726,8 +739,10 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         Timestamp: now,
         Useremail: req.user!.employeeId,
         ORDER_ID: req.params.id,
-        "Discount Reasion": body.reason,
-        Description: body.description,
+        "Discount Applicable": "Yes",
+        "Discount Reason": body.reason,
+        "Discount Details": body.description,
+        "Default Discount Type": "Invoice",
         "Default Discount on": body.type,
         "Discount (Rs)": money(discountRs),
         "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",

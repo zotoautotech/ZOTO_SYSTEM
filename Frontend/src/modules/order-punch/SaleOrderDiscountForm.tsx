@@ -259,7 +259,7 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
               )}
 
               {scope === "Item" && (
-                <div>
+                <div style={{ marginBottom: 20 }}>
                   <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
                     Items <span style={{ color: "var(--color-error)" }}>*</span>
                   </label>
@@ -267,63 +267,90 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
                   {!itemsLoading && items.length === 0 && (
                     <p style={{ fontSize: 14, color: "var(--color-text-muted)" }}>This order has no items.</p>
                   )}
-                  {items.map((item) => {
-                    const checked = selectedItemIds.has(item.ITEM_ID);
-                    const line = itemLines[item.ITEM_ID];
-                    return (
-                      <div
-                        key={item.ITEM_ID}
-                        className="card"
-                        style={{ padding: 14, marginBottom: 10, border: "1px solid var(--color-border)" }}
-                      >
-                        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleItem(item.ITEM_ID)}
-                            style={{ width: 18, height: 18 }}
-                          />
-                          <span style={{ fontWeight: 600, fontSize: 14 }}>{item.PART_NAME || item.ITEM_ID}</span>
-                          <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--color-text-muted)" }}>
-                            {formatCurrency(item.BASIC_AMOUNT)}
-                          </span>
-                        </label>
-
-                        {checked && (
-                          <div style={{ marginTop: 12, paddingLeft: 28 }}>
-                            <ToggleGroup
-                              label="Discount On"
-                              required
-                              value={line?.type ?? ""}
-                              onChange={(v) => updateItemLine(item.ITEM_ID, { type: v })}
-                              options={[
-                                { value: "Rupees", label: "Discount In Rs" },
-                                { value: "Percentage", label: "Discount In %" },
-                              ]}
-                            />
-                            {line?.type === "Rupees" && (
-                              <TextField
-                                label="Discount (Rs)"
-                                required
-                                type="number"
-                                value={line.rs}
-                                onChange={(e) => updateItemLine(item.ITEM_ID, { rs: e.target.value })}
-                              />
-                            )}
-                            {line?.type === "Percentage" && (
-                              <TextField
-                                label="Discount (%)"
-                                required
-                                type="number"
-                                value={line.pct}
-                                onChange={(e) => updateItemLine(item.ITEM_ID, { pct: e.target.value })}
-                              />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {!itemsLoading && items.length > 0 && (
+                    <div style={{ overflowX: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius)" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ width: 40, padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }} />
+                            <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              Item
+                            </th>
+                            <th style={{ textAlign: "right", padding: "10px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              Basic Amount
+                            </th>
+                            <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              Discount On
+                            </th>
+                            <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              Value
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item) => {
+                            const checked = selectedItemIds.has(item.ITEM_ID);
+                            const line = itemLines[item.ITEM_ID];
+                            return (
+                              <tr key={item.ITEM_ID} style={{ background: checked ? "var(--color-primary-tint)" : undefined }}>
+                                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleItem(item.ITEM_ID)}
+                                    style={{ width: 16, height: 16, cursor: "pointer" }}
+                                  />
+                                </td>
+                                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                                  {item.PART_NAME || item.ITEM_ID}
+                                </td>
+                                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)", textAlign: "right", whiteSpace: "nowrap" }}>
+                                  {formatCurrency(item.BASIC_AMOUNT)}
+                                </td>
+                                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                  {checked ? (
+                                    <select
+                                      value={line?.type ?? ""}
+                                      onChange={(e) => updateItemLine(item.ITEM_ID, { type: e.target.value as "Rupees" | "Percentage" })}
+                                      style={{ padding: "6px 8px", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", fontSize: 13 }}
+                                    >
+                                      <option value="" disabled>
+                                        Select…
+                                      </option>
+                                      <option value="Rupees">Discount In Rs</option>
+                                      <option value="Percentage">Discount In %</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-muted">—</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                                  {checked && line?.type === "Rupees" && (
+                                    <input
+                                      type="number"
+                                      value={line.rs}
+                                      onChange={(e) => updateItemLine(item.ITEM_ID, { rs: e.target.value })}
+                                      placeholder="Rs"
+                                      style={{ width: 90, padding: "6px 8px", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", fontSize: 13 }}
+                                    />
+                                  )}
+                                  {checked && line?.type === "Percentage" && (
+                                    <input
+                                      type="number"
+                                      value={line.pct}
+                                      onChange={(e) => updateItemLine(item.ITEM_ID, { pct: e.target.value })}
+                                      placeholder="%"
+                                      style={{ width: 90, padding: "6px 8px", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", fontSize: 13 }}
+                                    />
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </>

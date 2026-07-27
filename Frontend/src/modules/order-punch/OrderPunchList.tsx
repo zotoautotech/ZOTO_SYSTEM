@@ -88,10 +88,15 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
     queryFn: () => listOrders({}),
   });
 
-  // "Completed" means the Sale Order form has been uploaded (STATUS "SALE ORDER") — this
-  // stage of the pipeline is done. Shared by both Punch Order and Sale Order (same data).
+  // "Completed" means this order has moved past the Punch/discount stage — not just landed
+  // exactly on STATUS "SALE ORDER", but anything further downstream too (Dispatch Approval,
+  // Delivered, etc.), since an order doesn't stay at "SALE ORDER" once SO Confirmation moves
+  // it on. Shared by both Punch Order and Sale Order (same data).
   const scoped = useMemo(
-    () => orders.filter((o) => (showCompleted ? o.STATUS === "SALE ORDER" : o.STATUS !== "SALE ORDER")),
+    () =>
+      orders.filter((o) =>
+        showCompleted ? o.STATUS !== "PENDING" && o.STATUS !== "PENDING SALE ORDER" : o.STATUS === "PENDING" || o.STATUS === "PENDING SALE ORDER"
+      ),
     [orders, showCompleted]
   );
 
