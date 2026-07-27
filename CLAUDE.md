@@ -312,8 +312,10 @@ already, don't reintroduce it.
 
 ## Sheets read/write performance
 
-`Backend/src/services/sheets.ts` keeps ONE cache (headers + raw rows, 5 min TTL, busted
-immediately on any write to that tab) shared by `readTable`, `appendRow(s)`, `updateRow`, and
+`Backend/src/services/sheets.ts` keeps ONE cache (headers + raw rows, 30s TTL — was 5 min
+until a doer hand-editing the live sheet directly [outside the app] needed to show up sooner
+than that; nothing busts this cache for an edit made outside our own API, so it's on a timer
+instead) shared by `readTable`, `appendRow(s)`, `updateRow`, and
 `deleteRows` — previously `appendRow` always re-fetched the header row live and `updateRow`/
 `deleteRows` always re-fetched the *entire* tab live, even when the caller had just read that
 same tab moments earlier (e.g. SO Confirmation's handler already reads `ORDER_PUNCH`/
@@ -322,6 +324,14 @@ tab, records[])` instead of looping `appendRow` per item** — it writes every r
 Sheets API call instead of one round trip per row. `orders.ts` is fully converted;
 `tripRoutes.ts`/`stageRoutes.ts` still have a few old per-item `appendRow` loops left to
 convert (tracked as a follow-up, not yet done).
+
+`Frontend/src/lib/sync.tsx`'s `AUTO_SYNC_MS` (the periodic full `invalidateQueries()` that
+drives the "Sync complete"/"Syncing…" header indicator) is 30s for the same reason as the
+backend TTL above — both were 5 min, tuned down together so the app catches up to a manual
+sheet edit in well under a minute instead of up to 5. This is deliberately still polling, not
+a real push/webhook system (a doer explicitly chose the simple/short-poll tradeoff over
+standing up a Google Apps Script trigger + webhook + live browser connection) — don't build
+that heavier system without asking again first, the tradeoff was discussed and decided.
 
 ## Google Drive uploads
 

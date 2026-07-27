@@ -6,9 +6,13 @@ type RawTable = { headers: string[]; rows: string[][] };
 type CacheEntry = RawTable & { expiresAt: number };
 const cache = new Map<string, CacheEntry>();
 // Every write path (appendRow/updateRow/deleteRows) busts this tab's cache entry
-// immediately, so a long read TTL costs nothing on correctness — it only cuts how
-// often an idle GET has to make a live Sheets API round trip (typically 300-800ms).
-const DEFAULT_TTL_MS = 5 * 60_000;
+// immediately, so writes made through our own API are always instantly fresh regardless
+// of this TTL. This only bounds how stale a tab can look after someone edits the live
+// Google Sheet DIRECTLY (bypassing our API entirely, e.g. hand-deleting a row) — nothing
+// busts the cache for that case, so it's on a timer instead. Kept short (not the 5min it
+// used to be) so those manual edits show up in the app quickly rather than doers wondering
+// why their sheet change "didn't work" for minutes.
+const DEFAULT_TTL_MS = 30_000;
 
 function cacheKey(spreadsheetId: string, tab: string, headerRow: number) {
   return `${spreadsheetId}::${tab}::${headerRow}`;

@@ -8,7 +8,10 @@ interface SyncContextValue {
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
-const AUTO_SYNC_MS = 5 * 60_000;
+// Kept short (was 5 min) so a doer's own edit made directly in the Google Sheet — e.g.
+// hand-deleting an Order Punch Discount row to undo it — shows up in the app within
+// roughly this long instead of requiring a manual Sync click or a long wait.
+const AUTO_SYNC_MS = 30_000;
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
