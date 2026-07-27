@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { createOrder } from "../../lib/ordersApi";
 import { emptyOrderForm, type OrderFormState } from "./form/types";
@@ -47,6 +48,7 @@ function validateTab(tab: number, form: OrderFormState): string | null {
 
 export function OrderPunchForm() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
@@ -81,7 +83,7 @@ export function OrderPunchForm() {
     setSaving(true);
     setError("");
     try {
-      const result = await createOrder({
+      await createOrder({
         poNo: form.poNo,
         poDate: form.poDate,
         poAttachmentUrl: form.poAttachmentUrl,
@@ -129,7 +131,8 @@ export function OrderPunchForm() {
           notes: it.remarks,
         })),
       });
-      navigate(`/modules/punch-order/${result.orderId}`);
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      navigate("/modules/punch-order");
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ? `Could not save the order — ${detail}` : "Could not save the order");
