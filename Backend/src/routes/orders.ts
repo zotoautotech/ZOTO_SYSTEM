@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
+import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
@@ -324,15 +324,14 @@ ordersRouter.post("/", async (req, res, next) => {
       });
     }
 
-    for (const row of itemRows) {
-      await appendRow(env.sheets.transactions, "ORDER_ITEMS", itemToSheet(row));
-    }
+    await appendRows(env.sheets.transactions, "ORDER_ITEMS", itemRows.map(itemToSheet));
 
     const dspIds = await nextIds("DSP", "DISPATCH_PLAN", "DSP_ID", body.dispatchPlan.length);
+    const dispatchPlanRows: SheetRow[] = [];
     for (const [i, plan] of body.dispatchPlan.entries()) {
       const targetItem = itemRows[plan.itemIndex];
       if (!targetItem) continue;
-      await appendRow(env.sheets.transactions, "DISPATCH_PLAN", {
+      dispatchPlanRows.push({
         DSP_ID: dspIds[i],
         ITEM_ID: targetItem.ITEM_ID,
         ORDER_ID: orderId,
@@ -347,6 +346,7 @@ ordersRouter.post("/", async (req, res, next) => {
         ROW_VERSION: "1",
       });
     }
+    await appendRows(env.sheets.transactions, "DISPATCH_PLAN", dispatchPlanRows);
 
     // Seller/buyer master fields were already fetched above (needed for the GST split);
     // translate everything to ORDER_PUNCH's sheet headers here.
@@ -539,15 +539,17 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       (i) => i.ORDER_ID === req.params.id
     );
     const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
-    for (const [i, item] of items.entries()) {
-      await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", {
+    await appendRows(
+      env.sheets.transactions,
+      "SALE_ORDER_ITEMS",
+      items.map((item, i) => ({
         ...item,
         Timestamp: now,
         Useremail: req.user!.employeeId,
         SALE_ORDER_ID: saleOrderId,
         SALE_ORDER_ITEM_ID: soItemIds[i],
-      });
-    }
+      }))
+    );
 
     // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
     await updateRow(
@@ -623,10 +625,10 @@ async function logSoConfirmation(
 
   if (items.length === 0) return;
   const confItemIds = await nextIds("CONFI", "SO_Confirmation_Items", "Conf Item ID", items.length);
-  for (const [i, item] of items.entries()) {
-    await appendRow(
-      env.sheets.transactions,
-      "SO_Confirmation_Items",
+  await appendRows(
+    env.sheets.transactions,
+    "SO_Confirmation_Items",
+    items.map((item, i) =>
       soConfirmationItemToSheet({
         ...item,
         CREATED_AT: now,
@@ -637,8 +639,8 @@ async function logSoConfirmation(
         CONF_ITEM_ID: confItemIds[i],
         STATUS: outcome,
       })
-    );
-  }
+    )
+  );
 }
 
 /** Saves the SO Confirmation decision. Confirmed orders advance to Dispatch Approval;
@@ -711,13 +713,13 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         }
 
         await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", [req.params.id]);
-        for (const row of newItemRows) {
-          await appendRow(env.sheets.transactions, "ORDER_ITEMS", itemToSheet(row));
-        }
+        await appendRows(env.sheets.transactions, "ORDER_ITEMS", newItemRows.map(itemToSheet));
         await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
-        for (const row of newItemRows) {
-          await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...itemToSheet(row), SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
-        }
+        await appendRows(
+          env.sheets.transactions,
+          "SALE_ORDER_ITEMS",
+          newItemRows.map((row) => ({ ...itemToSheet(row), SALE_ORDER_ID: saleOrder.SALE_ORDER_ID }))
+        );
 
         const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
         amountFields = {
@@ -816,10 +818,10 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
 
     const dispatchIds = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", Math.max(orderItems.length, 1));
     const rowsToWrite = orderItems.length > 0 ? orderItems : [{ ITEM_ID: "", SALE_ORDER_ITEM_ID: "" } as SheetRow];
-    for (const [i, item] of rowsToWrite.entries()) {
-      await appendRow(
-        env.sheets.transactions,
-        "Dispatch Items Approval",
+    await appendRows(
+      env.sheets.transactions,
+      "Dispatch Items Approval",
+      rowsToWrite.map((item, i) =>
         dispatchApprovalToSheet({
           CREATED_AT: now,
           CREATED_BY: req.user!.employeeId,
@@ -851,8 +853,8 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
           DISPATCH_REMARKS: body.remarks,
           STATUS: body.outcome,
         })
-      );
-    }
+      )
+    );
 
     await updateRow(
       env.sheets.transactions,

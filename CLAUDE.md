@@ -278,6 +278,19 @@ it reads the tab once and checks uniqueness in-memory. Calling `nextId()` per it
 forces one uncached network read *per item* — a real perf regression that happened once
 already, don't reintroduce it.
 
+## Sheets read/write performance
+
+`Backend/src/services/sheets.ts` keeps ONE cache (headers + raw rows, 5 min TTL, busted
+immediately on any write to that tab) shared by `readTable`, `appendRow(s)`, `updateRow`, and
+`deleteRows` — previously `appendRow` always re-fetched the header row live and `updateRow`/
+`deleteRows` always re-fetched the *entire* tab live, even when the caller had just read that
+same tab moments earlier (e.g. SO Confirmation's handler already reads `ORDER_PUNCH`/
+`SALE_ORDERS` before calling `updateRow` on both). **Always use `appendRows(spreadsheetId,
+tab, records[])` instead of looping `appendRow` per item** — it writes every row in one
+Sheets API call instead of one round trip per row. `orders.ts` is fully converted;
+`tripRoutes.ts`/`stageRoutes.ts` still have a few old per-item `appendRow` loops left to
+convert (tracked as a follow-up, not yet done).
+
 ## Google Drive uploads
 
 `Backend/src/routes/uploads.ts`. Files are uploaded **fully private** — no public "anyone"

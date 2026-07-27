@@ -2,7 +2,8 @@ import { getSheetsClient } from "./googleAuth.js";
 
 export type SheetRow = Record<string, string>;
 
-type CacheEntry = { data: SheetRow[]; expiresAt: number };
+type RawTable = { headers: string[]; rows: string[][] };
+type CacheEntry = RawTable & { expiresAt: number };
 const cache = new Map<string, CacheEntry>();
 // Every write path (appendRow/updateRow/deleteRows) busts this tab's cache entry
 // immediately, so a long read TTL costs nothing on correctness — it only cuts how
@@ -11,6 +12,50 @@ const DEFAULT_TTL_MS = 5 * 60_000;
 
 function cacheKey(spreadsheetId: string, tab: string, headerRow: number) {
   return `${spreadsheetId}::${tab}::${headerRow}`;
+}
+
+async function fetchRaw(spreadsheetId: string, tab: string, headerRow: number): Promise<RawTable> {
+  const sheets = await getSheetsClient();
+  let values: string[][];
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${tab}!A${headerRow}:ZZ`,
+    });
+    values = (res.data.values as string[][] | undefined) ?? [];
+  } catch (err) {
+    // A tab that doesn't exist yet (never created, or referenced speculatively by code
+    // written ahead of the sheet) shouldn't 500 the whole request — treat it as empty,
+    // same as an existing-but-blank tab. Any other error still throws.
+    const message = (err as { errors?: { message?: string }[] })?.errors?.[0]?.message ?? "";
+    if (message.startsWith("Unable to parse range")) {
+      values = [];
+    } else {
+      throw err;
+    }
+  }
+  if (values.length === 0) return { headers: [], rows: [] };
+  return { headers: values[0].map((h) => String(h ?? "").trim()), rows: values.slice(1) };
+}
+
+/** One shared cache backs readTable AND every write helper below (append/update/delete all
+ * need the header row, and update/delete also need the existing rows to locate a record) —
+ * a single live Sheets API read serves all of them instead of each doing its own, which used
+ * to mean e.g. appendRow always re-fetched headers live and updateRow always re-fetched the
+ * whole tab live even when the caller had just read that exact tab moments earlier. */
+async function getCachedTable(
+  spreadsheetId: string,
+  tab: string,
+  headerRow: number,
+  opts: { refresh?: boolean; ttlMs?: number } = {}
+): Promise<RawTable> {
+  const key = cacheKey(spreadsheetId, tab, headerRow);
+  const cached = cache.get(key);
+  if (!opts.refresh && cached && cached.expiresAt > Date.now()) return cached;
+
+  const raw = await fetchRaw(spreadsheetId, tab, headerRow);
+  cache.set(key, { ...raw, expiresAt: Date.now() + (opts.ttlMs ?? DEFAULT_TTL_MS) });
+  return raw;
 }
 
 /**
@@ -26,35 +71,10 @@ export async function readTable(
   opts: { refresh?: boolean; ttlMs?: number; headerRow?: number } = {}
 ): Promise<SheetRow[]> {
   const headerRow = opts.headerRow ?? 1;
-  const key = cacheKey(spreadsheetId, tab, headerRow);
-  const cached = cache.get(key);
-  if (!opts.refresh && cached && cached.expiresAt > Date.now()) {
-    return cached.data;
-  }
+  const { headers, rows } = await getCachedTable(spreadsheetId, tab, headerRow, opts);
+  if (headers.length === 0) return [];
 
-  const sheets = await getSheetsClient();
-  let rows: string[][];
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${tab}!A${headerRow}:ZZ`,
-    });
-    rows = (res.data.values as string[][] | undefined) ?? [];
-  } catch (err) {
-    // A tab that doesn't exist yet (never created, or referenced speculatively by code
-    // written ahead of the sheet) shouldn't 500 the whole request — treat it as empty,
-    // same as an existing-but-blank tab. Any other error still throws.
-    const message = (err as { errors?: { message?: string }[] })?.errors?.[0]?.message ?? "";
-    if (message.startsWith("Unable to parse range")) {
-      rows = [];
-    } else {
-      throw err;
-    }
-  }
-  if (rows.length === 0) return [];
-
-  const headers = rows[0].map((h) => String(h ?? "").trim());
-  const records: SheetRow[] = rows.slice(1).map((row) => {
+  return rows.map((row) => {
     const record: SheetRow = {};
     headers.forEach((header, i) => {
       if (!header || header in record) return;
@@ -62,9 +82,6 @@ export async function readTable(
     });
     return record;
   });
-
-  cache.set(key, { data: records, expiresAt: Date.now() + (opts.ttlMs ?? DEFAULT_TTL_MS) });
-  return records;
 }
 
 /** Creates `tab` with the given header row if it doesn't already exist in the spreadsheet.
@@ -87,19 +104,18 @@ export async function ensureSheetTab(spreadsheetId: string, tab: string, headers
   });
 }
 
-/** Appends one row, mapping the object's keys to the tab's existing header order (row 1 unless `headerRow` is given). */
-export async function appendRow(
+/** Appends one or more rows in a SINGLE Sheets API call, mapping each object's keys to the
+ * tab's existing header order (row 1 unless `headerRow` is given). Writing N rows one at a
+ * time (N round trips) instead of batched was a real bottleneck for anything with line
+ * items — always prefer this over looping appendRow when every row is already known upfront. */
+export async function appendRows(
   spreadsheetId: string,
   tab: string,
-  record: SheetRow,
+  records: SheetRow[],
   headerRow = 1
 ): Promise<void> {
-  const sheets = await getSheetsClient();
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${tab}!A${headerRow}:ZZ${headerRow}`,
-  });
-  const headers = (headerRes.data.values?.[0] ?? []).map((h) => String(h ?? "").trim());
+  if (records.length === 0) return;
+  const { headers } = await getCachedTable(spreadsheetId, tab, headerRow);
   if (headers.length === 0) {
     throw new Error(`Tab "${tab}" has no header row — cannot append`);
   }
@@ -107,22 +123,35 @@ export async function appendRow(
   // Mirror readTable's first-occurrence-wins rule: only the first column with a given
   // header name gets written, so a value meant for one field can't bleed into a later,
   // identically-named column on a legacy sheet (e.g. repeated "CUSTOMER NAME" columns).
-  const seen = new Set<string>();
-  const row = headers.map((h) => {
-    if (!h || seen.has(h) || !(h in record)) return "";
-    seen.add(h);
-    return record[h];
+  const values = records.map((record) => {
+    const seen = new Set<string>();
+    return headers.map((h) => {
+      if (!h || seen.has(h) || !(h in record)) return "";
+      seen.add(h);
+      return record[h];
+    });
   });
 
+  const sheets = await getSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${tab}!A${headerRow}`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [row] },
+    requestBody: { values },
   });
 
   cache.delete(cacheKey(spreadsheetId, tab, headerRow));
+}
+
+/** Appends a single row — see appendRows() for the batching details. */
+export async function appendRow(
+  spreadsheetId: string,
+  tab: string,
+  record: SheetRow,
+  headerRow = 1
+): Promise<void> {
+  return appendRows(spreadsheetId, tab, [record], headerRow);
 }
 
 /** Updates the row whose idColumn matches idValue with the given patch (partial record). */
@@ -133,25 +162,20 @@ export async function updateRow(
   idValue: string,
   patch: SheetRow
 ): Promise<void> {
-  const sheets = await getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${tab}!A1:ZZ`,
-  });
-  const rows = res.data.values ?? [];
-  if (rows.length === 0) throw new Error(`Tab "${tab}" is empty`);
+  const { headers, rows } = await getCachedTable(spreadsheetId, tab, 1);
+  if (headers.length === 0) throw new Error(`Tab "${tab}" is empty`);
 
-  const headers = rows[0].map((h) => String(h ?? "").trim());
   const idColIndex = headers.indexOf(idColumn);
   if (idColIndex === -1) throw new Error(`Column "${idColumn}" not found in tab "${tab}"`);
 
-  const rowIndex = rows.findIndex((r, i) => i > 0 && r[idColIndex] === idValue);
+  const rowIndex = rows.findIndex((r) => r[idColIndex] === idValue);
   if (rowIndex === -1) throw new Error(`Row with ${idColumn}=${idValue} not found in "${tab}"`);
 
   const existing = rows[rowIndex];
   const merged = headers.map((h, i) => (h in patch ? patch[h] : existing[i] ?? ""));
 
-  const sheetRowNumber = rowIndex + 1; // 1-indexed, includes header row
+  const sheetRowNumber = rowIndex + 2; // +1 for the header row, +1 to go from 0-indexed to 1-indexed
+  const sheets = await getSheetsClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${tab}!A${sheetRowNumber}`,
@@ -173,25 +197,23 @@ export async function deleteRows(
   const idSet = new Set(idValues);
   const sheets = await getSheetsClient();
 
-  const [valuesRes, metaRes] = await Promise.all([
-    sheets.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A1:ZZ` }),
+  const [{ headers, rows }, metaRes] = await Promise.all([
+    getCachedTable(spreadsheetId, tab, 1),
     sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties" }),
   ]);
+  if (headers.length === 0) return 0;
 
-  const rows = valuesRes.data.values ?? [];
-  if (rows.length === 0) return 0;
-
-  const headers = rows[0].map((h) => String(h ?? "").trim());
   const idColIndex = headers.indexOf(idColumn);
   if (idColIndex === -1) throw new Error(`Column "${idColumn}" not found in tab "${tab}"`);
 
   const sheetId = metaRes.data.sheets?.find((s) => s.properties?.title === tab)?.properties?.sheetId;
   if (sheetId === undefined || sheetId === null) throw new Error(`Tab "${tab}" not found`);
 
-  // 0-indexed sheet row numbers (matches the Sheets API's deleteDimension range), descending
-  // so deleting one row doesn't shift the index of the next one still to be deleted.
+  // Absolute 0-indexed sheet row numbers (rows here excludes the header, which occupies
+  // absolute row 0 — so data row i sits at absolute index i+1), descending so deleting one
+  // row doesn't shift the index of the next one still to be deleted.
   const rowIndices = rows
-    .map((r, i) => (i > 0 && idSet.has(r[idColIndex]) ? i : -1))
+    .map((r, i) => (idSet.has(r[idColIndex]) ? i + 1 : -1))
     .filter((i) => i !== -1)
     .sort((a, b) => b - a);
 
