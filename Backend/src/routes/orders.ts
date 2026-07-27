@@ -211,10 +211,13 @@ async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
     readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true }),
   ]);
   const loggedIds = new Set(discountLog.map((r) => r.ORDER_ID));
-  const saleOrderIds = new Set(saleOrders.map((r) => r.ORDER_ID));
+  // A placeholder SALE_ORDERS row now exists as soon as the discount step is done (see
+  // createPlaceholderSaleOrder) — its own presence no longer means "form actually uploaded".
+  // Only a filled-in Sale Order No. means that; a blank one is still just the placeholder.
+  const uploadedSaleOrderIds = new Set(saleOrders.filter((r) => r["Sale Order No."]).map((r) => r.ORDER_ID));
 
   const orphaned = rows.filter(
-    (r) => r.STATUS === "PENDING SALE ORDER" && !loggedIds.has(r.ORDER_ID) && !saleOrderIds.has(r.ORDER_ID)
+    (r) => r.STATUS === "PENDING SALE ORDER" && !loggedIds.has(r.ORDER_ID) && !uploadedSaleOrderIds.has(r.ORDER_ID)
   );
   if (orphaned.length === 0) return rows;
 
@@ -256,6 +259,12 @@ async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
         STATUS: "PENDING",
       })
     );
+
+    // Also remove the blank placeholder SALE_ORDERS/SALE_ORDER_ITEMS rows createPlaceholderSaleOrder()
+    // wrote when the (now-undone) discount was applied — leaving them around would show a
+    // phantom Sale Order entry for an order that's back to square one.
+    await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [order.ORDER_ID]);
+    await deleteRows(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", [order.ORDER_ID]);
 
     revertedById.set(order.ORDER_ID, {
       ...order,
@@ -585,6 +594,52 @@ const DISCOUNT_LOG_HEADERS = [
   "Status",
 ];
 
+/** Creates a placeholder SALE_ORDERS + SALE_ORDER_ITEMS row the moment the discount step is
+ * done — Sale Order No./Date/Attachment/Remarks stay blank until the doer actually uploads
+ * the Sale Order form (which fills those in via updateRow, not another append; see
+ * `/:id/sale-order-form`), STATUS starts as "PENDING SALE ORDER" to mirror the order's own
+ * status while it waits. A deliberate choice (confirmed with the user) over the previous
+ * behavior of only creating this row at upload time — no-op if one already exists (e.g. the
+ * doer reverted and reapplied a discount before ever uploading). */
+async function createPlaceholderSaleOrder(orderId: string, employeeId: string): Promise<void> {
+  const existing = (await readTable(env.sheets.transactions, "SALE_ORDERS")).find((r) => r.ORDER_ID === orderId);
+  if (existing) return;
+
+  const [orderRow, items] = await Promise.all([
+    readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.find((r) => r.ORDER_ID === orderId)),
+    readTable(env.sheets.transactions, "ORDER_ITEMS").then((rows) => rows.filter((r) => r.ORDER_ID === orderId)),
+  ]);
+  if (!orderRow) return;
+  const order = punchFromSheet(orderRow);
+
+  const now = new Date().toISOString();
+  const saleOrderId = await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID");
+  await appendRow(
+    env.sheets.transactions,
+    "SALE_ORDERS",
+    saleOrderToSheet({
+      ...order,
+      CREATED_AT: now,
+      CREATED_BY: employeeId,
+      ORDER_ID: orderId,
+      SALE_ORDER_ID: saleOrderId,
+      SO_NO: "",
+      SO_DATE: "",
+      SO_ATTACHMENT_URL: "",
+      SO_REMARKS: "",
+      STATUS: "PENDING SALE ORDER",
+    })
+  );
+
+  if (items.length === 0) return;
+  const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
+  await appendRows(
+    env.sheets.transactions,
+    "SALE_ORDER_ITEMS",
+    items.map((item, i) => ({ ...item, Timestamp: now, Useremail: employeeId, SALE_ORDER_ID: saleOrderId, SALE_ORDER_ITEM_ID: soItemIds[i] }))
+  );
+}
+
 /** Applies the Sale Order discount, splits it across the order's line items (proportional to
  * each item's current basic amount, so every item absorbs the same effective % regardless of
  * whether the doer entered a flat Rs amount or a percentage), recalculates each item's GST and
@@ -784,6 +839,8 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
       })
     );
 
+    await createPlaceholderSaleOrder(req.params.id, req.user!.employeeId);
+
     res.json({ orderId: req.params.id, discountRs: money(discountRs), totalAmount: money(totalAmount) });
   } catch (err) {
     next(err);
@@ -797,8 +854,68 @@ const saleOrderFormSchema = z.object({
   soRemarks: z.string().optional().default(""),
 });
 
-/** Saves the Sale Order form: creates a full SALE_ORDERS row (a copy of the punch order +
- * the carried discount + SO No./Date/Attachment/Remarks) and marks the punch order done. */
+/** Creates a placeholder SO_Confirmation + SO_Confirmation_Items row the moment the Sale
+ * Order form is uploaded — Confirmation/Received Payment Amount/Payment Amount (%)/Payment
+ * Attachment/Confirmation Remarks stay blank until the doer actually submits a decision
+ * (`/:id/so-confirmation` then updates this same row in place, see `logSoConfirmation()`),
+ * STATUS starts as "PENDING". No-op if one already exists for this order. */
+async function createPlaceholderSoConfirmation(orderId: string, saleOrderId: string, employeeId: string): Promise<void> {
+  const existing = (await readTable(env.sheets.transactions, "SO_Confirmation")).find((r) => r.ORDER_ID === orderId);
+  if (existing) return;
+
+  const [orderRow, items] = await Promise.all([
+    readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.find((r) => r.ORDER_ID === orderId)),
+    readTable(env.sheets.transactions, "SALE_ORDER_ITEMS").then((rows) => rows.filter((r) => r.ORDER_ID === orderId)),
+  ]);
+  if (!orderRow) return;
+  const order = punchFromSheet(orderRow);
+
+  const now = new Date().toISOString();
+  const confId = await nextId("CONF", "SO_Confirmation", "Conf_ID");
+  await appendRow(
+    env.sheets.transactions,
+    "SO_Confirmation",
+    soConfirmationToSheet({
+      ...order,
+      CREATED_AT: now,
+      CREATED_BY: employeeId,
+      ORDER_ID: orderId,
+      SALE_ORDER_ID: saleOrderId,
+      CONF_ID: confId,
+      CONFIRMATION: "",
+      RECEIVED_PAYMENT_AMOUNT: "",
+      PAYMENT_AMOUNT_PCT: "",
+      PAYMENT_ATTACHMENT_URL: "",
+      CONFIRMATION_REMARKS: "",
+      STATUS: "PENDING",
+    })
+  );
+
+  if (items.length === 0) return;
+  const confItemIds = await nextIds("CONFI", "SO_Confirmation_Items", "Conf Item ID", items.length);
+  await appendRows(
+    env.sheets.transactions,
+    "SO_Confirmation_Items",
+    items.map((item, i) =>
+      soConfirmationItemToSheet({
+        ...itemFromSheet(item),
+        CREATED_AT: now,
+        CREATED_BY: employeeId,
+        ORDER_ID: orderId,
+        SALE_ORDER_ID: saleOrderId,
+        CONF_ID: confId,
+        CONF_ITEM_ID: confItemIds[i],
+        STATUS: "PENDING",
+      })
+    )
+  );
+}
+
+/** Saves the Sale Order form. `createPlaceholderSaleOrder()` (called from the discount route)
+ * already created the SALE_ORDERS + SALE_ORDER_ITEMS rows with Sale Order No./Date/
+ * Attachment/Remarks blank — this fills those in via updateRow instead of appending a second
+ * row (falls back to a fresh append if somehow no placeholder exists yet), then also creates
+ * a placeholder SO_Confirmation + SO_Confirmation_Items row the same way, for the next stage. */
 ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
@@ -809,45 +926,48 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
     }
 
     const now = new Date().toISOString();
-    const saleOrderId = await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID");
+    const existingSaleOrder = (await readTable(env.sheets.transactions, "SALE_ORDERS")).find((r) => r.ORDER_ID === req.params.id);
+    const saleOrderId = existingSaleOrder?.SALE_ORDER_ID ?? (await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID"));
 
-    await appendRow(
-      env.sheets.transactions,
-      "SALE_ORDERS",
-      saleOrderToSheet({
-        // Copy every order-header field captured at Punch (PO, seller, buyer, billing,
-        // shipping, consignee, logistics, amounts, carried discount)...
-        ...order,
-        // ...then set the sale-order-specific fields (these win over the spread).
-        CREATED_AT: now,
-        CREATED_BY: req.user!.employeeId,
-        ORDER_ID: req.params.id,
-        SALE_ORDER_ID: saleOrderId,
-        SO_NO: body.soNo,
-        SO_DATE: body.soDate,
-        SO_ATTACHMENT_URL: body.soAttachmentUrl,
-        SO_REMARKS: body.soRemarks,
-        STATUS: "PENDING",
-      })
-    );
+    const saleOrderFields = saleOrderToSheet({
+      ...order,
+      CREATED_AT: now,
+      CREATED_BY: req.user!.employeeId,
+      ORDER_ID: req.params.id,
+      SALE_ORDER_ID: saleOrderId,
+      SO_NO: body.soNo,
+      SO_DATE: body.soDate,
+      SO_ATTACHMENT_URL: body.soAttachmentUrl,
+      SO_REMARKS: body.soRemarks,
+      STATUS: "PENDING",
+    });
+    if (existingSaleOrder) {
+      await updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderFields);
+    } else {
+      await appendRow(env.sheets.transactions, "SALE_ORDERS", saleOrderFields);
+    }
 
-    // SALE_ORDER_ITEMS uses the same column names as ORDER_ITEMS (no renaming), so each
-    // punch item row is copied over as-is, just adding the two sale-order link IDs.
+    // SALE_ORDER_ITEMS uses the same column names as ORDER_ITEMS (no renaming). The
+    // placeholder copy from discount time might be stale if anything changed since, so
+    // resync from scratch rather than assume it's still accurate.
     const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter(
       (i) => i.ORDER_ID === req.params.id
     );
-    const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
-    await appendRows(
-      env.sheets.transactions,
-      "SALE_ORDER_ITEMS",
-      items.map((item, i) => ({
-        ...item,
-        Timestamp: now,
-        Useremail: req.user!.employeeId,
-        SALE_ORDER_ID: saleOrderId,
-        SALE_ORDER_ITEM_ID: soItemIds[i],
-      }))
-    );
+    await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
+    if (items.length > 0) {
+      const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
+      await appendRows(
+        env.sheets.transactions,
+        "SALE_ORDER_ITEMS",
+        items.map((item, i) => ({
+          ...item,
+          Timestamp: now,
+          Useremail: req.user!.employeeId,
+          SALE_ORDER_ID: saleOrderId,
+          SALE_ORDER_ITEM_ID: soItemIds[i],
+        }))
+      );
+    }
 
     // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
     await updateRow(
@@ -857,6 +977,8 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       req.params.id,
       punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.employeeId })
     );
+
+    await createPlaceholderSoConfirmation(req.params.id, saleOrderId, req.user!.employeeId);
 
     res.json({ orderId: req.params.id, saleOrderId });
   } catch (err) {
@@ -886,9 +1008,12 @@ const soConfirmationSchema = z.object({
 });
 
 /**
- * Appends a full snapshot of this SO Confirmation decision to SO_Confirmation +
- * SO_Confirmation_Items — an append-only audit log, not the live source of truth
- * (that stays ORDER_PUNCH/SALE_ORDERS/ORDER_ITEMS, updated separately above/below).
+ * Fills in this SO Confirmation decision on the placeholder row `createPlaceholderSoConfirmation()`
+ * already created when the Sale Order form was uploaded (blank Confirmation/payment fields,
+ * STATUS "PENDING") — updates it in place rather than appending a second row. Falls back to
+ * appending fresh if somehow no placeholder exists yet. SO_Confirmation_Items is resynced
+ * (delete + re-append) since the item list may have changed since the placeholder was made
+ * (e.g. a "Changes" outcome editing items).
  */
 async function logSoConfirmation(
   orderId: string,
@@ -901,26 +1026,30 @@ async function logSoConfirmation(
   userEmployeeId: string
 ) {
   const now = new Date().toISOString();
-  const confId = await nextId("CONF", "SO_Confirmation", "Conf_ID");
-  await appendRow(
-    env.sheets.transactions,
-    "SO_Confirmation",
-    soConfirmationToSheet({
-      ...finalPunch,
-      CREATED_AT: now,
-      CREATED_BY: userEmployeeId,
-      ORDER_ID: orderId,
-      SALE_ORDER_ID: saleOrderId,
-      CONF_ID: confId,
-      CONFIRMATION: outcome,
-      RECEIVED_PAYMENT_AMOUNT: payment.receivedPaymentAmount ?? "",
-      PAYMENT_AMOUNT_PCT: payment.paymentAmountPct ?? "",
-      PAYMENT_ATTACHMENT_URL: payment.paymentAttachmentUrl ?? "",
-      CONFIRMATION_REMARKS: remarks,
-      STATUS: outcome,
-    })
-  );
+  const existing = (await readTable(env.sheets.transactions, "SO_Confirmation")).find((r) => r.ORDER_ID === orderId);
+  const confId = existing?.Conf_ID ?? (await nextId("CONF", "SO_Confirmation", "Conf_ID"));
 
+  const confirmationFields = soConfirmationToSheet({
+    ...finalPunch,
+    CREATED_AT: now,
+    CREATED_BY: userEmployeeId,
+    ORDER_ID: orderId,
+    SALE_ORDER_ID: saleOrderId,
+    CONF_ID: confId,
+    CONFIRMATION: outcome,
+    RECEIVED_PAYMENT_AMOUNT: payment.receivedPaymentAmount ?? "",
+    PAYMENT_AMOUNT_PCT: payment.paymentAmountPct ?? "",
+    PAYMENT_ATTACHMENT_URL: payment.paymentAttachmentUrl ?? "",
+    CONFIRMATION_REMARKS: remarks,
+    STATUS: outcome,
+  });
+  if (existing) {
+    await updateRow(env.sheets.transactions, "SO_Confirmation", "ORDER_ID", orderId, confirmationFields);
+  } else {
+    await appendRow(env.sheets.transactions, "SO_Confirmation", confirmationFields);
+  }
+
+  await deleteRows(env.sheets.transactions, "SO_Confirmation_Items", "ORDER_ID", [orderId]);
   if (items.length === 0) return;
   const confItemIds = await nextIds("CONFI", "SO_Confirmation_Items", "Conf Item ID", items.length);
   await appendRows(

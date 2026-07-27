@@ -253,8 +253,30 @@ punch save), `BILLING STRATEGY MASTER`.
 
 **Pipeline so far:** Punch (`ORDER_PUNCH`, `STATUS: PENDING`) → discount applied
 (`STATUS: PENDING SALE ORDER`, logged to `Order Punch Discount`) → Sale Order form uploaded
-(`STATUS: SALE ORDER`, full row written to `SALE_ORDERS`/`SALE_ORDER_ITEMS`) → SO Confirmation
-queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome:
+(`STATUS: SALE ORDER`) → SO Confirmation queue (`GET /orders/sale-orders`) → `POST
+/orders/:id/so-confirmation` outcome:
+
+**`SALE_ORDERS`/`SALE_ORDER_ITEMS` and `SO_Confirmation`/`SO_Confirmation_Items` rows now get
+created as blank placeholders one stage EARLIER than the form that actually fills them in**
+(a deliberate, user-confirmed design — was originally "only create the row when its own form
+is submitted", changed after a doer asked for the row to exist and be visible from the
+previous stage onward, blank fields and all). `createPlaceholderSaleOrder()` runs at the end
+of `POST /orders/:id/discount` — copies the current `ORDER_PUNCH`/`ORDER_ITEMS` state into
+`SALE_ORDERS`/`SALE_ORDER_ITEMS` with `Sale Order No.`/`Date`/`Attachment`/`Remarks` blank and
+`STATUS: PENDING SALE ORDER`; no-ops if a row already exists (discount can be applied more
+than once before upload, e.g. after a revert). `POST /orders/:id/sale-order-form` then
+**updates that same row** (`updateRow` by `ORDER_ID`, not another `appendRow`) to fill in the
+four form fields and set `STATUS: PENDING`, and resyncs `SALE_ORDER_ITEMS` from scratch in
+case anything changed since the placeholder was made. It also calls
+`createPlaceholderSoConfirmation()` the same way for `SO_Confirmation`/`SO_Confirmation_Items`
+(blank `Confirmation`/payment fields, `STATUS: PENDING`), which `logSoConfirmation()` (called
+from `POST /orders/:id/so-confirmation`) then fills in via `updateRow` instead of appending a
+second row — so `SO_Confirmation` is no longer purely append-only; only `SO_Confirmation_Items`
+still gets delete+recreated each time (item list can change on a "Changes" outcome).
+**This changed what "does `SALE_ORDERS` exist" means** — it used to mean "form was uploaded";
+now it exists from the discount step onward, so `revertOrphanedDiscounts()` (below) checks
+`Sale Order No.` is actually filled in, not just row-existence, and revert additionally
+deletes the (now-orphaned) placeholder `SALE_ORDERS`/`SALE_ORDER_ITEMS` rows it created.
 
 **Undoing a discount**: there's no in-app "undo" button (matches the app's hand-edit-the-sheet
 convention elsewhere) — a doer deletes the order's row(s) from `Order Punch Discount` directly
@@ -271,10 +293,13 @@ Runs from a GET, which is unusual (GETs are normally side-effect-free), but ther
 trigger available — the only way the app ever learns about a hand-edit made directly in Sheets
 is by reading it, so the read handler doubles as the corrective write when it detects one.
 Idempotent: once reverted, `STATUS` is `PENDING`, so nothing here fires again until another
-discount is applied. Once `SALE_ORDERS` exists for the order (Sale Order form uploaded), the
-discount is considered locked in and deleting the log row no longer does anything — revert
-only applies while still at the discount stage, a deliberate scope decision (not "always
-revert regardless of stage").
+discount is applied. Once the Sale Order form is actually uploaded (`SALE_ORDERS`' own `Sale
+Order No.` is filled in — **not** just the row existing, since a blank placeholder row now
+exists from the discount step onward, see above), the discount is considered locked in and
+deleting the log row no longer does anything — revert only applies while still at the
+discount stage, a deliberate scope decision (not "always revert regardless of stage"). Revert
+also deletes the placeholder `SALE_ORDERS`/`SALE_ORDER_ITEMS` rows for that order, since
+they're for a discount that no longer exists.
 - **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
   (this is what feeds the Dispatch Approval queue — `GET /orders/dispatch-approvals` reads
   `ORDER_PUNCH` filtered on that status, **not** `SALE_ORDERS`, since `SALE_ORDERS` has no
@@ -330,10 +355,13 @@ via API only so far; the "Transport" module UI still needs a trip list/detail + 
 picker, not just a form (unlike every other module so far).
 
 **`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch Items Approval`** are separate,
-pre-built append-only snapshot/audit-log tabs (human-readable headers, mapped in
+pre-built snapshot/audit-log tabs (human-readable headers, mapped in
 `Backend/src/routes/soConfirmationMap.ts`) — **not** the live source of truth, which stays
-`ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` exactly as above (nothing reads
-these three tabs back into the app). All three carry `ORDER_ID` directly (`SO_Confirmation_
+`ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` exactly as above. `SO_Confirmation`
+is the one exception to "nothing reads these tabs back into the app" — `logSoConfirmation()`
+reads it first to find (and update in place) the placeholder row created at Sale Order upload
+time, see above. `SO_Confirmation_Items` and `Dispatch Items Approval` are still write-only
+from the app's perspective. All three carry `ORDER_ID` directly (`SO_Confirmation_
 Items`/`Dispatch Items Approval` also carry `ITEM_ID`) as the join key — see the next
 paragraph for why this matters.
 
