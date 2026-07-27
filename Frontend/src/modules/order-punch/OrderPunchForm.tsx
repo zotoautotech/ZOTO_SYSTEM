@@ -21,8 +21,12 @@ const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Log
 function validateTab(tab: number, form: OrderFormState): string | null {
   if (tab === 1) {
     if (!form.saleType) return "Select a Sale Type before continuing";
-    if (!form.orderType) return "Select an Order Type before continuing";
-    if (!form.paymentType) return "Select a Payment Type before continuing";
+    // Order Type / Payment Type don't apply to a Return Order and are hidden on this tab
+    // for that Sale Type, so they can't be required for it either.
+    if (form.saleType !== "Return Order") {
+      if (!form.orderType) return "Select an Order Type before continuing";
+      if (!form.paymentType) return "Select a Payment Type before continuing";
+    }
     if (!form.custId) return "Select a Customer ID before continuing";
     for (const [i, item] of form.items.entries()) {
       if (!item.fgId) return `Select a part for item ${i + 1} before continuing`;

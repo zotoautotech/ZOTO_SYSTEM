@@ -90,32 +90,36 @@ export function Tab2OrderDetails({ form, update }: Props) {
           { value: "Return Order", label: "Return Order" },
         ]}
       />
-      <ToggleGroup
-        label="Order Type"
-        required
-        value={form.orderType}
-        onChange={(v) => update({ orderType: v })}
-        options={[
-          { value: "Order Incoming", label: "Order Incoming" },
-          { value: "Order Outgoing", label: "Order Outgoing" },
-        ]}
-      />
-      <ToggleGroup
-        label="Payment Type"
-        required
-        value={form.paymentType}
-        onChange={(v) => update({ paymentType: v })}
-        options={[
-          { value: "Credit", label: "Credit" },
-          { value: "Advance", label: "Advance" },
-        ]}
-      />
-      {form.paymentType === "Advance" && (
-        <PercentInput
-          label="Advance Payment (%)"
-          value={form.advancePct}
-          onChange={(v) => update({ advancePct: v })}
-        />
+      {form.saleType !== "Return Order" && (
+        <>
+          <ToggleGroup
+            label="Order Type"
+            required
+            value={form.orderType}
+            onChange={(v) => update({ orderType: v })}
+            options={[
+              { value: "Order Incoming", label: form.saleType === "Sample" ? "Sample Incoming" : "Order Incoming" },
+              { value: "Order Outgoing", label: form.saleType === "Sample" ? "Sample Outgoing" : "Order Outgoing" },
+            ]}
+          />
+          <ToggleGroup
+            label="Payment Type"
+            required
+            value={form.paymentType}
+            onChange={(v) => update({ paymentType: v })}
+            options={[
+              { value: "Credit", label: "Credit" },
+              { value: "Advance", label: "Advance" },
+            ]}
+          />
+          {form.paymentType === "Advance" && (
+            <PercentInput
+              label="Advance Payment (%)"
+              value={form.advancePct}
+              onChange={(v) => update({ advancePct: v })}
+            />
+          )}
+        </>
       )}
 
       <h3 style={{ fontSize: 15, marginTop: 24 }}>Buyer Details</h3>
