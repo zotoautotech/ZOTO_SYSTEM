@@ -82,6 +82,7 @@ export function Tab3BillingAddress({ form, update }: Props) {
 
       <ToggleGroup
         label="Is Shipping Address Same"
+        required
         value={form.shippingSame}
         onChange={handleShippingSameChange}
         options={[

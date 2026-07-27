@@ -194,7 +194,14 @@ CRR order data).
   typo], `Description`, `Default Discount on`, `Discount (Rs)`, `Discount (%)`, `Status`).
   `ensureSheetTab()` is still called defensively but the tab already exists live — don't
   confuse this with the old auto-created `ORDER_PUNCH_DISCOUNT` name, which is now dead/
-  orphaned (a past mismatch, since fixed).
+  orphaned (a past mismatch, since fixed). **`POST /orders/:id/discount` writes this log row
+  BEFORE flipping `ORDER_PUNCH.STATUS`** (not after) — a real production case surfaced an
+  order whose status had advanced to `PENDING SALE ORDER` with zero matching row in this tab
+  (root cause not pinned down after direct reproduction attempts against the live sheet came
+  back clean), so the write order was flipped defensively: if the log append ever fails, the
+  order now stays exactly as-is with the Discount action still showing, instead of silently
+  advancing with no audit trail. Follow this same log-then-advance order for any other
+  status-changing route that also writes to an audit-log tab.
 - `COUNTERS` — leftover from the old sequential-ID scheme, no longer written to (see IDs
   below). Don't delete it — just not the ID source anymore.
 - `CRR DD` — dropdown value lists (e.g. Sale Type: Order/Sample/Return Order/Pilot Lot).

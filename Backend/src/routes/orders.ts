@@ -457,20 +457,9 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
     const now = new Date().toISOString();
 
-    await updateRow(
-      env.sheets.transactions,
-      ORDER_TAB,
-      "ORDER_ID",
-      req.params.id,
-      punchToSheet({
-        INVOICE_DISCOUNT_RS: money(discountRs),
-        TOTAL_AMOUNT: money(totalAmount),
-        // Status flips so the order reads as reviewed-with-discount; the full discount
-        // detail is captured in the ORDER_PUNCH_DISCOUNT log below (and, in phase 2, SALE_ORDERS).
-        STATUS: "PENDING SALE ORDER",
-      })
-    );
-
+    // Write the audit-log entry BEFORE flipping the order's own status — if the log write
+    // fails, the order must stay exactly as it was (still showing the Discount action) so
+    // the doer can just retry, rather than silently advancing with no record of the discount.
     await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
     const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "Punch Discount ID");
     await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
@@ -485,6 +474,20 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
       "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
       Status: "PENDING SALE ORDER",
     });
+
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      req.params.id,
+      punchToSheet({
+        INVOICE_DISCOUNT_RS: money(discountRs),
+        TOTAL_AMOUNT: money(totalAmount),
+        // Status flips so the order reads as reviewed-with-discount; the full discount
+        // detail is captured in the ORDER_PUNCH_DISCOUNT log above (and, in phase 2, SALE_ORDERS).
+        STATUS: "PENDING SALE ORDER",
+      })
+    );
 
     res.json({ orderId: req.params.id, discountRs: money(discountRs), totalAmount: money(totalAmount) });
   } catch (err) {

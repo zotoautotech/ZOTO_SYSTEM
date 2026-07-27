@@ -14,8 +14,9 @@ const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Log
 // Most fields on this form aren't mandatory to advance or save — validation was removed
 // at the user's request so the team can punch partial orders and fill gaps in later.
 // A small set of "can't punch an order at all without this" fields are the exception:
-// Sale/Order/Payment Type, Customer ID, each item's part/qty/price, and Billing
-// Address/State — matching the old CRR system's required set.
+// Sale/Order/Payment Type, Customer ID, each item's part/qty/price, Billing Address/State,
+// Is Shipping Address Same, and the three Logistics toggles — matching the old CRR
+// system's required set.
 function validateTab(tab: number, form: OrderFormState): string | null {
   if (tab === 1) {
     if (!form.saleType) return "Select a Sale Type before continuing";
@@ -31,6 +32,12 @@ function validateTab(tab: number, form: OrderFormState): string | null {
   if (tab === 2) {
     if (!form.billingAddress) return "Enter a Billing Address before continuing";
     if (!form.billingState) return "Enter a Billing State before continuing";
+    if (!form.shippingSame) return "Select Is Shipping Address Same before continuing";
+  }
+  if (tab === 3) {
+    if (!form.preferredDeliveryMode) return "Select a Preferred Delivery Mode before continuing";
+    if (!form.preferredTransportMode) return "Select a Preferred Transportation Mode before continuing";
+    if (!form.freightPaidBy) return "Select who Freight is Paid by before continuing";
   }
   if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
     return "Advance Payment (%) must be between 0 and 100";
