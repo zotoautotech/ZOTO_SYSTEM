@@ -1217,6 +1217,12 @@ const dispatchApprovalSchema = z.object({
   excessQty: z.number().optional(),
   nextExtendedDate: z.string().optional(),
   remarks: z.string().min(1),
+  // Manually typed for now (no Inventory Management System connected yet). availableStockQty
+  // has nowhere to go — no matching column on "Dispatch Items Approval" — so it's accepted
+  // but not written anywhere; balanceDispatchQty/unit do have columns and get persisted.
+  availableStockQty: z.number().optional(),
+  balanceDispatchQty: z.number().optional(),
+  unit: z.string().optional(),
 });
 
 /** Saves the Dispatch Approval decision: appends one Dispatch_Approval row per item
@@ -1269,13 +1275,16 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
           PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
           NOTES: item.NOTES ?? "",
           ORDER_QTY: item.QTY ?? "",
-          UOM: item.UOM ?? "NOS",
+          // Manually typed on the form for now (no Inventory Management System connected
+          // yet) — falls back to the item's own Unit if the doer left it blank.
+          UOM: body.unit || item.UOM || "NOS",
           DISPATCH_APPROVAL: body.outcome,
           ...(Object.fromEntries(
             Object.entries(qtyField)
               .filter(([, v]) => v !== undefined)
               .map(([k, v]) => [k, money(v as number)])
           ) as SheetRow),
+          BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
           NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
           DISPATCH_REMARKS: body.remarks,
           STATUS: body.outcome,

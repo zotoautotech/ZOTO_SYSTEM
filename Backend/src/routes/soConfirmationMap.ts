@@ -169,6 +169,7 @@ export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   APPROVED_QTY: "Approved Quantity",
   SHORT_QTY: "Short Quantity",
   EXCESS_QTY: "Excess Quantity",
+  BALANCE_DISPATCH_QTY: "Balance Dispatch Approval Qty",
   NEXT_EXTENDED_DATE: "Next Extended Date",
   DISPATCH_REMARKS: "Dispatch Remarks",
   STATUS: "Status",

@@ -23,11 +23,11 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * Dispatch Approval form matching the reference's per-outcome field set and live
  * red-border validation. Saves via POST /orders/:id/dispatch-approval.
  *
- * Available Stock Quantity is a placeholder (disabled, "0.00") until a real Inventory
- * Management System is connected — Balance Dispatch Quantity is the only stock-derived
- * number we can show for real today (it comes from the order's own planned/order
- * quantity), so quantity validation only enforces against Balance when it's actually
- * known (> 0); once inventory is wired, Available Stock should feed in the same way.
+ * Available Stock Quantity / Balance Dispatch Quantity / Unit are manually typed for the
+ * time being, until a real Inventory Management System is connected — Available Stock has
+ * nowhere to persist to yet (no matching sheet column), Balance Dispatch Quantity and Unit
+ * do and get sent along. Once inventory is wired, these should auto-fill instead of
+ * requiring manual entry.
  */
 export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
@@ -37,19 +37,17 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
   const [excessQty, setExcessQty] = useState("");
   const [nextExtendedDate, setNextExtendedDate] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [availableStockQty, setAvailableStockQty] = useState("");
+  const [balanceDispatchQty, setBalanceDispatchQty] = useState("");
+  const [unit, setUnit] = useState("NOS");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Placeholder until Inventory Management System is connected — see comment above.
-  const availableStockQty = 0;
-  // Real for today: derived from the order's own quantity, not yet wired here — 0 means
-  // "unknown", in which case quantity fields are only checked for being > 0.
-  const balanceDispatchQty = 0;
-
+  const balanceQtyNum = Number(balanceDispatchQty) || 0;
   const qtyError = (value: string, label: string) => {
     const n = Number(value);
     if (!value || Number.isNaN(n) || n <= 0) return "Invalid Quantity.";
-    if (balanceDispatchQty > 0 && n > balanceDispatchQty) return `You can't ${label} more than Balance quantity.`;
+    if (balanceQtyNum > 0 && n > balanceQtyNum) return `You can't ${label} more than Balance quantity.`;
     return "";
   };
 
@@ -74,6 +72,10 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
         excessQty: outcome === "Excess Quantity" ? Number(excessQty) : undefined,
         nextExtendedDate: outcome === "Dispatch Extended" ? nextExtendedDate : undefined,
         remarks,
+        availableStockQty: availableStockQty ? Number(availableStockQty) : undefined,
+        balanceDispatchQty:
+          outcome !== "Dispatch Extended" && balanceDispatchQty ? Number(balanceDispatchQty) : undefined,
+        unit: unit || undefined,
       });
       onSaved();
     } catch {
@@ -134,11 +136,21 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
           />
 
           {outcome && (
-            <TextField label="Available Stock Quantity" disabled value={availableStockQty.toFixed(2)} />
+            <TextField
+              label="Available Stock Quantity"
+              type="number"
+              value={availableStockQty}
+              onChange={(e) => setAvailableStockQty(e.target.value)}
+            />
           )}
 
           {(outcome === "Dispatch Today" || outcome === "Short Quantity" || outcome === "Excess Quantity") && (
-            <TextField label="Balance Dispatch Quantity" disabled value={balanceDispatchQty.toFixed(2)} />
+            <TextField
+              label="Balance Dispatch Quantity"
+              type="number"
+              value={balanceDispatchQty}
+              onChange={(e) => setBalanceDispatchQty(e.target.value)}
+            />
           )}
 
           {outcome === "Dispatch Today" && (
@@ -172,7 +184,7 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
             />
           )}
 
-          {outcome && <TextField label="Unit" disabled value="NOS" />}
+          {outcome && <TextField label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} />}
 
           {outcome === "Dispatch Extended" && (
             <TextField

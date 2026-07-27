@@ -240,6 +240,11 @@ export interface DispatchApprovalPayload {
   excessQty?: number;
   nextExtendedDate?: string;
   remarks: string;
+  // Manually typed for now (no Inventory Management System connected yet) — availableStockQty
+  // has nowhere to persist to (no matching sheet column), balanceDispatchQty/unit do.
+  availableStockQty?: number;
+  balanceDispatchQty?: number;
+  unit?: string;
 }
 
 export async function submitDispatchApproval(orderId: string, payload: DispatchApprovalPayload) {
