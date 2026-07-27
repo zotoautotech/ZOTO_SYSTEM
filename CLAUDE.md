@@ -231,14 +231,24 @@ punch save), `BILLING STRATEGY MASTER`.
 queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome:
 
 **Undoing a discount**: there's no in-app "undo" button (matches the app's hand-edit-the-sheet
-convention elsewhere) — a doer deletes the order's row from `Order Punch Discount` directly in
-the sheet, and `orders.ts`'s `revertOrphanedDiscounts()` (called from `GET /orders` and
-`GET /orders/:id`) detects at read time that an order is `PENDING SALE ORDER` with no matching
-log row and no `SALE_ORDERS` row yet, and reports it back as `PENDING` with the discount zeroed
-— purely a read-time computation, nothing is written back to `ORDER_PUNCH`. Once `SALE_ORDERS`
-exists for the order (Sale Order form uploaded), the discount is considered locked in and
-deleting the log row no longer does anything — revert only applies while still at the discount
-stage, a deliberate scope decision (not "always revert regardless of stage").
+convention elsewhere) — a doer deletes the order's row(s) from `Order Punch Discount` directly
+in the sheet, and `orders.ts`'s `revertOrphanedDiscounts()` (called from `GET /orders` and
+`GET /orders/:id`) detects that an order is `PENDING SALE ORDER` with no matching log row and
+no `SALE_ORDERS` row yet, and **physically writes the reverted state back** to both
+`ORDER_ITEMS` (every item reset to zero Sale-Order-stage discount via the same
+`computeItemDiscountFields()` the discount route itself uses, just with `cumulativeDiscountRs:
+0`) and `ORDER_PUNCH` (`STATUS: PENDING`, `INVOICE_DISCOUNT_RS: 0`, totals resummed from the
+now-reverted items) — an earlier version of this only overrode the API *response* without
+writing back, which looked fine in the app but left the raw sheet cells still showing the
+discounted values, confusing doers who check the sheet directly (as they routinely do here).
+Runs from a GET, which is unusual (GETs are normally side-effect-free), but there's no other
+trigger available — the only way the app ever learns about a hand-edit made directly in Sheets
+is by reading it, so the read handler doubles as the corrective write when it detects one.
+Idempotent: once reverted, `STATUS` is `PENDING`, so nothing here fires again until another
+discount is applied. Once `SALE_ORDERS` exists for the order (Sale Order form uploaded), the
+discount is considered locked in and deleting the log row no longer does anything — revert
+only applies while still at the discount stage, a deliberate scope decision (not "always
+revert regardless of stage").
 - **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
   (this is what feeds the Dispatch Approval queue — `GET /orders/dispatch-approvals` reads
   `ORDER_PUNCH` filtered on that status, **not** `SALE_ORDERS`, since `SALE_ORDERS` has no

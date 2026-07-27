@@ -162,20 +162,50 @@ function splitGst(lineBasic: number, gstSlabPct: number, buyerState: string, sel
   return { cgst: 0, sgst: 0, igst: totalTax, lineTax: totalTax };
 }
 
-/** A doer can undo a discount by hand-deleting its row from the Order Punch Discount sheet —
- * there's no in-app "undo" button (matches the app's existing hand-edit-the-sheet convention).
- * Detects that case at read time (never writes anything back) and reports the order as if the
- * discount had never been applied, so the Discount action reappears in the UI. Only reverts
- * orders still sitting at the discount stage (STATUS "PENDING SALE ORDER") that haven't had
- * their Sale Order form uploaded yet — once SALE_ORDERS exists for an order, the discount is
- * considered locked in and this no longer applies (deleting the log row does nothing). */
+/** Recomputes one item's discount/GST fields for a given TOTAL (cumulative) discount amount —
+ * shared by both applying a new Sale Order discount (cumulative = prior + this transaction's
+ * share) and reverting one (cumulative = 0, i.e. as if no Sale Order discount had ever been
+ * applied). Keeping this in one place means "apply" and "undo" can never drift apart. */
+function computeItemDiscountFields(item: SheetRow, cumulativeDiscountRs: number, buyerState: string, sellerState: string) {
+  const priceQty = Number(item.PRICE || 0) * Number(item.QTY || 0);
+  const basicAmount = priceQty - cumulativeDiscountRs;
+  const { cgst, sgst, igst, lineTax } = splitGst(basicAmount, Number(item.GST_SLAB_PCT || 0), buyerState, sellerState);
+  return {
+    basicAmount,
+    lineTax,
+    patch: itemToSheet({
+      DISCOUNT_RS: money(cumulativeDiscountRs),
+      DISCOUNT_PCT: priceQty > 0 ? ((cumulativeDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
+      BASIC_AMOUNT: money(basicAmount),
+      CGST: money(cgst),
+      SGST: money(sgst),
+      IGST: money(igst),
+      TAX_AMOUNT: money(lineTax),
+      TOTAL_AMOUNT: money(basicAmount + lineTax),
+    }),
+  };
+}
+
+/** A doer can undo a discount by hand-deleting its row(s) from the Order Punch Discount
+ * sheet — there's no in-app "undo" button (matches the app's existing hand-edit-the-sheet
+ * convention). Detects that case (an order at the discount stage with no discount-log row
+ * left and no Sale Order form uploaded yet) and PHYSICALLY reverts it: resets every item back
+ * to zero Sale-Order-stage discount (same computeItemDiscountFields() used to apply one, just
+ * with cumulative=0) and resums the order's own totals — not just a read-time display trick,
+ * since the doer checks the raw sheet directly, not only the app. Only reverts orders still
+ * sitting at the discount stage — once SALE_ORDERS exists, the discount is locked in and
+ * deleting the log row no longer does anything. Runs from a GET, which is unusual (GETs
+ * shouldn't normally have side effects), but there's no other trigger available here — the
+ * app only ever finds out about a hand-edit made directly in Sheets by reading it. Idempotent
+ * either way: once reverted, STATUS is "PENDING" so nothing here fires again until another
+ * discount is applied. */
 async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
   if (!rows.some((r) => r.STATUS === "PENDING SALE ORDER")) return rows;
 
-  // Must bypass the normal 5-minute read cache here: a doer deleting a row directly in
-  // Google Sheets never goes through our API, so nothing ever busts that cache entry for
-  // them — reading the cached copy could serve stale (pre-deletion) data for minutes and
-  // make this whole feature silently not work right after someone edits the sheet by hand.
+  // Must bypass the normal cache here: a doer deleting a row directly in Google Sheets never
+  // goes through our API, so nothing ever busts that cache entry for them — reading the
+  // cached copy could serve stale (pre-deletion) data and make this feature silently not
+  // work right after someone edits the sheet by hand.
   const [discountLog, saleOrders] = await Promise.all([
     readTable(env.sheets.transactions, DISCOUNT_LOG_TAB, { refresh: true }),
     readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true }),
@@ -183,13 +213,61 @@ async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
   const loggedIds = new Set(discountLog.map((r) => r.ORDER_ID));
   const saleOrderIds = new Set(saleOrders.map((r) => r.ORDER_ID));
 
-  return rows.map((r) => {
-    if (r.STATUS !== "PENDING SALE ORDER") return r;
-    if (loggedIds.has(r.ORDER_ID) || saleOrderIds.has(r.ORDER_ID)) return r;
-    const basicAmount = Number(r.BASIC_AMOUNT || 0);
-    const taxAmount = Number(r.TAX_AMOUNT || 0);
-    return { ...r, STATUS: "PENDING", INVOICE_DISCOUNT_RS: "0.00", TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)) };
-  });
+  const orphaned = rows.filter(
+    (r) => r.STATUS === "PENDING SALE ORDER" && !loggedIds.has(r.ORDER_ID) && !saleOrderIds.has(r.ORDER_ID)
+  );
+  if (orphaned.length === 0) return rows;
+
+  const allItems = await readTable(env.sheets.transactions, "ORDER_ITEMS", { refresh: true });
+  const revertedById = new Map<string, SheetRow>();
+
+  for (const order of orphaned) {
+    const orderItems = allItems.filter((i) => i.ORDER_ID === order.ORDER_ID).map(itemFromSheet);
+    let basicAmount = Number(order.BASIC_AMOUNT || 0);
+    let taxAmount = Number(order.TAX_AMOUNT || 0);
+
+    if (orderItems.length > 0) {
+      basicAmount = 0;
+      taxAmount = 0;
+      for (const item of orderItems) {
+        const { basicAmount: itemBasic, lineTax, patch } = computeItemDiscountFields(
+          item,
+          0,
+          order.BILLING_STATE || "",
+          order.SELLER_STATE || ""
+        );
+        basicAmount += itemBasic;
+        taxAmount += lineTax;
+        await updateRow(env.sheets.transactions, "ORDER_ITEMS", "ITEM_ID", item.ITEM_ID, patch);
+      }
+    }
+
+    const totalAmount = money(roundOff(basicAmount + taxAmount));
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      order.ORDER_ID,
+      punchToSheet({
+        BASIC_AMOUNT: money(basicAmount),
+        TAX_AMOUNT: money(taxAmount),
+        INVOICE_DISCOUNT_RS: "0.00",
+        TOTAL_AMOUNT: totalAmount,
+        STATUS: "PENDING",
+      })
+    );
+
+    revertedById.set(order.ORDER_ID, {
+      ...order,
+      STATUS: "PENDING",
+      INVOICE_DISCOUNT_RS: "0.00",
+      BASIC_AMOUNT: money(basicAmount),
+      TAX_AMOUNT: money(taxAmount),
+      TOTAL_AMOUNT: totalAmount,
+    });
+  }
+
+  return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
 ordersRouter.get("/", async (req, res, next) => {
@@ -496,6 +574,7 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
 
     let newBasicAmount = orderBasicAmount;
     let newTaxAmount = orderTaxAmount;
+    let totalAmount: number;
     const logRows: SheetRow[] = [];
     const itemUpdates: { itemId: string; patch: SheetRow }[] = [];
 
@@ -513,30 +592,16 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         const priorDiscountRs = Number(item.DISCOUNT_RS || 0);
         const cumulativeDiscountRs = priorDiscountRs + itemDiscountRs;
         const priceQty = Number(item.PRICE || 0) * Number(item.QTY || 0);
-        const itemNewBasicAmount = priceQty - cumulativeDiscountRs;
-        const { cgst, sgst, igst, lineTax } = splitGst(
-          itemNewBasicAmount,
-          Number(item.GST_SLAB_PCT || 0),
+        const { basicAmount: itemNewBasicAmount, lineTax, patch } = computeItemDiscountFields(
+          item,
+          cumulativeDiscountRs,
           order.BILLING_STATE || "",
           order.SELLER_STATE || ""
         );
 
         newBasicAmount += itemNewBasicAmount;
         newTaxAmount += lineTax;
-
-        itemUpdates.push({
-          itemId: item.ITEM_ID,
-          patch: itemToSheet({
-            DISCOUNT_RS: money(cumulativeDiscountRs),
-            DISCOUNT_PCT: priceQty > 0 ? ((cumulativeDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
-            BASIC_AMOUNT: money(itemNewBasicAmount),
-            CGST: money(cgst),
-            SGST: money(sgst),
-            IGST: money(igst),
-            TAX_AMOUNT: money(lineTax),
-            TOTAL_AMOUNT: money(itemNewBasicAmount + lineTax),
-          }),
-        });
+        itemUpdates.push({ itemId: item.ITEM_ID, patch });
 
         logRows.push({
           Timestamp: now,
@@ -551,8 +616,12 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           Status: "PENDING SALE ORDER",
         });
       }
+      // Discount is already baked into each item's (and so the resummed order's) basic amount.
+      totalAmount = roundOff(newBasicAmount + newTaxAmount);
     } else {
-      // No items yet (partial punch) — nothing to apportion, so log and discount stay order-level.
+      // No items yet (partial punch) — nothing to apportion into, so the discount is applied
+      // straight against the order's own totals instead (basic/tax stay as-is, matching the
+      // pre-per-item behavior for this edge case).
       logRows.push({
         Timestamp: now,
         Useremail: req.user!.employeeId,
@@ -564,9 +633,8 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
         Status: "PENDING SALE ORDER",
       });
+      totalAmount = roundOff(orderBasicAmount + orderTaxAmount - discountRs);
     }
-
-    const totalAmount = roundOff(newBasicAmount + newTaxAmount);
 
     // Write the audit-log entries BEFORE touching item/order rows — if the log write fails,
     // nothing else has changed yet, so the doer can just retry from a clean state.
