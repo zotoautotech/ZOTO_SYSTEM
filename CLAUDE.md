@@ -214,6 +214,16 @@ punch save), `BILLING STRATEGY MASTER`.
 (`STATUS: PENDING SALE ORDER`, logged to `Order Punch Discount`) → Sale Order form uploaded
 (`STATUS: SALE ORDER`, full row written to `SALE_ORDERS`/`SALE_ORDER_ITEMS`) → SO Confirmation
 queue (`GET /orders/sale-orders`) → `POST /orders/:id/so-confirmation` outcome:
+
+**Undoing a discount**: there's no in-app "undo" button (matches the app's hand-edit-the-sheet
+convention elsewhere) — a doer deletes the order's row from `Order Punch Discount` directly in
+the sheet, and `orders.ts`'s `revertOrphanedDiscounts()` (called from `GET /orders` and
+`GET /orders/:id`) detects at read time that an order is `PENDING SALE ORDER` with no matching
+log row and no `SALE_ORDERS` row yet, and reports it back as `PENDING` with the discount zeroed
+— purely a read-time computation, nothing is written back to `ORDER_PUNCH`. Once `SALE_ORDERS`
+exists for the order (Sale Order form uploaded), the discount is considered locked in and
+deleting the log row no longer does anything — revert only applies while still at the discount
+stage, a deliberate scope decision (not "always revert regardless of stage").
 - **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
   (this is what feeds the Dispatch Approval queue — `GET /orders/dispatch-approvals` reads
   `ORDER_PUNCH` filtered on that status, **not** `SALE_ORDERS`, since `SALE_ORDERS` has no

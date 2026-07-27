@@ -162,10 +162,36 @@ function splitGst(lineBasic: number, gstSlabPct: number, buyerState: string, sel
   return { cgst: 0, sgst: 0, igst: totalTax, lineTax: totalTax };
 }
 
+/** A doer can undo a discount by hand-deleting its row from the Order Punch Discount sheet —
+ * there's no in-app "undo" button (matches the app's existing hand-edit-the-sheet convention).
+ * Detects that case at read time (never writes anything back) and reports the order as if the
+ * discount had never been applied, so the Discount action reappears in the UI. Only reverts
+ * orders still sitting at the discount stage (STATUS "PENDING SALE ORDER") that haven't had
+ * their Sale Order form uploaded yet — once SALE_ORDERS exists for an order, the discount is
+ * considered locked in and this no longer applies (deleting the log row does nothing). */
+async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
+  if (!rows.some((r) => r.STATUS === "PENDING SALE ORDER")) return rows;
+
+  const [discountLog, saleOrders] = await Promise.all([
+    readTable(env.sheets.transactions, DISCOUNT_LOG_TAB),
+    readTable(env.sheets.transactions, "SALE_ORDERS"),
+  ]);
+  const loggedIds = new Set(discountLog.map((r) => r.ORDER_ID));
+  const saleOrderIds = new Set(saleOrders.map((r) => r.ORDER_ID));
+
+  return rows.map((r) => {
+    if (r.STATUS !== "PENDING SALE ORDER") return r;
+    if (loggedIds.has(r.ORDER_ID) || saleOrderIds.has(r.ORDER_ID)) return r;
+    const basicAmount = Number(r.BASIC_AMOUNT || 0);
+    const taxAmount = Number(r.TAX_AMOUNT || 0);
+    return { ...r, STATUS: "PENDING", INVOICE_DISCOUNT_RS: "0.00", TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)) };
+  });
+}
+
 ordersRouter.get("/", async (req, res, next) => {
   try {
     const { stage, status } = req.query as { stage?: string; status?: string };
-    const rows = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
+    const rows = await revertOrphanedDiscounts((await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet));
     const filtered = rows.filter(
       (r) => (!stage || r.CURRENT_STAGE === stage) && (!status || r.STATUS === status)
     );
@@ -236,8 +262,9 @@ ordersRouter.get("/:id", async (req, res, next) => {
     if (!sheetOrder) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
+    const [order] = await revertOrphanedDiscounts([punchFromSheet(sheetOrder)]);
     res.json({
-      order: punchFromSheet(sheetOrder),
+      order,
       items: items.filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet),
       dispatchPlan: dispatchPlan.filter((d) => d.ORDER_ID === req.params.id),
     });
