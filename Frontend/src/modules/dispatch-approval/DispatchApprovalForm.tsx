@@ -90,7 +90,21 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
       <div
         className="card modal-in"
         onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(560px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
+        style={{
+          width: "min(560px, 100%)",
+          height: isMobile ? "100dvh" : undefined,
+          // The card clips its contents (overflow: hidden, needed for the rounded corners),
+          // which was cutting off the Dispatch Approval dropdown's floating options panel
+          // whenever the modal was still short (before an outcome is picked, before the
+          // per-outcome fields below have appeared) — a tall-enough minHeight means the
+          // panel always has room to render fully instead of getting clipped.
+          minHeight: isMobile ? undefined : 480,
+          maxHeight: isMobile ? "100dvh" : "90vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          borderRadius: isMobile ? 0 : 18,
+        }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Dispatch Items Approval Form</h2>
