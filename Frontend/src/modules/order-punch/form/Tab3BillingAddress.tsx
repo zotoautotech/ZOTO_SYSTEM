@@ -59,11 +59,13 @@ export function Tab3BillingAddress({ form, update }: Props) {
       <h3 style={{ fontSize: 15, marginTop: 0 }}>Billing Address</h3>
       <TextField
         label="Billing Address"
+        required
         value={form.billingAddress}
         onChange={(e) => update({ billingAddress: e.target.value })}
       />
       <TextField
         label="Billing State"
+        required
         value={form.billingState}
         onChange={(e) => update({ billingState: e.target.value })}
       />

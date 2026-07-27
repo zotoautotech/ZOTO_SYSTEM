@@ -13,11 +13,24 @@ const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Log
 
 // Most fields on this form aren't mandatory to advance or save — validation was removed
 // at the user's request so the team can punch partial orders and fill gaps in later.
-// Customer ID is the one exception (matching the old CRR system): without a customer,
-// there's nothing to attach a billing address to, so Order Details can't be left blank.
+// A small set of "can't punch an order at all without this" fields are the exception:
+// Sale/Order/Payment Type, Customer ID, each item's part/qty/price, and Billing
+// Address/State — matching the old CRR system's required set.
 function validateTab(tab: number, form: OrderFormState): string | null {
-  if (tab === 1 && !form.custId) {
-    return "Select a Customer ID before continuing";
+  if (tab === 1) {
+    if (!form.saleType) return "Select a Sale Type before continuing";
+    if (!form.orderType) return "Select an Order Type before continuing";
+    if (!form.paymentType) return "Select a Payment Type before continuing";
+    if (!form.custId) return "Select a Customer ID before continuing";
+    for (const [i, item] of form.items.entries()) {
+      if (!item.fgId) return `Select a part for item ${i + 1} before continuing`;
+      if (!item.qty) return `Enter a quantity for item ${i + 1} before continuing`;
+      if (!item.price) return `Enter a price for item ${i + 1} before continuing`;
+    }
+  }
+  if (tab === 2) {
+    if (!form.billingAddress) return "Enter a Billing Address before continuing";
+    if (!form.billingState) return "Enter a Billing State before continuing";
   }
   if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
     return "Advance Payment (%) must be between 0 and 100";

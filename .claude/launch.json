@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["Frontend/node_modules/vite/bin/vite.js", "Frontend"],
       "port": 5173
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["Backend/node_modules/tsx/dist/cli.mjs", "watch", "Backend/src/index.ts"],
+      "port": 4000
     }
   ]
 }

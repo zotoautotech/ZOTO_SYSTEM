@@ -81,6 +81,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
     <div>
       <ToggleGroup
         label="Sale Type"
+        required
         value={form.saleType}
         onChange={(v) => update({ saleType: v })}
         options={[
@@ -91,6 +92,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
       />
       <ToggleGroup
         label="Order Type"
+        required
         value={form.orderType}
         onChange={(v) => update({ orderType: v })}
         options={[
@@ -100,6 +102,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
       />
       <ToggleGroup
         label="Payment Type"
+        required
         value={form.paymentType}
         onChange={(v) => update({ paymentType: v })}
         options={[
@@ -123,6 +126,7 @@ export function Tab2OrderDetails({ form, update }: Props) {
       ) : (
         <SearchableSelect
           label="Customer ID"
+          required
           value={form.custId}
           onChange={(_v, option) => selectExistingCustomer(option?.value ?? "", option?.label ?? "")}
           options={customerOptions}
@@ -226,6 +230,7 @@ function ItemBlock({
       {!item.fgId && (
         <SearchableSelect
           label="Part (ID)"
+          required
           value={item.fgId}
           onChange={(_v, option) =>
             onChange({ fgId: option?.value ?? "", partName: option?.label ?? "", partNo: option?.subtitle ?? "" })
@@ -264,7 +269,7 @@ function ItemBlock({
         />
       )}
 
-      <QuantityStepper label="Quantity" value={item.qty} onChange={(v) => onChange({ qty: v })} />
+      <QuantityStepper label="Quantity" required value={item.qty} onChange={(v) => onChange({ qty: v })} />
 
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
@@ -283,7 +288,7 @@ function ItemBlock({
         </select>
       </div>
 
-      <TextField label="Price" type="number" value={item.price ?? ""} onChange={(e) => onChange({ price: Number(e.target.value) })} />
+      <TextField label="Price" required type="number" value={item.price ?? ""} onChange={(e) => onChange({ price: Number(e.target.value) })} />
       <TextField label="Remarks" value={item.remarks} onChange={(e) => onChange({ remarks: e.target.value })} />
     </div>
   );
