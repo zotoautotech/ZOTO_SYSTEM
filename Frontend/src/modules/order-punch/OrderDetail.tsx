@@ -410,13 +410,16 @@ export function OrderDetail() {
         <SaleOrderUploadForm
           orderId={orderId!}
           onClose={() => setShowUploadForm(false)}
-          onSaved={() => {
+          onSaved={async () => {
             setShowUploadForm(false);
-            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-            queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
-            queryClient.invalidateQueries({ queryKey: ["saleOrder", orderId] });
+            // refetchQueries (not invalidateQueries) so the list is already fresh by the time
+            // it mounts a moment later — see main.tsx's note on this exact race. Back to the
+            // Sale Order list (this order's own STATUS is now "SALE ORDER", i.e. Completed),
+            // not straight into SO Confirmation — matches the Punch Order form's "return to
+            // the list, don't jump ahead" pattern.
+            await queryClient.refetchQueries({ queryKey: ["orders", "all"] });
             queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
-            navigate("/modules/so-confirmation");
+            navigate(basePath);
           }}
         />
       )}
