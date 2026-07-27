@@ -467,8 +467,11 @@ const DISCOUNT_LOG_HEADERS = [
   "Status",
 ];
 
-/** Applies the Sale Order discount, recalculates TOTAL_AMOUNT, logs the action to the
- * Order Punch Discount tab, and pushes the order into the Sale Order stage's pending queue. */
+/** Applies the Sale Order discount, splits it across the order's line items (proportional to
+ * each item's current basic amount, so every item absorbs the same effective % regardless of
+ * whether the doer entered a flat Rs amount or a percentage), recalculates each item's GST and
+ * the order's totals, logs one Order Punch Discount row per item, and pushes the order into
+ * the Sale Order stage's pending queue. */
 ordersRouter.post("/:id/discount", async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
@@ -478,29 +481,102 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
 
-    const basicAmount = Number(order.BASIC_AMOUNT || 0);
-    const taxAmount = Number(order.TAX_AMOUNT || 0);
-    const discountRs = body.type === "Percentage" ? (basicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
-    const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
     const now = new Date().toISOString();
+    const orderItems = (await readTable(env.sheets.transactions, "ORDER_ITEMS"))
+      .filter((i) => i.ORDER_ID === req.params.id)
+      .map(itemFromSheet);
 
-    // Write the audit-log entry BEFORE flipping the order's own status — if the log write
-    // fails, the order must stay exactly as it was (still showing the Discount action) so
-    // the doer can just retry, rather than silently advancing with no record of the discount.
+    const orderBasicAmount = Number(order.BASIC_AMOUNT || 0);
+    const orderTaxAmount = Number(order.TAX_AMOUNT || 0);
+    const discountRs = body.type === "Percentage" ? (orderBasicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
+
+    let newBasicAmount = orderBasicAmount;
+    let newTaxAmount = orderTaxAmount;
+    const logRows: SheetRow[] = [];
+    const itemUpdates: { itemId: string; patch: SheetRow }[] = [];
+
+    if (orderItems.length > 0) {
+      const itemsBasicTotal = orderItems.reduce((sum, i) => sum + Number(i.BASIC_AMOUNT || 0), 0);
+      newBasicAmount = 0;
+      newTaxAmount = 0;
+
+      for (const item of orderItems) {
+        const itemBasicAmount = Number(item.BASIC_AMOUNT || 0);
+        const share = itemsBasicTotal > 0 ? itemBasicAmount / itemsBasicTotal : 0;
+        const itemDiscountRs = discountRs * share;
+        // DISCOUNT_RS/DISCOUNT_PCT track the item's TOTAL discount to date (punch-time + every
+        // Sale Order discount applied since) so BASIC_AMOUNT = Price*Qty - DISCOUNT_RS always holds.
+        const priorDiscountRs = Number(item.DISCOUNT_RS || 0);
+        const cumulativeDiscountRs = priorDiscountRs + itemDiscountRs;
+        const priceQty = Number(item.PRICE || 0) * Number(item.QTY || 0);
+        const itemNewBasicAmount = priceQty - cumulativeDiscountRs;
+        const { cgst, sgst, igst, lineTax } = splitGst(
+          itemNewBasicAmount,
+          Number(item.GST_SLAB_PCT || 0),
+          order.BILLING_STATE || "",
+          order.SELLER_STATE || ""
+        );
+
+        newBasicAmount += itemNewBasicAmount;
+        newTaxAmount += lineTax;
+
+        itemUpdates.push({
+          itemId: item.ITEM_ID,
+          patch: itemToSheet({
+            DISCOUNT_RS: money(cumulativeDiscountRs),
+            DISCOUNT_PCT: priceQty > 0 ? ((cumulativeDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
+            BASIC_AMOUNT: money(itemNewBasicAmount),
+            CGST: money(cgst),
+            SGST: money(sgst),
+            IGST: money(igst),
+            TAX_AMOUNT: money(lineTax),
+            TOTAL_AMOUNT: money(itemNewBasicAmount + lineTax),
+          }),
+        });
+
+        logRows.push({
+          Timestamp: now,
+          Useremail: req.user!.employeeId,
+          ORDER_ID: req.params.id,
+          ITEM_ID: item.ITEM_ID,
+          "Discount Reasion": body.reason,
+          Description: body.description,
+          "Default Discount on": body.type,
+          "Discount (Rs)": money(itemDiscountRs),
+          "Discount (%)": priceQty > 0 ? ((itemDiscountRs / priceQty) * 100).toFixed(2) : "0.00",
+          Status: "PENDING SALE ORDER",
+        });
+      }
+    } else {
+      // No items yet (partial punch) — nothing to apportion, so log and discount stay order-level.
+      logRows.push({
+        Timestamp: now,
+        Useremail: req.user!.employeeId,
+        ORDER_ID: req.params.id,
+        "Discount Reasion": body.reason,
+        Description: body.description,
+        "Default Discount on": body.type,
+        "Discount (Rs)": money(discountRs),
+        "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
+        Status: "PENDING SALE ORDER",
+      });
+    }
+
+    const totalAmount = roundOff(newBasicAmount + newTaxAmount);
+
+    // Write the audit-log entries BEFORE touching item/order rows — if the log write fails,
+    // nothing else has changed yet, so the doer can just retry from a clean state.
     await ensureSheetTab(env.sheets.transactions, DISCOUNT_LOG_TAB, DISCOUNT_LOG_HEADERS);
-    const punchDiscountId = await nextId("DISC", DISCOUNT_LOG_TAB, "Punch Discount ID");
-    await appendRow(env.sheets.transactions, DISCOUNT_LOG_TAB, {
-      Timestamp: now,
-      Useremail: req.user!.employeeId,
-      ORDER_ID: req.params.id,
-      "Punch Discount ID": punchDiscountId,
-      "Discount Reasion": body.reason,
-      Description: body.description,
-      "Default Discount on": body.type,
-      "Discount (Rs)": money(discountRs),
-      "Discount (%)": body.type === "Percentage" ? String(body.discountPct) : "",
-      Status: "PENDING SALE ORDER",
-    });
+    const punchDiscountIds = await nextIds("DISC", DISCOUNT_LOG_TAB, "Punch Discount ID", logRows.length);
+    await appendRows(
+      env.sheets.transactions,
+      DISCOUNT_LOG_TAB,
+      logRows.map((row, i) => ({ ...row, "Punch Discount ID": punchDiscountIds[i] }))
+    );
+
+    for (const { itemId, patch } of itemUpdates) {
+      await updateRow(env.sheets.transactions, "ORDER_ITEMS", "ITEM_ID", itemId, patch);
+    }
 
     await updateRow(
       env.sheets.transactions,
@@ -508,6 +584,8 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
       "ORDER_ID",
       req.params.id,
       punchToSheet({
+        BASIC_AMOUNT: money(newBasicAmount),
+        TAX_AMOUNT: money(newTaxAmount),
         INVOICE_DISCOUNT_RS: money(discountRs),
         TOTAL_AMOUNT: money(totalAmount),
         // Status flips so the order reads as reviewed-with-discount; the full discount

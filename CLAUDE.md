@@ -202,6 +202,21 @@ CRR order data).
   order now stays exactly as-is with the Discount action still showing, instead of silently
   advancing with no audit trail. Follow this same log-then-advance order for any other
   status-changing route that also writes to an audit-log tab.
+  **The discount is now applied per line item, not just at the order level** (`ITEM_ID` used
+  to be permanently blank here — the sheet had it ready for this "future" use, per the sheet-
+  redesign plan doc, before it was actually wired up): the doer's single reason/description/
+  type/amount still applies once, but the route reads `ORDER_ITEMS`, splits the Rs amount
+  across items **proportional to each item's current `BASIC_AMOUNT`** (so every item ends up
+  with the same effective % off, whether the doer entered a flat Rs or a %), recalculates each
+  item's CGST/SGST/IGST via `splitGst()` off its new discounted basic amount, and writes one
+  `Order Punch Discount` row per item (with that item's own `ITEM_ID` and its *own* discount
+  share, not the order total). `ORDER_ITEMS.DISCOUNT_RS`/`DISCOUNT_PCT` are cumulative — they
+  always represent the item's total discount to date (punch-time + every Sale Order discount
+  applied since), so `BASIC_AMOUNT = Price×Qty − DISCOUNT_RS` keeps holding everywhere else
+  that reads it. `ORDER_PUNCH.BASIC_AMOUNT`/`TAX_AMOUNT`/`TOTAL_AMOUNT` are then resummed from
+  the (now-discounted) items, same as the SO Confirmation Changes item-replace flow already
+  does. A partial punch with no items yet falls back to the old order-level-only behavior
+  (one log row, blank `ITEM_ID`, discount applied straight against the order's own totals).
 - `COUNTERS` — leftover from the old sequential-ID scheme, no longer written to (see IDs
   below). Don't delete it — just not the ID source anymore.
 - `CRR DD` — dropdown value lists (e.g. Sale Type: Order/Sample/Return Order/Pilot Lot).
