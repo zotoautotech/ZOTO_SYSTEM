@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SearchableSelect } from "../../components/form/SearchableSelect";
+import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
 import { submitDispatchApproval } from "../../lib/ordersApi";
@@ -110,13 +110,12 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
         </div>
 
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-          <SearchableSelect
+          <ToggleGroup
             label="Dispatch Approval"
             required
             value={outcome}
-            onChange={(v) => setOutcome(v as Outcome)}
-            options={DISPATCH_APPROVAL_OPTIONS}
-            placeholder="Search"
+            onChange={(v) => setOutcome(v)}
+            options={DISPATCH_APPROVAL_OPTIONS as { value: Exclude<Outcome, "">; label: string }[]}
           />
 
           {outcome && (
