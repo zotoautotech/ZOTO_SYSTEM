@@ -140,6 +140,28 @@ function money(n: number) {
   return n.toFixed(2);
 }
 
+/** GST invoices round the order-level Total Amount off to the nearest whole rupee (never
+ * per line item — that would make the line items' sum drift from the header total). Applied
+ * automatically wherever TOTAL_AMOUNT is (re)computed at the order/sale-order level. */
+function roundOff(n: number): number {
+  return Math.round(n);
+}
+
+/** Intra-state (buyer's billing state matches the seller branch's state) splits the line's
+ * GST evenly into CGST+SGST; inter-state charges the full rate as IGST instead. Blank state
+ * on either side falls back to the old always-CGST/SGST behavior rather than guessing. */
+function splitGst(lineBasic: number, gstSlabPct: number, buyerState: string, sellerState: string) {
+  const totalTax = (lineBasic * gstSlabPct) / 100;
+  const buyer = buyerState.trim().toLowerCase();
+  const seller = sellerState.trim().toLowerCase();
+  const sameState = !buyer || !seller || buyer === seller;
+  if (sameState) {
+    const half = totalTax / 2;
+    return { cgst: half, sgst: half, igst: 0, lineTax: totalTax };
+  }
+  return { cgst: 0, sgst: 0, igst: totalTax, lineTax: totalTax };
+}
+
 ordersRouter.get("/", async (req, res, next) => {
   try {
     const { stage, status } = req.query as { stage?: string; status?: string };
@@ -256,6 +278,10 @@ ordersRouter.post("/", async (req, res, next) => {
     const now = new Date().toISOString();
     const orderId = await nextId("ORD", ORDER_TAB, "ORDER_ID");
 
+    // Fetched early (not just at write time below) because the seller's state is needed
+    // to decide CGST+SGST vs IGST per line item.
+    const [seller, buyer] = await Promise.all([getSellerFields(), getBuyerFields(body.custId)]);
+
     let basicAmount = 0;
     let taxAmount = 0;
 
@@ -263,9 +289,7 @@ ordersRouter.post("/", async (req, res, next) => {
     for (const item of body.items) {
       const itemId = `${orderId}-${String(itemRows.length + 1).padStart(2, "0")}`;
       const lineBasic = item.price * item.qty - item.discountRs;
-      const cgst = (lineBasic * item.gstSlabPct) / 2 / 100;
-      const sgst = cgst;
-      const lineTax = cgst + sgst;
+      const { cgst, sgst, igst, lineTax } = splitGst(lineBasic, item.gstSlabPct, body.billingState, String(seller.SELLER_STATE || ""));
       basicAmount += lineBasic;
       taxAmount += lineTax;
 
@@ -288,7 +312,7 @@ ordersRouter.post("/", async (req, res, next) => {
         GST_SLAB_PCT: String(item.gstSlabPct),
         CGST: money(cgst),
         SGST: money(sgst),
-        IGST: "0.00",
+        IGST: money(igst),
         TAX_AMOUNT: money(lineTax),
         TOTAL_AMOUNT: money(lineBasic + lineTax),
         SPECIAL_INSTRUCTIONS: item.specialInstructions,
@@ -324,9 +348,8 @@ ordersRouter.post("/", async (req, res, next) => {
       });
     }
 
-    // Auto-fill the Seller Details section (fixed ZOTO branch) and buyer contact/segment
-    // fields from the masters, then translate everything to ORDER_PUNCH's sheet headers.
-    const [seller, buyer] = await Promise.all([getSellerFields(), getBuyerFields(body.custId)]);
+    // Seller/buyer master fields were already fetched above (needed for the GST split);
+    // translate everything to ORDER_PUNCH's sheet headers here.
     await appendRow(
       env.sheets.transactions,
       ORDER_TAB,
@@ -372,7 +395,7 @@ ordersRouter.post("/", async (req, res, next) => {
         TRANSPORTER_ADDRESS: body.transporterAddress,
         BASIC_AMOUNT: money(basicAmount),
         TAX_AMOUNT: money(taxAmount),
-        TOTAL_AMOUNT: money(basicAmount + taxAmount),
+        TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)),
         APPROVAL_STATUS: "",
         APPROVAL_REMARKS: "",
         STATUS: "PENDING",
@@ -431,7 +454,7 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
     const basicAmount = Number(order.BASIC_AMOUNT || 0);
     const taxAmount = Number(order.TAX_AMOUNT || 0);
     const discountRs = body.type === "Percentage" ? (basicAmount * (body.discountPct ?? 0)) / 100 : body.discountRs ?? 0;
-    const totalAmount = basicAmount + taxAmount - discountRs;
+    const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
     const now = new Date().toISOString();
 
     await updateRow(
@@ -666,12 +689,14 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         let basicAmount = 0;
         let taxAmount = 0;
         const newItemRows: SheetRow[] = [];
+        // Billing state may itself be part of this Changes edit; seller state was fixed at
+        // order-creation time and stored on the order row, so it doesn't need re-fetching.
+        const gstBuyerState = body.changes?.billingState ?? existingPunch.BILLING_STATE ?? "";
+        const gstSellerState = String(existingPunch.SELLER_STATE || "");
         for (const item of body.changes.items) {
           const itemId = `${req.params.id}-${String(newItemRows.length + 1).padStart(2, "0")}`;
           const lineBasic = item.price * item.qty - item.discountRs;
-          const cgst = (lineBasic * item.gstSlabPct) / 2 / 100;
-          const sgst = cgst;
-          const lineTax = cgst + sgst;
+          const { cgst, sgst, igst, lineTax } = splitGst(lineBasic, item.gstSlabPct, gstBuyerState, gstSellerState);
           basicAmount += lineBasic;
           taxAmount += lineTax;
           newItemRows.push({
@@ -679,7 +704,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
             SEGMENT: item.segment, CATEGORY: item.category, STRATEGY_ID: item.strategyId, PRICE: money(item.price),
             QTY: String(item.qty), UOM: item.uom, DISCOUNT_ON: item.discountOn, DISCOUNT_RS: money(item.discountRs),
             DISCOUNT_PCT: String(item.discountPct), BASIC_AMOUNT: money(lineBasic), GST_SLAB_PCT: String(item.gstSlabPct),
-            CGST: money(cgst), SGST: money(sgst), IGST: "0.00", TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
+            CGST: money(cgst), SGST: money(sgst), IGST: money(igst), TAX_AMOUNT: money(lineTax), TOTAL_AMOUNT: money(lineBasic + lineTax),
             SPECIAL_INSTRUCTIONS: item.specialInstructions, PACKING_REQUIREMENTS: item.packingRequirements, NOTES: item.notes,
             STATUS: "PENDING", CREATED_AT: now, CREATED_BY: req.user!.employeeId,
           });
@@ -694,7 +719,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
           await appendRow(env.sheets.transactions, "SALE_ORDER_ITEMS", { ...itemToSheet(row), SALE_ORDER_ID: saleOrder.SALE_ORDER_ID });
         }
 
-        const totalAmount = basicAmount + taxAmount - discountRs;
+        const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
         amountFields = {
           BASIC_AMOUNT: money(basicAmount), TAX_AMOUNT: money(taxAmount), TOTAL_AMOUNT: money(totalAmount),
           INVOICE_DISCOUNT_RS: money(discountRs),
@@ -704,7 +729,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         // recompute the total against the new discount.
         const basicAmount = Number(existingPunch.BASIC_AMOUNT || 0);
         const taxAmount = Number(existingPunch.TAX_AMOUNT || 0);
-        const totalAmount = basicAmount + taxAmount - discountRs;
+        const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
         amountFields = { TOTAL_AMOUNT: money(totalAmount), INVOICE_DISCOUNT_RS: money(discountRs) };
       }
 
