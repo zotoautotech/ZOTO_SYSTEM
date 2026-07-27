@@ -369,6 +369,22 @@ a real push/webhook system (a doer explicitly chose the simple/short-poll tradeo
 standing up a Google Apps Script trigger + webhook + live browser connection) — don't build
 that heavier system without asking again first, the tradeoff was discussed and decided.
 
+`Frontend/src/main.tsx`'s query client leaves `refetchOnMount` at the library default (`true`)
+— a past version of this file set it to `false` to stop every page revisit re-fetching from
+scratch, but that also meant: mutate on page A (e.g. save a new order) → `invalidateQueries()`
+runs while page B's query has no active observer yet (not mounted) → nothing actually
+refetches → navigate to page B → it mounts showing the STALE cached data anyway, since
+`refetchOnMount:false` blocks catching up even on data that's explicitly invalid, not just
+"still fresh." This produced a whole recurring class of "why doesn't my new order show up"
+reports. `staleTime: 60_000` already solves the original "refetch on every revisit" complaint
+on its own (a mount only refetches if the cached data is actually stale/invalidated) — don't
+reintroduce `refetchOnMount: false` to fix a perceived perf issue without re-checking this.
+For any one call site that mutates and then immediately navigates to a page whose query
+needs to be fresh, prefer `queryClient.refetchQueries(...)` over `invalidateQueries(...)` —
+the former always fires the network request now; the latter only does if something is
+actively observing that query key at the moment it's called, which a not-yet-mounted
+destination page never is (see `OrderPunchForm.tsx`'s post-save handler).
+
 ## Google Drive uploads
 
 `Backend/src/routes/uploads.ts`. Files are uploaded **fully private** — no public "anyone"

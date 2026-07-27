@@ -135,7 +135,14 @@ export function OrderPunchForm() {
           notes: it.remarks,
         })),
       });
-      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      // invalidateQueries() only auto-refetches queries with an ACTIVE observer right now —
+      // the list page isn't mounted yet (we're still on this modal, about to navigate to it),
+      // so invalidate alone just marks the cache stale without fetching, and the list's
+      // refetchOnMount:false means it would then render that stale (pre-save) cache as soon
+      // as it mounts, only catching up whenever the 30s auto-sync happens to fire next.
+      // refetchQueries forces the fetch now, so the cache is already fresh by the time the
+      // list mounts a moment later.
+      await queryClient.refetchQueries({ queryKey: ["orders"] });
       navigate("/modules/punch-order");
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
