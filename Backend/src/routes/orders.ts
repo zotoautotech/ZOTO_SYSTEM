@@ -172,9 +172,13 @@ function splitGst(lineBasic: number, gstSlabPct: number, buyerState: string, sel
 async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
   if (!rows.some((r) => r.STATUS === "PENDING SALE ORDER")) return rows;
 
+  // Must bypass the normal 5-minute read cache here: a doer deleting a row directly in
+  // Google Sheets never goes through our API, so nothing ever busts that cache entry for
+  // them — reading the cached copy could serve stale (pre-deletion) data for minutes and
+  // make this whole feature silently not work right after someone edits the sheet by hand.
   const [discountLog, saleOrders] = await Promise.all([
-    readTable(env.sheets.transactions, DISCOUNT_LOG_TAB),
-    readTable(env.sheets.transactions, "SALE_ORDERS"),
+    readTable(env.sheets.transactions, DISCOUNT_LOG_TAB, { refresh: true }),
+    readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true }),
   ]);
   const loggedIds = new Set(discountLog.map((r) => r.ORDER_ID));
   const saleOrderIds = new Set(saleOrders.map((r) => r.ORDER_ID));

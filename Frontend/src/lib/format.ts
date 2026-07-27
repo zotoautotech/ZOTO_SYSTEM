@@ -8,7 +8,11 @@ export function formatTimestamp(iso: string): string {
 }
 
 export function formatCurrency(value: string | number): string {
-  const n = typeof value === "string" ? Number(value) : value;
+  // Some sheet columns (e.g. "Invoice Discount (Rs)") have currency number formatting applied
+  // directly in Google Sheets, so the API can hand back a value like "₹3,565.00" instead of a
+  // plain number — Number() on that returns NaN and silently displayed as ₹0.00, hiding the
+  // real amount. Strip everything but digits/dot/minus before parsing so both forms work.
+  const n = typeof value === "string" ? Number(value.replace(/[^0-9.-]/g, "")) : value;
   if (Number.isNaN(n)) return "₹0.00";
   return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
