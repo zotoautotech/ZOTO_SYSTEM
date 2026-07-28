@@ -5,7 +5,7 @@ import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
-import { dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
+import { dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 
@@ -344,6 +344,23 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
           UOM: item.UOM || "",
         };
       });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Per-item detail bundle for the item-level pending Dispatch Approval page (matches the old
+ * CRR reference's PRE-PD-CONF item view): Quantity Details' Approved/Short/Excess/Balance Qty
+ * come from the item's own latest "Dispatch Items Approval" log row (if any decision has been
+ * made yet), and the Follow-ups table is the full history of those log rows for this item. */
+ordersRouter.get("/:orderId/items/:itemId/dispatch-approval-log", async (req, res, next) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const rows = (await readTable(env.sheets.transactions, "Dispatch Items Approval"))
+      .map(dispatchApprovalFromSheet)
+      .filter((r) => r.ORDER_ID === orderId && r.ITEM_ID === itemId)
+      .sort((a, b) => (a.CREATED_AT ?? "").localeCompare(b.CREATED_AT ?? ""));
     res.json(rows);
   } catch (err) {
     next(err);

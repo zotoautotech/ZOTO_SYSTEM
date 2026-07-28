@@ -124,7 +124,7 @@ export function DispatchApprovalList() {
             : filteredItems.map((row) => (
                 <button
                   key={row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
-                  onClick={() => navigate(`/modules/dispatch-approval/${row.ORDER_ID}`)}
+                  onClick={() => navigate(`/modules/dispatch-approval/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
                   className="card"
                   style={{ display: "block", width: "100%", textAlign: "left", padding: 14, marginBottom: 10, color: "var(--color-text)", cursor: "pointer" }}
                 >
@@ -162,7 +162,7 @@ export function DispatchApprovalList() {
             columns={itemColumns}
             rows={filteredItems}
             getRowKey={(row) => row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
-            onRowClick={(row) => navigate(`/modules/dispatch-approval/${row.ORDER_ID}`)}
+            onRowClick={(row) => navigate(`/modules/dispatch-approval/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
             emptyMessage={isLoading ? "Loading…" : normalizedQuery ? `No items match “${query}”` : "No orders awaiting dispatch approval."}
           />
         )}

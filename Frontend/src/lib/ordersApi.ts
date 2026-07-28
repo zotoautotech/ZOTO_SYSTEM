@@ -268,6 +268,30 @@ export async function submitDispatchApproval(orderId: string, payload: DispatchA
   return res.data;
 }
 
+export interface DispatchApprovalLogRow {
+  CREATED_AT: string;
+  ORDER_ID: string;
+  ITEM_ID: string;
+  PART_NAME: string;
+  PART_NO: string;
+  DISPATCH_APPROVAL: string;
+  APPROVED_QTY: string;
+  SHORT_QTY: string;
+  EXCESS_QTY: string;
+  BALANCE_DISPATCH_QTY: string;
+  NEXT_EXTENDED_DATE: string;
+  DISPATCH_REMARKS: string;
+  STATUS: string;
+  [key: string]: string;
+}
+
+/** Full "Dispatch Items Approval" log history for one item, oldest first — used by the
+ * item-level Dispatch Approval detail page's Quantity Details + Follow-ups table. */
+export async function listItemDispatchApprovalLog(orderId: string, itemId: string) {
+  const res = await api.get<DispatchApprovalLogRow[]>(`/orders/${orderId}/items/${itemId}/dispatch-approval-log`);
+  return res.data;
+}
+
 /** Generic queue for any of the 8 pipeline stages after Dispatch Approval (PDI, Transport,
  * Transport Reached, Stock Release, Tax Invoice, Dispatch, Collect LR, Delivery) — see
  * Frontend/src/lib/stages.ts and Backend/src/routes/stageRoutes.ts. */

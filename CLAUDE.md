@@ -326,6 +326,26 @@ Name/Part Name/Order Quantity), matching the old CRR reference view; Available S
 Excess Quantity are shown as "—" there since they're only decided when the doer actually
 submits the approval form, not before. The Completed toggle stays the order-level table
 (`GET /orders/dispatch-approvals`, unchanged) since those three columns don't apply to it.
+Clicking a pending item row goes to a dedicated **item-level detail page**
+(`Frontend/src/modules/dispatch-approval/DispatchApprovalItemDetail.tsx`, routed at
+`modules/dispatch-approval/:orderId/items/:itemId` — this one URL pattern uses a different
+component than every other module's generic `OrderItemDetail`, see `App.tsx`), matching the
+old CRR/AppSheet reference layout: Buyer Details, Special Instructions, Planned Dispatch
+Dates (from `DISPATCH_PLAN` rows filtered to this `ITEM_ID`, already carries `ITEM_ID` per
+row so no new backend work was needed there), Goods Details (same `goods`-master lookup
+pattern as `OrderItemDetail`), Quantity Details, and a Dispatch Approval Follow-ups history
+table. Quantity Details' Balance/Approved/Short/Excess Qty come from the item's own **latest**
+`Dispatch Items Approval` log row (blank until the doer actually submits a decision); FG Stock
+in Warehouse/Assembly Line/Booked/Total have no backing data source (no IMS yet, same gap as
+Available Stock Quantity on the form itself) and are shown as "—" rather than a form field,
+since this is a read-only page. New backend: `GET
+/orders/:orderId/items/:itemId/dispatch-approval-log` (`orders.ts`) reads `Dispatch Items
+Approval` filtered to that order+item — the first time this tab has ever been read back by
+the app (previously write-only, see the `SO_Confirmation`/`Dispatch Items Approval` paragraph
+below); added `dispatchApprovalFromSheet()` (`soConfirmationMap.ts`, a `reverseTranslate()`
+mirroring the existing `translate()`) to support it. The "Give Dispatch Approval Form" quick
+action on this page reuses the existing order-level `DispatchApprovalForm` unchanged (the
+form itself still submits at the order level, only the detail page reading is item-level).
 
 From there, two simple single-order stages (`Backend/src/routes/stageConfig.ts` /
 `stageRoutes.ts`, `Frontend/src/lib/stages.ts`): `DISPATCH APPROVAL COMPLETED → PDI
@@ -367,10 +387,13 @@ picker, not just a form (unlike every other module so far).
 pre-built snapshot/audit-log tabs (human-readable headers, mapped in
 `Backend/src/routes/soConfirmationMap.ts`) — **not** the live source of truth, which stays
 `ORDER_PUNCH`/`SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` exactly as above. `SO_Confirmation`
-is the one exception to "nothing reads these tabs back into the app" — `logSoConfirmation()`
+is one exception to "nothing reads these tabs back into the app" — `logSoConfirmation()`
 reads it first to find (and update in place) the placeholder row created at Sale Order upload
-time, see above. `SO_Confirmation_Items` and `Dispatch Items Approval` are still write-only
-from the app's perspective. All three carry `ORDER_ID` directly (`SO_Confirmation_
+time, see above. `Dispatch Items Approval` is the other — `GET
+/orders/:orderId/items/:itemId/dispatch-approval-log` reads it back (via the new
+`dispatchApprovalFromSheet()`) for the item-level Dispatch Approval detail page's Quantity
+Details + Follow-ups table, see above. `SO_Confirmation_Items` is still write-only from the
+app's perspective. All three carry `ORDER_ID` directly (`SO_Confirmation_
 Items`/`Dispatch Items Approval` also carry `ITEM_ID`) as the join key — see the next
 paragraph for why this matters.
 

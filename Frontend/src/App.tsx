@@ -16,6 +16,7 @@ import { OrderItemsView } from "./modules/order-punch/OrderItemsView";
 import { OrderItemDetail } from "./modules/order-punch/OrderItemDetail";
 import { SoConfirmationList } from "./modules/so-confirmation/SoConfirmationList";
 import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprovalList";
+import { DispatchApprovalItemDetail } from "./modules/dispatch-approval/DispatchApprovalItemDetail";
 import { StageQueueList } from "./components/stage/StageQueueList";
 import { STAGES } from "./lib/stages";
 import { TripQueueList } from "./components/stage/TripQueueList";
@@ -63,7 +64,7 @@ export default function App() {
         <Route path="modules/dispatch-approval" element={<DispatchApprovalList />} />
         <Route path="modules/dispatch-approval/:orderId" element={<OrderDetail />} />
         <Route path="modules/dispatch-approval/:orderId/items" element={<OrderItemsView />} />
-        <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<DispatchApprovalItemDetail />} />
         {STAGES.map((stage) => (
           <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
         ))}

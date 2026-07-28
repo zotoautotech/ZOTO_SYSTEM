@@ -184,6 +184,14 @@ function translate(record: SheetRow, map: Record<string, string>): SheetRow {
   return out;
 }
 
+function reverseTranslate(record: SheetRow, map: Record<string, string>): SheetRow {
+  const out: SheetRow = {};
+  for (const [key, header] of Object.entries(map)) {
+    if (record[header] !== undefined) out[key] = record[header];
+  }
+  return out;
+}
+
 export function soConfirmationToSheet(record: SheetRow): SheetRow {
   return translate(record, SO_CONFIRMATION_MAP);
 }
@@ -194,4 +202,11 @@ export function soConfirmationItemToSheet(record: SheetRow): SheetRow {
 
 export function dispatchApprovalToSheet(record: SheetRow): SheetRow {
   return translate(record, DISPATCH_APPROVAL_MAP);
+}
+
+/** Reads a "Dispatch Items Approval" log row back — used for the item-level detail page's
+ * Quantity Details (latest Approved/Short/Excess/Balance Qty) and Follow-ups history table.
+ * This tab is otherwise write-only from the app's perspective (see file header). */
+export function dispatchApprovalFromSheet(record: SheetRow): SheetRow {
+  return reverseTranslate(record, DISPATCH_APPROVAL_MAP);
 }
