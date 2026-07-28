@@ -191,7 +191,7 @@ export function Login() {
                 autoFocus
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                placeholder="Employee ID"
+                placeholder="Enter ID"
                 style={{
                   flex: 1,
                   background: "transparent",
