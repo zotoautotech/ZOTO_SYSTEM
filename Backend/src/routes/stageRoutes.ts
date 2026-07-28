@@ -34,7 +34,72 @@ function buildBodySchema(stage: StageConfig) {
  * row is appended per order item, with the shared buyer/order snapshot fields auto-filled
  * via orderSnapshotToSheet (same helper the trip routes use), same append-only-log +
  * STATUS-chain pattern already used for SO Confirmation/Dispatch Approval. */
+/** Item-level rows for the PDI queue's table (Timestamp, Part Name, Customer Name, Buyer
+ * GSTIN No., Quantity, Unit, PDI Date, PDI Attachment, PDI Remarks — matching the old CRR
+ * reference view), used for both the pending and Completed toggle states. Pending reads
+ * ORDER_PUNCH+ORDER_ITEMS directly (no PDI tab row exists yet, so the PDI-specific columns
+ * are blank); Completed reads the PDI tab's own rows, which already carry every column
+ * needed (see the Quantity/Unit columns added above) with no extra joins required. */
+function registerPdiItemsRoute(router: Router) {
+  const pdiStage = STAGES.find((s) => s.key === "pdi");
+  if (!pdiStage) return;
+
+  router.get("/pdi/items", async (req, res, next) => {
+    try {
+      const { status } = req.query as { status?: string };
+
+      if (status === "COMPLETED") {
+        const rows = (await readTable(env.sheets.transactions, pdiStage.tab)).map((r) => ({
+          CREATED_AT: r["Timestamp"] || "",
+          ORDER_ID: r["ORDER_ID"] || "",
+          ITEM_ID: r["ITEM_ID"] || "",
+          PART_NAME: r["Part Name"] || "",
+          CUSTOMER_NAME: r["Customer Name"] || "",
+          BUYER_GSTIN: r["Buyer GSTIN No."] || "",
+          QTY: r["Quantity"] || "",
+          UOM: r["Unit"] || "",
+          PDI_DATE: r["PDI Date"] || "",
+          PDI_ATTACHMENT_URL: r["PDI Attachment"] || "",
+          PDI_REMARKS: r["PDI Remarks"] || "",
+        }));
+        res.json(rows);
+        return;
+      }
+
+      const [punchRows, itemRows] = await Promise.all([
+        readTable(env.sheets.transactions, ORDER_TAB),
+        readTable(env.sheets.transactions, "ORDER_ITEMS"),
+      ]);
+      const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.prevStatus);
+      const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
+      const rows = itemRows
+        .filter((i) => orderById.has(i.ORDER_ID))
+        .map(itemFromSheet)
+        .map((item) => {
+          const order = orderById.get(item.ORDER_ID)!;
+          return {
+            CREATED_AT: "",
+            ORDER_ID: order.ORDER_ID,
+            ITEM_ID: item.ITEM_ID,
+            PART_NAME: item.PART_NAME || "",
+            CUSTOMER_NAME: order.CUSTOMER_NAME || "",
+            BUYER_GSTIN: order.BUYER_GSTIN || "",
+            QTY: item.QTY || "",
+            UOM: item.UOM || "",
+            PDI_DATE: "",
+            PDI_ATTACHMENT_URL: "",
+            PDI_REMARKS: "",
+          };
+        });
+      res.json(rows);
+    } catch (err) {
+      next(err);
+    }
+  });
+}
+
 export function registerStageRoutes(router: Router) {
+  registerPdiItemsRoute(router);
   for (const stage of STAGES) {
     const schema = buildBodySchema(stage);
     const headers = [
@@ -42,7 +107,8 @@ export function registerStageRoutes(router: Router) {
       ...(stage.perItem ? ["ITEM_ID"] : []),
       stage.idColumn,
       "CUST ID", "Customer Name", "Business Segment", "Type of Customer", "Sale Type", "Buyer GSTIN No.",
-      "Segment", "Category", "Part Name", "Part No.", "Special Instructions", "Packing Requirements", "Additional Notes",
+      "Segment", "Category", "Part Name", "Part No.", "Quantity", "Unit",
+      "Special Instructions", "Packing Requirements", "Additional Notes",
       ...stage.fields.map((f) => f.header),
       "Status",
     ];
@@ -95,6 +161,8 @@ export function registerStageRoutes(router: Router) {
               Category: item.CATEGORY ?? "",
               "Part Name": item.PART_NAME ?? "",
               "Part No.": item.PART_NO ?? "",
+              Quantity: item.QTY ?? "",
+              Unit: item.UOM ?? "",
               "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
               "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
               "Additional Notes": item.NOTES ?? "",

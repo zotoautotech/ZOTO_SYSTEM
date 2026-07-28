@@ -18,6 +18,7 @@ import { SoConfirmationList } from "./modules/so-confirmation/SoConfirmationList
 import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprovalList";
 import { DispatchApprovalItemDetail } from "./modules/dispatch-approval/DispatchApprovalItemDetail";
 import { StageQueueList } from "./components/stage/StageQueueList";
+import { PdiList } from "./modules/stage/PdiList";
 import { STAGES } from "./lib/stages";
 import { TripQueueList } from "./components/stage/TripQueueList";
 import { TripDetail } from "./modules/transport/TripDetail";
@@ -65,7 +66,8 @@ export default function App() {
         <Route path="modules/dispatch-approval/:orderId" element={<OrderDetail />} />
         <Route path="modules/dispatch-approval/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<DispatchApprovalItemDetail />} />
-        {STAGES.map((stage) => (
+        <Route path="modules/pdi" element={<PdiList />} />
+        {STAGES.filter((stage) => stage.key !== "pdi").map((stage) => (
           <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
         ))}
         <Route path="modules/transport" element={<TransportList />} />

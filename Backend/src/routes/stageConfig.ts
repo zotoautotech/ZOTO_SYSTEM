@@ -40,12 +40,13 @@ export const STAGES: StageConfig[] = [
     nextStatus: "PDI COMPLETED",
     perItem: true,
     fields: [
+      // "PDI No." is a real column on the live sheet, separate from the internal "PDI ID"
+      // (idColumn below, auto-generated per ids.ts convention) — matches the old CRR
+      // reference form's own manually-typed PDI No. field.
+      { key: "pdiNo", header: "PDI No." },
       { key: "pdiDate", header: "PDI Date", required: true },
-      { key: "productWeight", header: "Product Weight (g/pcs)" },
-      { key: "sampleSize", header: "Sample size" },
-      { key: "boxQuantity", header: "Box Quantity" },
       { key: "pdiAttachmentUrl", header: "PDI Attachment" },
-      { key: "sendToCustomer", header: "Send PDI to Customer" },
+      { key: "boxQuantity", header: "Box Quantity" },
       { key: "pdiRemarks", header: "PDI Remarks", required: true },
     ],
   },

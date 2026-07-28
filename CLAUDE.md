@@ -344,8 +344,12 @@ Approval` filtered to that order+item — the first time this tab has ever been 
 the app (previously write-only, see the `SO_Confirmation`/`Dispatch Items Approval` paragraph
 below); added `dispatchApprovalFromSheet()` (`soConfirmationMap.ts`, a `reverseTranslate()`
 mirroring the existing `translate()`) to support it. The "Give Dispatch Approval Form" quick
-action on this page reuses the existing order-level `DispatchApprovalForm` unchanged (the
-form itself still submits at the order level, only the detail page reading is item-level).
+action on this page reuses the existing order-level `DispatchApprovalForm` — its Unit field
+is now a real UOM `<select>` (`CRR DD`-backed `dropdownValues(dropdowns, "UOM")`, falling
+back to `UOM_OPTIONS`, defaulting to `"SET"`), same list/reconciliation pattern as the Order
+Punch item editor's own UOM select, not a free-typed `TextField` like Available Stock/
+Balance Dispatch Quantity still are (form itself still submits at the order level, only the
+detail page reading is item-level).
 
 From there, two simple single-order stages (`Backend/src/routes/stageConfig.ts` /
 `stageRoutes.ts`, `Frontend/src/lib/stages.ts`): `DISPATCH APPROVAL COMPLETED → PDI
@@ -353,6 +357,37 @@ COMPLETED → PRE TRANSPORT COMPLETED` (`POST /orders/:id/pdi`, `POST
 /orders/:id/pre-transport`, one row per item appended to `PDI`/`Pre Transport`). Both are
 "per-item" stages — `StageConfig.perItem: true` — auto-filling buyer/order snapshot fields
 via `orderSnapshotToSheet()` (`tripMap.ts`), same helper the trip system below uses.
+`stageRoutes.ts`'s per-item append also writes `Quantity`/`Unit` (from the item's own
+`QTY`/`UOM`) onto every per-item stage tab now, not just PDI/Pre Transport's own declared
+fields — needed for the PDI item-level table below, harmless for Pre Transport since it's
+just two more populated columns. **PDI's form fields were trimmed to match the old CRR
+reference** (`PDI No.`/`PDI Date`/`PDI Attachment`/`Box Quantity`/`PDI Remarks` — dropped
+Product Weight/Sample Size/Send PDI to Customer, which the live `PDI` tab still has as
+columns, just no longer written to from this form). `PDI No.` is a **real, separate live
+sheet column** from the internal auto-generated `PDI ID` (`idColumn`/`ids.ts` convention) —
+manually typed by the doer, matching the reference form; verified this by dumping the live
+`PDI` tab's actual headers rather than assuming, same discipline as everywhere else in this
+project. Fixing this form also caught a real pre-existing bug: the frontend field key was
+`remarks` while `stageConfig.ts`'s was `pdiRemarks` — since `StageForm.tsx` posts the payload
+keyed directly by `field.key`, and `stageRoutes.ts`'s `buildBodySchema` builds its required-
+field zod shape off that same key, this meant `pdiRemarks` was never present in the request
+body and `schema.parse()` was silently rejecting every PDI submission (whatever remarks text
+the doer typed under a mismatched key). Renamed to match — if a stage form field ever
+"doesn't seem to save," check the frontend `StageField.key` against the backend
+`StageConfig` field's `key` first, they must be identical since neither is translated.
+
+**The PDI queue's table is item-level, not order-level, in both the pending and Completed
+toggle states** (`Frontend/src/modules/stage/PdiList.tsx`, replacing the generic
+`StageQueueList` only for `pdi` in `App.tsx`'s route registration — same override pattern as
+Dispatch Approval) — Timestamp/Part Name/Customer Name/Buyer GSTIN No./Quantity/Unit/PDI
+Date/PDI Attachment/PDI Remarks, matching the old CRR reference view. Backend: `GET
+/orders/pdi/items` (`stageRoutes.ts`, registered before the generic per-stage loop) —
+pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly and leaves the PDI-specific columns blank
+(no `PDI` tab row exists yet); Completed reads the `PDI` tab's own rows directly, no joins
+needed since every column the table wants is already on that row. Row click still opens the
+order-level detail page (`/modules/pdi/:orderId`) — the PDI form itself still submits at the
+order level (one row per item gets appended on save), only the queue's table reads item-
+level.
 
 **From `PRE TRANSPORT COMPLETED` onward, everything is trip-level, not order-level** —
 `Backend/src/routes/tripRoutes.ts` (mounted at `/api/v1/transport-trips`, separate from

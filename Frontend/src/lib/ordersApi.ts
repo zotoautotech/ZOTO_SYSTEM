@@ -304,3 +304,24 @@ export async function submitStageForm(stageKey: string, orderId: string, payload
   const res = await api.post<{ orderId: string; stageId: string; status: string }>(`/orders/${orderId}/${stageKey}`, payload);
   return res.data;
 }
+
+export interface PdiItemRow {
+  CREATED_AT: string;
+  ORDER_ID: string;
+  ITEM_ID: string;
+  PART_NAME: string;
+  CUSTOMER_NAME: string;
+  BUYER_GSTIN: string;
+  QTY: string;
+  UOM: string;
+  PDI_DATE: string;
+  PDI_ATTACHMENT_URL: string;
+  PDI_REMARKS: string;
+}
+
+/** Item-level rows (one per item, not per order) for the PDI queue's table, matching the old
+ * CRR reference view — used for both the pending and Completed toggle states. */
+export async function listPdiItems(status?: string) {
+  const res = await api.get<PdiItemRow[]>("/orders/pdi/items", { params: { status } });
+  return res.data;
+}

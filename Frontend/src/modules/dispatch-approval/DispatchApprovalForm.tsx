@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
 import { submitDispatchApproval } from "../../lib/ordersApi";
+import { listDropdowns, dropdownValues } from "../../lib/mastersApi";
+import { UOM_OPTIONS } from "../../lib/modules";
 
 interface Props {
   orderId: string;
@@ -23,11 +26,12 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * Dispatch Approval form matching the reference's per-outcome field set and live
  * red-border validation. Saves via POST /orders/:id/dispatch-approval.
  *
- * Available Stock Quantity / Balance Dispatch Quantity / Unit are manually typed for the
- * time being, until a real Inventory Management System is connected — Available Stock has
- * nowhere to persist to yet (no matching sheet column), Balance Dispatch Quantity and Unit
- * do and get sent along. Once inventory is wired, these should auto-fill instead of
- * requiring manual entry.
+ * Available Stock Quantity / Balance Dispatch Quantity are manually typed for the time being,
+ * until a real Inventory Management System is connected — Available Stock has nowhere to
+ * persist to yet (no matching sheet column), Balance Dispatch Quantity does and gets sent
+ * along. Once inventory is wired, these should auto-fill instead of requiring manual entry.
+ * Unit is a real UOM dropdown (same CRR DD-backed list + "SET" default as the Order Punch
+ * item editor's UOM select), not manually typed.
  */
 export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
@@ -39,9 +43,21 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
   const [remarks, setRemarks] = useState("");
   const [availableStockQty, setAvailableStockQty] = useState("");
   const [balanceDispatchQty, setBalanceDispatchQty] = useState("");
-  const [unit, setUnit] = useState("NOS");
+  const [unit, setUnit] = useState("SET");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const { data: dropdowns = [] } = useQuery({ queryKey: ["masters", "dropdowns"], queryFn: listDropdowns });
+  const uomOptions = dropdownValues(dropdowns, "UOM");
+  const uomList = uomOptions.length > 0 ? uomOptions : UOM_OPTIONS;
+
+  // Same reconciliation as the Order Punch item editor's UOM select — the "SET" default
+  // isn't guaranteed to be an exact match once the live dropdown list loads.
+  useEffect(() => {
+    if (uomList.length === 0 || uomList.includes(unit)) return;
+    setUnit(uomList.includes("SET") ? "SET" : uomList[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uomList.join("|")]);
 
   const balanceQtyNum = Number(balanceDispatchQty) || 0;
   const qtyError = (value: string, label: string) => {
@@ -184,7 +200,22 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
             />
           )}
 
-          {outcome && <TextField label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} />}
+          {outcome && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>Unit</label>
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", fontSize: 14 }}
+              >
+                {uomList.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {outcome === "Dispatch Extended" && (
             <TextField

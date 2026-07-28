@@ -29,13 +29,16 @@ export const STAGES: StageDef[] = [
     prevStatus: "DISPATCH APPROVAL COMPLETED",
     nextStatus: "PDI COMPLETED",
     fields: [
+      { key: "pdiNo", label: "PDI No.", type: "text" },
       { key: "pdiDate", label: "PDI Date", type: "date", required: true },
-      { key: "sampleSize", label: "Sample Size", type: "number" },
-      { key: "boxQuantity", label: "Box Quantity", type: "number" },
-      { key: "productWeight", label: "Product Weight (g/pcs)", type: "number" },
-      { key: "sendToCustomer", label: "Send PDI to Customer", type: "yesno" },
       { key: "pdiAttachmentUrl", label: "PDI Attachment", type: "file" },
-      { key: "remarks", label: "PDI Remarks", type: "text", required: true },
+      { key: "boxQuantity", label: "Box Quantity", type: "number" },
+      // Was "remarks" here, which never matched Backend/src/routes/stageConfig.ts's
+      // "pdiRemarks" key — since StageForm posts the payload keyed by field.key directly
+      // (see stageRoutes.ts's buildBodySchema, which builds its zod shape off the SAME
+      // stage.fields[].key), this meant every PDI submission's schema.parse() was silently
+      // failing to see this required field at all. Renamed to match.
+      { key: "pdiRemarks", label: "PDI Remarks", type: "text", required: true },
     ],
   },
   {
