@@ -250,12 +250,15 @@ export function OrderDetail() {
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(order.CREATED_AT)}
           </span>
-          {/* Three states: STATUS "PENDING" (fresh punch) -> show the discount action;
-              "PENDING SALE ORDER" (discount saved) -> show the upload action;
-              "SALE ORDER" (form uploaded, this stage done) -> show neither. */}
-          {basePath === "/modules/sale-order" && order.STATUS !== "SALE ORDER" && (
+          {/* Strict allowlist, not a "!== done" negative check — an order that's since
+              progressed past SALE ORDER into any later stage (Dispatch Approval, PDI,
+              Transport, ...) is still "not === SALE ORDER" and "not === PENDING SALE ORDER",
+              so a negative check kept wrongly resurrecting these actions on orders that had
+              long since moved on. Only these two exact pre-upload statuses are actionable;
+              every other status (including SALE ORDER itself) is strictly view-only here. */}
+          {basePath === "/modules/sale-order" && (order.STATUS === "PENDING" || order.STATUS === "PENDING SALE ORDER") && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
-              {order.STATUS !== "PENDING SALE ORDER" ? (
+              {order.STATUS === "PENDING" ? (
                 <QuickAction label="Add Discounts on Sale Order…" onClick={() => setShowDiscountForm(true)}>
                   <path d="M9 5H5a2 2 0 0 0-2 2v4l10 10 8-8L11 3H7" />
                   <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
@@ -276,7 +279,11 @@ export function OrderDetail() {
               </QuickAction>
             </div>
           )}
-          {basePath === "/modules/dispatch-approval" && (
+          {/* Strict allowlist — this used to show unconditionally on this route regardless
+              of order.STATUS, so the form quick action kept appearing even on orders long
+              since past Dispatch Approval (PDI, Transport, ...), same bug class as the Sale
+              Order actions above. Only actionable while still exactly pending here. */}
+          {basePath === "/modules/dispatch-approval" && order.STATUS === "DISPATCH APPROVAL" && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowDispatchApprovalForm(true)}>
                 <rect x="5" y="10" width="14" height="10" rx="2" />

@@ -566,6 +566,20 @@ directly with the service account, no impersonation needed there).
 
 ## Known gotchas
 
+- **A negative "!== done" check on `ORDER_PUNCH.STATUS` resurrects quick-action buttons on
+  orders that have long since moved past that stage** — `OrderDetail.tsx`'s Sale Order
+  quick actions used `order.STATUS !== "SALE ORDER"` to decide whether to show "Add
+  Discounts"/"Upload Sale Order Form", and the Dispatch Approval quick action had no status
+  check at all. Since `STATUS` keeps advancing through many later values (Dispatch Approval,
+  PDI, Transport, ...), "not equal to the one status that means done" is true for all of
+  them too, so a fully-completed order kept showing edit actions again. Fixed by flipping
+  both to a strict **positive allowlist** of the exact pre-completion statuses instead (only
+  `"PENDING"`/`"PENDING SALE ORDER"` for Sale Order, only `"DISPATCH APPROVAL"` for Dispatch
+  Approval) — this is the same "STATUS drift" bug family as the Completed-view-vanishing
+  fixes elsewhere in this file, just inverted (there, a *positive* strict-equality check was
+  too narrow; here, a *negative* strict-equality check was too broad). Any other per-module
+  quick action gated on `order.STATUS` should use the same positive-allowlist shape, not a
+  `!== "wherever this stage ends"` check.
 - **A "final" pass on the transactions sheet silently renamed almost every `ORDER_PUNCH`/
   `SALE_ORDERS`/`ORDER_ITEMS`/`SALE_ORDER_ITEMS` header** from `Underscore_Style` to
   `"Space Style"` (e.g. `Cutomer_Name` → `Cutomer Name`, `PART_NO` written by code → real
