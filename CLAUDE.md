@@ -437,21 +437,22 @@ trip-family tab (they all repeat the same ~30 denormalized columns; `appendRow` 
 drops whichever don't exist on a given tab, so one spread works everywhere).
 `CreateTripModal.tsx`'s Transporter ID is a searchable select against the `Transporter Data`
 master (`GET /masters/transporters`, `TRANSPORT_SHEET_ID`) — selecting one auto-fills
-Transporter Name, same pattern as the Order Punch logistics tab. `TransportList.tsx` also
-shows a read-only `EligibleItemsTable` above the trip queue with its own Pending/"Vehicle
-Arrange Completed" toggle (`GET /transport-trips/eligible-items`, `?status=COMPLETED`
-optional) — item-level Timestamp/CUST ID/Customer Name/Part No./Part Name/Quantity/Unit/
-Status, matching the old CRR "Pending Transport" reference view's visibility intent (that
-reference's Balance Quantity/NUG/Packing Type columns came from the now-removed Pre Transport
-stage's own manual entry and are deliberately left out, not fabricated). Pending reads live
-`ORDER_PUNCH.STATUS === "PRE TRANSPORT COMPLETED"` (label `"Transport Pending"`); Completed
-reads `Transport_Products` directly instead of a live status filter (label `"Vehicle Arrange
-Completed"`) — same reasoning as PDI's own Completed view (see above): a live-status equality
-check would make an order that's since progressed even further (Transport Reached, etc.)
-silently vanish from this Completed view too.
-**Frontend for the trip system does not exist yet** — `tripRoutes.ts` is verified end-to-end
-via API only so far; the "Transport" module UI still needs a trip list/detail + multi-order
-picker, not just a form (unlike every other module so far).
+Transporter Name, same pattern as the Order Punch logistics tab. **`TransportList.tsx`'s
+main view is item-level, not the generic trip list** — matches the old CRR "Pending
+Transport" reference exactly (customer filter sidebar via `CustomerFilterPanel`, main table,
+header actions row with a "Completed Transport" toggle + "+ Arrange Vehicle" button, same
+list pattern as `PdiList.tsx`), replacing the earlier `TripQueueList`-based trip list on this
+one route (the other 6 Transport-family routes still use `TripQueueList` unchanged, see
+above). Columns: Timestamp/CUST ID/Customer Name/Quantity/Unit/Part No./Part Name/Status
+(`GET /transport-trips/eligible-items`, `?status=COMPLETED` optional). Balance Quantity/
+Balance BOX Quantity/NUG/BOX Quantity/Packing Type from that reference came from the
+now-removed Pre Transport stage's own manual entry and are deliberately left out, not
+fabricated — "Quantity" here is just the item's own order quantity, not a tracked balance.
+Pending reads live `ORDER_PUNCH.STATUS === "PRE TRANSPORT COMPLETED"` (label `"Transport
+Pending"`); Completed reads `Transport_Products` directly instead of a live status filter
+(label `"Vehicle Arrange Completed"`) — same reasoning as PDI's own Completed view (see
+above): a live-status equality check would make an order that's since progressed even
+further (Transport Reached, etc.) silently vanish from this Completed view too.
 
 **`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch Items Approval`** are separate,
 pre-built snapshot/audit-log tabs (human-readable headers, mapped in
