@@ -28,7 +28,10 @@ authRouter.post("/login", async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "ID not recognized" } });
     }
-    if (!user.Password || user.Password !== password) {
+    // Trimmed the same way employeeId already is — mobile keyboards (autocapitalize,
+    // autofill) routinely add a trailing space to the password field, which this exact
+    // comparison used to reject outright even though the "real" password was correct.
+    if (!user.Password || user.Password.trim() !== password.trim()) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Incorrect password" } });
     }
 
