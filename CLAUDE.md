@@ -327,6 +327,34 @@ deleting the log row no longer does anything — revert only applies while still
 discount stage, a deliberate scope decision (not "always revert regardless of stage"). Revert
 also deletes the placeholder `SALE_ORDERS`/`SALE_ORDER_ITEMS` rows for that order, since
 they're for a discount that no longer exists.
+
+**The same revert-on-delete convention now runs at every remaining single-order stage**, one
+function per stage in `orders.ts`, all following the identical shape (check orders sitting
+exactly at a stage's `nextStatus`, look for the row/field that should exist by now, revert
+`STATUS` back to `prevStatus` if it's missing):
+- `revertOrphanedSaleOrder()` — `STATUS "SALE ORDER"` with `SALE_ORDERS`' own `Sale Order No.`
+  cleared reverts to `"PENDING SALE ORDER"`; resets that `SALE_ORDERS` row's upload fields
+  back to blank (not deleted, since the placeholder is expected to persist continuously) and
+  clears the downstream `SO_Confirmation`/`SO_Confirmation_Items` placeholder rows created at
+  upload time. Runs from `GET /orders` and `GET /orders/:id`.
+- `revertOrphanedSoConfirmation()` — `STATUS "DISPATCH APPROVAL"`/`"CANCELLED"` with
+  `SO_Confirmation`'s own `Confirmation` field cleared reverts to `"SALE ORDER"` (and
+  `SALE_ORDERS.STATUS` back from `COMPLETED` to `PENDING` alongside it); resets the
+  `SO_Confirmation` row's decision fields back to blank. Runs from `GET /orders`,
+  `GET /orders/:id`, and `GET /orders/sale-orders` (as a side-effect call using a fresh
+  `ORDER_PUNCH` read, since that endpoint's own response is shaped from `SALE_ORDERS`).
+- `revertOrphanedDispatchApproval()` — `STATUS "DISPATCH APPROVAL COMPLETED"` with no
+  matching rows left in `Dispatch Items Approval` reverts to `"DISPATCH APPROVAL"`. Runs from
+  `GET /orders`, `GET /orders/:id`, `GET /orders/dispatch-approvals`, and
+  `GET /orders/dispatch-approvals/items`.
+
+(`revertOrphanedPdi()`, described further below, already covered the PDI stage before this.)
+Each only reverts orders sitting **exactly** at that stage's own status — same scoping as the
+discount revert — so an order that's since progressed even further is left alone. Deliberately
+kept as separate hand-written functions rather than one generic helper: each stage's "does the
+downstream row/field still exist" check and its placeholder-reset shape differ enough (blank
+field vs missing row vs no placeholder concept at all) that forcing one shared abstraction
+would have been more fragile than three similar-looking but independent functions.
 - **Confirmed** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: DISPATCH APPROVAL`
   (this is what feeds the Dispatch Approval queue — `GET /orders/dispatch-approvals` reads
   `ORDER_PUNCH` filtered on that status, **not** `SALE_ORDERS`, since `SALE_ORDERS` has no

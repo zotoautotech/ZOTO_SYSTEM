@@ -286,10 +286,132 @@ async function revertOrphanedDiscounts(rows: SheetRow[]): Promise<SheetRow[]> {
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
+/** Same revert-on-delete convention as revertOrphanedDiscounts, one stage later: an order at
+ * STATUS "SALE ORDER" (form uploaded) whose SALE_ORDERS row has had its Sale Order No.
+ * cleared (or the whole row deleted) reverts back to "PENDING SALE ORDER" — the Sale Order
+ * upload's own prevStatus — so it reappears in the pending Sale Order queue. Resets the
+ * existing SALE_ORDERS row's upload fields back to blank (matching the original placeholder
+ * createPlaceholderSaleOrder wrote) rather than deleting it, since a placeholder row is
+ * expected to exist continuously from the discount step onward. Also clears the downstream
+ * SO_Confirmation placeholder (created at upload time) since it's now for an upload that no
+ * longer exists — a fresh one gets created next time the form is actually re-uploaded. */
+async function revertOrphanedSaleOrder(rows: SheetRow[]): Promise<SheetRow[]> {
+  if (!rows.some((r) => r.STATUS === "SALE ORDER")) return rows;
+
+  const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true });
+  const saleOrderByOrderId = new Map(saleOrders.map((r) => [r.ORDER_ID, r]));
+
+  const orphaned = rows.filter((r) => {
+    if (r.STATUS !== "SALE ORDER") return false;
+    const so = saleOrderByOrderId.get(r.ORDER_ID);
+    return !so || !so["Sale Order No."];
+  });
+  if (orphaned.length === 0) return rows;
+
+  const revertedById = new Map<string, SheetRow>();
+  for (const order of orphaned) {
+    await updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", order.ORDER_ID, punchToSheet({ STATUS: "PENDING SALE ORDER" }));
+
+    const so = saleOrderByOrderId.get(order.ORDER_ID);
+    if (so) {
+      await updateRow(
+        env.sheets.transactions,
+        "SALE_ORDERS",
+        "ORDER_ID",
+        order.ORDER_ID,
+        saleOrderToSheet({ SO_NO: "", SO_DATE: "", SO_ATTACHMENT_URL: "", SO_REMARKS: "", STATUS: "PENDING SALE ORDER" })
+      );
+    }
+
+    await deleteRows(env.sheets.transactions, "SO_Confirmation_Items", "ORDER_ID", [order.ORDER_ID]);
+    await deleteRows(env.sheets.transactions, "SO_Confirmation", "ORDER_ID", [order.ORDER_ID]);
+
+    revertedById.set(order.ORDER_ID, { ...order, STATUS: "PENDING SALE ORDER" });
+  }
+
+  return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
+}
+
+/** One stage later still: an order at STATUS "DISPATCH APPROVAL"/"CANCELLED" (an SO
+ * Confirmation decision was made) whose SO_Confirmation row's own Confirmation field has been
+ * cleared reverts back to "SALE ORDER" — so it reappears in the pending SO Confirmation
+ * queue — and SALE_ORDERS.STATUS reverts from "COMPLETED" back to "PENDING" alongside it.
+ * Resets the existing SO_Confirmation row's decision fields back to blank rather than
+ * deleting it, same placeholder-stays-present reasoning as revertOrphanedSaleOrder. */
+async function revertOrphanedSoConfirmation(rows: SheetRow[]): Promise<SheetRow[]> {
+  if (!rows.some((r) => r.STATUS === "DISPATCH APPROVAL" || r.STATUS === "CANCELLED")) return rows;
+
+  const confirmations = await readTable(env.sheets.transactions, "SO_Confirmation", { refresh: true });
+  const confByOrderId = new Map(confirmations.map((r) => [r.ORDER_ID, r]));
+
+  const orphaned = rows.filter((r) => {
+    if (r.STATUS !== "DISPATCH APPROVAL" && r.STATUS !== "CANCELLED") return false;
+    const conf = confByOrderId.get(r.ORDER_ID);
+    return !conf || !conf["Confirmation"];
+  });
+  if (orphaned.length === 0) return rows;
+
+  const revertedById = new Map<string, SheetRow>();
+  for (const order of orphaned) {
+    await Promise.all([
+      updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", order.ORDER_ID, punchToSheet({ STATUS: "SALE ORDER", APPROVAL_STATUS: "", APPROVAL_REMARKS: "" })),
+      updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", order.ORDER_ID, saleOrderToSheet({ STATUS: "PENDING", APPROVAL_STATUS: "", APPROVAL_REMARKS: "" })),
+    ]);
+
+    const conf = confByOrderId.get(order.ORDER_ID);
+    if (conf) {
+      await updateRow(
+        env.sheets.transactions,
+        "SO_Confirmation",
+        "ORDER_ID",
+        order.ORDER_ID,
+        soConfirmationToSheet({
+          CONFIRMATION: "",
+          RECEIVED_PAYMENT_AMOUNT: "",
+          PAYMENT_AMOUNT_PCT: "",
+          PAYMENT_ATTACHMENT_URL: "",
+          CONFIRMATION_REMARKS: "",
+          STATUS: "PENDING",
+        })
+      );
+    }
+
+    revertedById.set(order.ORDER_ID, { ...order, STATUS: "SALE ORDER" });
+  }
+
+  return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
+}
+
+/** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" with no matching
+ * rows left in "Dispatch Items Approval" (all deleted) reverts back to "DISPATCH APPROVAL" —
+ * so it reappears in the pending Dispatch Approval queue. Nothing to reset in place here
+ * (unlike the two above) since Dispatch Items Approval has no early-created placeholder. */
+async function revertOrphanedDispatchApproval(rows: SheetRow[]): Promise<SheetRow[]> {
+  if (!rows.some((r) => r.STATUS === "DISPATCH APPROVAL COMPLETED")) return rows;
+
+  const dispatchRows = await readTable(env.sheets.transactions, "Dispatch Items Approval", { refresh: true });
+  const orderIdsWithRow = new Set(dispatchRows.map((r) => r.ORDER_ID));
+
+  const orphaned = rows.filter((r) => r.STATUS === "DISPATCH APPROVAL COMPLETED" && !orderIdsWithRow.has(r.ORDER_ID));
+  if (orphaned.length === 0) return rows;
+
+  const revertedById = new Map<string, SheetRow>();
+  for (const order of orphaned) {
+    await updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", order.ORDER_ID, punchToSheet({ STATUS: "DISPATCH APPROVAL", APPROVAL_TIME: "" }));
+    revertedById.set(order.ORDER_ID, { ...order, STATUS: "DISPATCH APPROVAL" });
+  }
+
+  return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
+}
+
 ordersRouter.get("/", async (req, res, next) => {
   try {
     const { stage, status } = req.query as { stage?: string; status?: string };
-    const rows = await revertOrphanedDiscounts((await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet));
+    let rows = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
+    rows = await revertOrphanedDiscounts(rows);
+    rows = await revertOrphanedSaleOrder(rows);
+    rows = await revertOrphanedSoConfirmation(rows);
+    rows = await revertOrphanedDispatchApproval(rows);
     const filtered = rows.filter(
       (r) => (!stage || r.CURRENT_STAGE === stage) && (!status || r.STATUS === status)
     );
@@ -310,9 +432,14 @@ ordersRouter.get("/", async (req, res, next) => {
  * in here as `ORDER_PUNCH_STATUS` for the list view's Status column/row styling. */
 ordersRouter.get("/sale-orders", async (_req, res, next) => {
   try {
+    // Revert-on-delete needs a fresh ORDER_PUNCH read, and runs as a side effect (its return
+    // value isn't what this endpoint responds with — SALE_ORDERS is read fresh afterward so
+    // the response reflects whatever it just reverted).
+    await revertOrphanedSoConfirmation((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
+
     const [saleOrderRows, punchRows] = await Promise.all([
-      readTable(env.sheets.transactions, "SALE_ORDERS"),
-      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true }),
+      readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
     ]);
     const punchStatusByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, punchFromSheet(r).STATUS]));
     const rows = saleOrderRows
@@ -340,7 +467,10 @@ const BEFORE_DISPATCH_APPROVAL_COMPLETED = new Set(["", "PENDING", "PENDING SALE
 ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };
-    const rows = (await readTable(env.sheets.transactions, ORDER_TAB))
+    if (status !== "COMPLETED") {
+      await revertOrphanedDispatchApproval((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
+    }
+    const rows = (await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }))
       .map(punchFromSheet)
       .filter((row) =>
         status === "COMPLETED"
@@ -359,8 +489,10 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
  * they're only decided when the doer actually submits the approval, not before. */
 ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
   try {
+    await revertOrphanedDispatchApproval((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
+
     const [punchRows, itemRows] = await Promise.all([
-      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
     ]);
     const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "DISPATCH APPROVAL");
@@ -439,7 +571,10 @@ ordersRouter.get("/:id", async (req, res, next) => {
     if (!sheetOrder) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
-    const [order] = await revertOrphanedDiscounts([punchFromSheet(sheetOrder)]);
+    let [order] = await revertOrphanedDiscounts([punchFromSheet(sheetOrder)]);
+    [order] = await revertOrphanedSaleOrder([order]);
+    [order] = await revertOrphanedSoConfirmation([order]);
+    [order] = await revertOrphanedDispatchApproval([order]);
     res.json({
       order,
       items: items.filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet),
