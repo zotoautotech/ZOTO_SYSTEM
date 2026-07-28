@@ -297,12 +297,21 @@ ordersRouter.get("/", async (req, res, next) => {
  * writes at the discount step (see below), before the doer has actually uploaded the Sale
  * Order form; showing them here let an order jump the queue with blank Sale Order No./Date
  * still showing "—". Only "PENDING" (uploaded, awaiting confirmation), "CHANGES", and
- * "COMPLETED" are real SO Confirmation states. */
+ * "COMPLETED" are real SO Confirmation states. `SALE_ORDERS.STATUS` alone can't distinguish
+ * Confirmed from Cancelled — both set it to "COMPLETED" (see the Confirmed/Cancelled branch
+ * below); only `ORDER_PUNCH.STATUS` does ("DISPATCH APPROVAL" vs "CANCELLED"), so it's joined
+ * in here as `ORDER_PUNCH_STATUS` for the list view's Status column/row styling. */
 ordersRouter.get("/sale-orders", async (_req, res, next) => {
   try {
-    const rows = (await readTable(env.sheets.transactions, "SALE_ORDERS"))
+    const [saleOrderRows, punchRows] = await Promise.all([
+      readTable(env.sheets.transactions, "SALE_ORDERS"),
+      readTable(env.sheets.transactions, ORDER_TAB),
+    ]);
+    const punchStatusByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, punchFromSheet(r).STATUS]));
+    const rows = saleOrderRows
       .map(saleOrderFromSheet)
-      .filter((row) => row.STATUS !== "PENDING SALE ORDER");
+      .filter((row) => row.STATUS !== "PENDING SALE ORDER")
+      .map((row) => ({ ...row, ORDER_PUNCH_STATUS: punchStatusByOrderId.get(row.ORDER_ID) ?? "" }));
     res.json(rows);
   } catch (err) {
     next(err);

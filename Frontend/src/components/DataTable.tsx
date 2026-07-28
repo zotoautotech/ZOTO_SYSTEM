@@ -14,6 +14,9 @@ interface DataTableProps<T> {
   getRowKey?: (row: T) => string;
   selectedKeys?: Set<string>;
   onToggleRow?: (key: string) => void;
+  /** Extra inline style merged onto a row's <tr> — used for e.g. the old CRR's
+   * strikethrough-red cancelled-row treatment (see SoConfirmationList.tsx). */
+  getRowStyle?: (row: T) => React.CSSProperties | undefined;
 }
 
 export function DataTable<T>({
@@ -25,6 +28,7 @@ export function DataTable<T>({
   getRowKey,
   selectedKeys,
   onToggleRow,
+  getRowStyle,
 }: DataTableProps<T>) {
   return (
     <div className="sheet-scroll" style={{ overflow: "auto", height: "100%" }}>
@@ -78,6 +82,7 @@ export function DataTable<T>({
                 style={{
                   cursor: selectable || onRowClick ? "pointer" : "default",
                   background: checked ? "var(--color-primary-tint)" : undefined,
+                  ...getRowStyle?.(row),
                 }}
                 onMouseEnter={(e) => {
                   if (!checked) e.currentTarget.style.background = "var(--color-bg-page)";

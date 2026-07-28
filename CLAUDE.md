@@ -326,6 +326,13 @@ they're for a discount that no longer exists.
   CHANGES`, stays in the pending SO Confirmation queue.
 - **Cancelled** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: CANCELLED`.
 
+Since `SALE_ORDERS.STATUS` alone can't tell Confirmed apart from Cancelled (both write
+`COMPLETED`), `GET /orders/sale-orders` (`orders.ts`) joins in `ORDER_PUNCH_STATUS` per row —
+`SoConfirmationList.tsx`'s Status badge and row styling key off that instead: `CANCELLED`
+renders a red badge and the whole row in red strikethrough (matching the old CRR reference),
+everything else uses `SALE_ORDERS.STATUS` as before. `DataTable.tsx` gained a `getRowStyle`
+prop for this.
+
 Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
 /orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED`.
 `?status=COMPLETED` on that GET route no longer does a strict `=== "DISPATCH APPROVAL

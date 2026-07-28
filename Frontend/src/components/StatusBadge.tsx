@@ -2,7 +2,7 @@ const COLORS: Record<string, { bg: string; fg: string }> = {
   PENDING: { bg: "#FFF3E0", fg: "#E65100" },
   COMPLETED: { bg: "#E8F5E9", fg: "#2E7D32" },
   REJECTED: { bg: "#FFEBEE", fg: "#C62828" },
-  CANCELLED: { bg: "#F5F5F5", fg: "#757575" },
+  CANCELLED: { bg: "#FFEBEE", fg: "#C62828" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

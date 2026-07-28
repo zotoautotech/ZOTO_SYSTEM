@@ -45,8 +45,18 @@ export function SoConfirmationList() {
     return matchesCustomer && matchesSearch;
   });
 
+  // SALE_ORDERS.STATUS alone can't tell Confirmed apart from Cancelled — both set it to
+  // "COMPLETED" — so the joined ORDER_PUNCH_STATUS ("CANCELLED" vs "DISPATCH APPROVAL")
+  // is what actually distinguishes them for the badge/row styling below.
+  function effectiveStatus(order: OrderRecord) {
+    return order.ORDER_PUNCH_STATUS === "CANCELLED" ? "CANCELLED" : order.STATUS || "PENDING";
+  }
+  function isCancelled(order: OrderRecord) {
+    return order.ORDER_PUNCH_STATUS === "CANCELLED";
+  }
+
   const columns: Column<OrderRecord>[] = [
-    { key: "status", header: "Status", render: (order) => <StatusBadge status={order.STATUS || "PENDING"} /> },
+    { key: "status", header: "Status", render: (order) => <StatusBadge status={effectiveStatus(order)} /> },
     { key: "timestamp", header: "Timestamp", render: (order) => formatTimestamp(order.CREATED_AT) },
     { key: "soNo", header: "Sale Order No.", render: (order) => order.SO_NO || "—" },
     { key: "soDate", header: "Sale Order Date", render: (order) => order.SO_DATE || "—" },
@@ -80,10 +90,20 @@ export function SoConfirmationList() {
               key={order.SALE_ORDER_ID || order.ORDER_ID}
               onClick={() => navigate(`/modules/so-confirmation/${order.ORDER_ID}`)}
               className="card"
-              style={{ display: "block", width: "100%", textAlign: "left", padding: 14, marginBottom: 10, color: "var(--color-text)", cursor: "pointer" }}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: 14,
+                marginBottom: 10,
+                cursor: "pointer",
+                ...(isCancelled(order)
+                  ? { color: "#C62828", textDecoration: "line-through" }
+                  : { color: "var(--color-text)" }),
+              }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <StatusBadge status={order.STATUS || "PENDING"} />
+                <StatusBadge status={effectiveStatus(order)} />
                 <span className="text-muted" style={{ fontSize: 12 }}>{formatTimestamp(order.CREATED_AT)}</span>
               </div>
               <div style={{ fontWeight: 700, marginTop: 10 }}>{order.CUSTOMER_NAME || "Customer not set"}</div>
@@ -105,6 +125,7 @@ export function SoConfirmationList() {
           rows={filtered}
           getRowKey={(order) => order.SALE_ORDER_ID || order.ORDER_ID}
           onRowClick={(order) => navigate(`/modules/so-confirmation/${order.ORDER_ID}`)}
+          getRowStyle={(order) => (isCancelled(order) ? { color: "#C62828", textDecoration: "line-through" } : undefined)}
           emptyMessage={isLoading ? "Loading…" : normalizedQuery ? `No saved sale orders match “${query}”` : showCompleted ? "No completed confirmations." : "No saved sale orders awaiting confirmation."}
         />
       </div>
