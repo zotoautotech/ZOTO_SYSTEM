@@ -16,8 +16,9 @@ const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Log
 // at the user's request so the team can punch partial orders and fill gaps in later.
 // A small set of "can't punch an order at all without this" fields are the exception:
 // Sale/Order/Payment Type, Customer ID, each item's part/qty/price, Billing Address/State,
-// Is Shipping Address Same, and the three Logistics toggles — matching the old CRR
-// system's required set.
+// Is Shipping Address Same, the three Logistics toggles, and Preferred Transporter ID
+// (only when Preferred Delivery Mode is "Transporter") — matching the old CRR system's
+// required set.
 function validateTab(tab: number, form: OrderFormState): string | null {
   if (tab === 1) {
     if (!form.saleType) return "Select a Sale Type before continuing";
@@ -43,6 +44,9 @@ function validateTab(tab: number, form: OrderFormState): string | null {
     if (!form.preferredDeliveryMode) return "Select a Preferred Delivery Mode before continuing";
     if (!form.preferredTransportMode) return "Select a Preferred Transportation Mode before continuing";
     if (!form.freightPaidBy) return "Select who Freight is Paid by before continuing";
+    if (form.preferredDeliveryMode === "Transporter" && !form.preferredTptId) {
+      return "Select a Preferred Transporter ID before continuing";
+    }
   }
   if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
     return "Advance Payment (%) must be between 0 and 100";

@@ -71,6 +71,7 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
         <>
           <SearchableSelect
             label="Preferred Transporter ID"
+            required
             value={form.preferredTptId}
             onChange={handleTransporterSelect}
             options={options}
