@@ -3,7 +3,7 @@ import { useIsMobile } from "../../../lib/responsive";
 /** Shared header/tab-bar chrome for the trip stage forms (Reached/Stock Release/Tax
  * Invoice/Dispatch/LR/Delivery) — same modal shell as StageForm.tsx, just reused directly
  * since each of these forms has enough bespoke conditional logic to not fit the single
- * config-driven StageForm pattern used for PDI/Pre Transport. */
+ * config-driven StageForm pattern used for PDI. */
 export function StageModalShell({
   title,
   tabLabel,

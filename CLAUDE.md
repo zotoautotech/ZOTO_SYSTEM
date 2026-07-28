@@ -73,19 +73,24 @@ action rail opens `DispatchApprovalForm.tsx` — Dispatch Approval dropdown (Dis
 Dispatch Extended / Short Quantity / Excess Quantity) with live validation, persists via
 `POST /orders/:id/dispatch-approval`.
 
-**PDI and Pre Transport** are the two simple, single-order stages between Dispatch Approval
-and the trip system below, driven by one generic, config-based implementation:
-- `Frontend/src/lib/stages.ts` — `STAGES` array (just `pdi`/`pre-transport` now — the other
-  6 entries this array used to hold were superseded by the trip system, see below), one
+**PDI** is the one simple, single-order stage between Dispatch Approval and the trip system
+below, driven by one generic, config-based implementation (Pre Transport was removed — a
+manual doer-filled stage the user wants system-auto-decided instead, deferred to a future
+version; PDI's `nextStatus` now goes straight to `"PRE TRANSPORT COMPLETED"`, the same string
+the trip system's `eligible-orders`/`eligible-items` already filter on, so nothing downstream
+needed to change):
+- `Frontend/src/lib/stages.ts` — `STAGES` array (just `pdi` now — the other stages this array
+  used to hold were superseded by the trip system, see below), one
   `StageDef` per stage: `key` (also the URL segment and API path), `label`, `prevStatus`/
   `nextStatus` (the `ORDER_PUNCH.STATUS` values that gate its pending queue and that it
   advances to), and a `fields[]` list driving the form (types: `text`/`number`/`date`/
   `datetime-local`/`yesno`/`file`).
-- `Frontend/src/components/stage/StageQueueList.tsx` — the one list component for both
-  (same Completed-toggle/customer-filter pattern as every other queue), rendered via
-  `App.tsx`'s `STAGES.map(...)` route generation.
-- `Frontend/src/components/stage/StageForm.tsx` — the one modal form for both, rendering
-  whichever fields the `StageDef` declares.
+- `Frontend/src/components/stage/StageQueueList.tsx` — the generic list component (same
+  Completed-toggle/customer-filter pattern as every other queue) — but PDI itself now uses
+  a dedicated item-level `PdiList.tsx` instead (see below), so this is currently unused
+  until a future stage is added to `STAGES`.
+- `Frontend/src/components/stage/StageForm.tsx` — the one modal form, rendering whichever
+  fields the `StageDef` declares.
 - `OrderDetail.tsx` derives `currentStage` from the URL's module segment and shows a single
   generic "Give `{label}` Form" action whenever `order.STATUS === currentStage.prevStatus` —
   no per-stage QuickAction wiring needed.
@@ -93,7 +98,7 @@ and the trip system below, driven by one generic, config-based implementation:
   stage — tab name, ID prefix/column, prev/next status, fields) and `stageRoutes.ts`
   (`registerStageRoutes()`, called from `orders.ts` **before** the generic `GET /:id` route
   so Express doesn't swallow e.g. `GET /pdi` as `:id="pdi"`). Each stage's tab (`PDI`,
-  `Pre Transport`) is brand-new — plain internal `UPPER_SNAKE` headers, no translation-map
+  `PDI`) is brand-new — plain internal `UPPER_SNAKE` headers, no translation-map
   file needed (unlike `ORDER_PUNCH`/`SO_Confirmation`), created on first use via
   `ensureSheetTab`. **If frontend and backend `stages.ts`/`stageConfig.ts` ever drift out of
   sync again, `App.tsx`'s static route for a leftover frontend-only key will silently shadow
@@ -414,6 +419,15 @@ simplification. Lifecycle:
 shared buyer/billing/shipping/consignee/GST/logistics/vehicle column spread reused by every
 trip-family tab (they all repeat the same ~30 denormalized columns; `appendRow` silently
 drops whichever don't exist on a given tab, so one spread works everywhere).
+`CreateTripModal.tsx`'s Transporter ID is a searchable select against the `Transporter Data`
+master (`GET /masters/transporters`, `TRANSPORT_SHEET_ID`) — selecting one auto-fills
+Transporter Name, same pattern as the Order Punch logistics tab. `TransportList.tsx` also
+shows a read-only `EligibleItemsTable` above the trip queue (`GET
+/transport-trips/eligible-items`, new) — item-level Timestamp/CUST ID/Customer Name/Part
+No./Part Name/Quantity/Unit for orders already at `PRE TRANSPORT COMPLETED`, matching the old
+CRR "Pending Transport" reference view's visibility intent (that reference's Balance
+Quantity/NUG/Packing Type columns came from the now-removed Pre Transport stage's own manual
+entry and are deliberately left out, not fabricated).
 **Frontend for the trip system does not exist yet** — `tripRoutes.ts` is verified end-to-end
 via API only so far; the "Transport" module UI still needs a trip list/detail + multi-order
 picker, not just a form (unlike every other module so far).

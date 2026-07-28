@@ -14,7 +14,6 @@ export const MODULES: ModuleDef[] = [
   { key: "so-confirmation", label: "SO Confirmation", icon: "✅" },
   { key: "dispatch-approval", label: "Dispatch Approval", icon: "📦" },
   { key: "pdi", label: "PDI", icon: "📋" },
-  { key: "pre-transport", label: "Pre Transport", icon: "📦" },
   { key: "transport", label: "Transport", icon: "🚚" },
   { key: "transport-reached", label: "Transport Reached", icon: "🕒" },
   { key: "stock-release", label: "Stock Release", icon: "🗄️" },

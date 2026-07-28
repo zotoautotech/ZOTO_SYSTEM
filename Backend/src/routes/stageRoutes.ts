@@ -29,11 +29,11 @@ function buildBodySchema(stage: StageConfig) {
 }
 
 /** Registers GET /orders/:stageKey (pending/completed queue) and POST /orders/:id/:stageKey
- * (save) for PDI and Pre Transport — the two simple single-order stages between Dispatch
- * Approval and the trip system (see stageConfig.ts, tripRoutes.ts). Both are per-item: one
- * row is appended per order item, with the shared buyer/order snapshot fields auto-filled
- * via orderSnapshotToSheet (same helper the trip routes use), same append-only-log +
- * STATUS-chain pattern already used for SO Confirmation/Dispatch Approval. */
+ * (save) for PDI — the one simple single-order stage between Dispatch Approval and the trip
+ * system (see stageConfig.ts, tripRoutes.ts). Per-item: one row is appended per order item,
+ * with the shared buyer/order snapshot fields auto-filled via orderSnapshotToSheet (same
+ * helper the trip routes use), same append-only-log + STATUS-chain pattern already used for
+ * SO Confirmation/Dispatch Approval. */
 /** Item-level rows for the PDI queue's table (Timestamp, Part Name, Customer Name, Buyer
  * GSTIN No., Quantity, Unit, PDI Date, PDI Attachment, PDI Remarks — matching the old CRR
  * reference view), used for both the pending and Completed toggle states. Pending reads

@@ -17,17 +17,24 @@ export interface StageDef {
 }
 
 /**
- * PDI and Pre Transport are the two simple single-order stages between Dispatch Approval
- * and the trip system (see Frontend/src/lib/tripStages.ts, modules/transport/) — mirrors
+ * PDI is the one simple single-order stage between Dispatch Approval and the trip system
+ * (see Frontend/src/lib/tripStages.ts, modules/transport/) — mirrors
  * Backend/src/routes/stageConfig.ts field-for-field. Transport onward is trip-level, not
  * order-level, and lives in its own module/route set.
+ *
+ * Pre Transport was removed (user call — it was a manual doer-filled stage but should be
+ * system-auto-decided instead; deferred to a future version, not rebuilt here) — PDI now
+ * forwards straight to "PRE TRANSPORT COMPLETED" (unchanged status string, since Transport's
+ * eligible-orders filter in tripRoutes.ts already keys off exactly that value — this way
+ * nothing downstream needed to change) instead of the old "PDI COMPLETED" intermediate
+ * status that Pre Transport used to pick up.
  */
 export const STAGES: StageDef[] = [
   {
     key: "pdi",
     label: "PDI",
     prevStatus: "DISPATCH APPROVAL COMPLETED",
-    nextStatus: "PDI COMPLETED",
+    nextStatus: "PRE TRANSPORT COMPLETED",
     fields: [
       { key: "pdiNo", label: "PDI No.", type: "text" },
       { key: "pdiDate", label: "PDI Date", type: "date", required: true },
@@ -39,19 +46,6 @@ export const STAGES: StageDef[] = [
       // stage.fields[].key), this meant every PDI submission's schema.parse() was silently
       // failing to see this required field at all. Renamed to match.
       { key: "pdiRemarks", label: "PDI Remarks", type: "text", required: true },
-    ],
-  },
-  {
-    key: "pre-transport",
-    label: "Pre Transport",
-    prevStatus: "PDI COMPLETED",
-    nextStatus: "PRE TRANSPORT COMPLETED",
-    fields: [
-      { key: "boxQuantity", label: "Box Quantity", type: "number", required: true },
-      { key: "packingType", label: "Packing Type", type: "text" },
-      { key: "nugOfThisCustomer", label: "NUG of this Customer", type: "text" },
-      { key: "packagingNug", label: "Packaging Nug", type: "text" },
-      { key: "packagingCode", label: "Packaging Code", type: "text" },
     ],
   },
 ];

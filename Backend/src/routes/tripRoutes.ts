@@ -64,6 +64,44 @@ tripsRouter.get("/eligible-orders", async (_req, res, next) => {
   }
 });
 
+/** Item-level view of the same eligible orders (one row per item: Timestamp, CUST ID,
+ * Customer Name, Part No., Part Name, Quantity, Unit) — read-only visibility into what's
+ * about to be picked up in "Arrange Vehicle" before a trip is actually created, matching the
+ * old CRR "Pending Transport" reference view. That reference also showed Balance Quantity/
+ * NUG/Packing Type columns, but those came from the now-removed Pre Transport stage's own
+ * manual entry — no longer collected anywhere, so they're intentionally left out here rather
+ * than shown as fabricated data. */
+tripsRouter.get("/eligible-items", async (_req, res, next) => {
+  try {
+    const [punchRows, itemRows] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB),
+      readTable(env.sheets.transactions, "ORDER_ITEMS"),
+    ]);
+    const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "PRE TRANSPORT COMPLETED");
+    const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
+    const rows = itemRows
+      .filter((i) => orderById.has(i.ORDER_ID))
+      .map(itemFromSheet)
+      .map((item) => {
+        const order = orderById.get(item.ORDER_ID)!;
+        return {
+          CREATED_AT: order.CREATED_AT || "",
+          ORDER_ID: order.ORDER_ID,
+          ITEM_ID: item.ITEM_ID,
+          CUST_ID: order.CUST_ID || "",
+          CUSTOMER_NAME: order.CUSTOMER_NAME || "",
+          PART_NO: item.PART_NO || "",
+          PART_NAME: item.PART_NAME || "",
+          QTY: item.QTY || "",
+          UOM: item.UOM || "",
+        };
+      });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 tripsRouter.get("/", async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };

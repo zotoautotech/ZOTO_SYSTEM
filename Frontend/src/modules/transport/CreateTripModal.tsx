@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
 import { createTrip } from "../../lib/tripsApi";
+import { listTransporters, transportersToOptions } from "../../lib/mastersApi";
 
 interface Props {
   onClose: () => void;
@@ -20,7 +22,10 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
 
 /** Matches the old "Transport Main Form" reference (docs/04-UIUX-BRIEF.md §9.1): Send
  * Through / Vehicle Arrange for toggles, Transporter ID only when Send Through =
- * Transporter, Freight Charge/GST Applicable only when Freight Applicable On Invoice = Y. */
+ * Transporter, Freight Charge/GST Applicable only when Freight Applicable On Invoice = Y.
+ * Transporter ID is a searchable select against the Transporter Data master (TRANSPORT_SHEET_ID,
+ * same GET /masters/transporters already used by the Order Punch logistics tab) — selecting
+ * one auto-fills Transporter Name, same pattern as Tab4LogisticsDetails.tsx. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
   const isMobile = useIsMobile();
   const [sendThrough, setSendThrough] = useState<string>("");
@@ -37,6 +42,14 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
+  const transporterOptions = transportersToOptions(transporters);
+
+  function handleTransporterSelect(_value: string, option?: { value: string; label: string }) {
+    setTransporterId(option?.value ?? "");
+    setTransporterName(option?.label ?? "");
+  }
 
   function canSave() {
     return !!vehicleArrangeFor && !!vehicleType && !!vehicleNo && !!driverName && !!driverContactNo;
@@ -114,8 +127,14 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
 
           {sendThrough === "Transporter" && (
             <>
-              <TextField label="Transporter ID" value={transporterId} onChange={(e) => setTransporterId(e.target.value)} />
-              <TextField label="Transporter Name" value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />
+              <SearchableSelect
+                label="Transporter ID"
+                value={transporterId}
+                onChange={handleTransporterSelect}
+                options={transporterOptions}
+                placeholder="Search transporter…"
+              />
+              <TextField label="Transporter Name" value={transporterName} disabled />
             </>
           )}
 

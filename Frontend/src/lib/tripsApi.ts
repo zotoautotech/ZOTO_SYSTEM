@@ -22,6 +22,25 @@ export async function listEligibleOrders() {
   return res.data;
 }
 
+export interface EligibleItemRow {
+  CREATED_AT: string;
+  ORDER_ID: string;
+  ITEM_ID: string;
+  CUST_ID: string;
+  CUSTOMER_NAME: string;
+  PART_NO: string;
+  PART_NAME: string;
+  QTY: string;
+  UOM: string;
+}
+
+/** Item-level view of listEligibleOrders — one row per item, read-only, for visibility into
+ * what's about to be picked up in "Arrange Vehicle" before a trip is created. */
+export async function listEligibleItems() {
+  const res = await api.get<EligibleItemRow[]>("/transport-trips/eligible-items");
+  return res.data;
+}
+
 export interface CreateTripPayload {
   vehicleArrangeFor: string;
   sendThrough?: string;

@@ -22,12 +22,18 @@ export interface StageConfig {
 }
 
 /**
- * PDI and Pre Transport are the two simple single-order stages between Dispatch Approval
- * and the trip system (see tripRoutes.ts). Both are per-item on the live sheet (ORDER_ID +
- * ITEM_ID columns), so one row is appended per order item — same pattern as
- * /:id/dispatch-approval in orders.ts. Once an order reaches PRE TRANSPORT COMPLETED it
- * becomes eligible to be attached to a Transport trip (GET /transport-trips/eligible-orders),
- * which owns everything from Transport through Delivery.
+ * PDI is the one simple single-order stage between Dispatch Approval and the trip system
+ * (see tripRoutes.ts). Per-item on the live sheet (ORDER_ID + ITEM_ID columns), so one row
+ * is appended per order item — same pattern as /:id/dispatch-approval in orders.ts. Once an
+ * order reaches PRE TRANSPORT COMPLETED it becomes eligible to be attached to a Transport
+ * trip (GET /transport-trips/eligible-orders), which owns everything from Transport through
+ * Delivery.
+ *
+ * Pre Transport (a manual doer-filled stage) was removed — user call, deferred to a future
+ * version where it becomes system-auto-decided instead. PDI now sets nextStatus straight to
+ * "PRE TRANSPORT COMPLETED" (unchanged string — tripRoutes.ts's eligible-orders filter
+ * already keys off exactly that value, so nothing downstream needed to change) instead of
+ * the old "PDI COMPLETED" intermediate status Pre Transport used to pick up.
  */
 export const STAGES: StageConfig[] = [
   {
@@ -37,7 +43,7 @@ export const STAGES: StageConfig[] = [
     idColumn: "PDI ID",
     idPrefix: "PDI",
     prevStatus: "DISPATCH APPROVAL COMPLETED",
-    nextStatus: "PDI COMPLETED",
+    nextStatus: "PRE TRANSPORT COMPLETED",
     perItem: true,
     fields: [
       // "PDI No." is a real column on the live sheet, separate from the internal "PDI ID"
@@ -48,23 +54,6 @@ export const STAGES: StageConfig[] = [
       { key: "pdiAttachmentUrl", header: "PDI Attachment" },
       { key: "boxQuantity", header: "Box Quantity" },
       { key: "pdiRemarks", header: "PDI Remarks", required: true },
-    ],
-  },
-  {
-    key: "pre-transport",
-    label: "Pre Transport",
-    tab: "Pre Transport",
-    idColumn: "Pre Transport ID",
-    idPrefix: "PRETPT",
-    prevStatus: "PDI COMPLETED",
-    nextStatus: "PRE TRANSPORT COMPLETED",
-    perItem: true,
-    fields: [
-      { key: "boxQuantity", header: "Box Quantity", required: true },
-      { key: "packingType", header: "Packing Type" },
-      { key: "nugOfThisCustomer", header: "NUG of this Customer" },
-      { key: "packagingNug", header: "Packaging Nug" },
-      { key: "packagingCode", header: "Packaging Code" },
     ],
   },
 ];
