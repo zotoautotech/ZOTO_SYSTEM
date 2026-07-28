@@ -324,12 +324,18 @@ they're for a discount that no longer exists.
 - **Cancelled** → `SALE_ORDERS.STATUS: COMPLETED`, `ORDER_PUNCH.STATUS: CANCELLED`.
 
 Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
-/orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
-is what `?status=COMPLETED` on that same GET route filters on).
+/orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED`.
+`?status=COMPLETED` on that GET route no longer does a strict `=== "DISPATCH APPROVAL
+COMPLETED"` check — broadened to "any status past Dispatch Approval" (not `PENDING`/`PENDING
+SALE ORDER`/`SALE ORDER`/`DISPATCH APPROVAL`/blank), same fix already applied once to Punch
+Order's Completed filter — an order that progressed even further (into PDI, Transport, etc.)
+was silently disappearing from both the pending AND Completed Dispatch Approval views at
+once under the old strict check.
 
 Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
 /orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
-is what `?status=COMPLETED` on that same GET route filters on), appending one row per item
+is what `?status=COMPLETED` on that same GET route filters on, per the broadened check just
+above), appending one row per item
 to **`Dispatch Items Approval`** (renamed from `Dispatch_Approval` in the sheet's "final"
 pass — see Known gotchas). `POST /orders/:id/so-confirmation`'s Confirmed/Cancelled branch
 also sets `ORDER_PUNCH.APPROVAL_TIME` (was mapped but never actually written before) — this
@@ -432,12 +438,17 @@ drops whichever don't exist on a given tab, so one spread works everywhere).
 `CreateTripModal.tsx`'s Transporter ID is a searchable select against the `Transporter Data`
 master (`GET /masters/transporters`, `TRANSPORT_SHEET_ID`) — selecting one auto-fills
 Transporter Name, same pattern as the Order Punch logistics tab. `TransportList.tsx` also
-shows a read-only `EligibleItemsTable` above the trip queue (`GET
-/transport-trips/eligible-items`, new) — item-level Timestamp/CUST ID/Customer Name/Part
-No./Part Name/Quantity/Unit for orders already at `PRE TRANSPORT COMPLETED`, matching the old
-CRR "Pending Transport" reference view's visibility intent (that reference's Balance
-Quantity/NUG/Packing Type columns came from the now-removed Pre Transport stage's own manual
-entry and are deliberately left out, not fabricated).
+shows a read-only `EligibleItemsTable` above the trip queue with its own Pending/"Vehicle
+Arrange Completed" toggle (`GET /transport-trips/eligible-items`, `?status=COMPLETED`
+optional) — item-level Timestamp/CUST ID/Customer Name/Part No./Part Name/Quantity/Unit/
+Status, matching the old CRR "Pending Transport" reference view's visibility intent (that
+reference's Balance Quantity/NUG/Packing Type columns came from the now-removed Pre Transport
+stage's own manual entry and are deliberately left out, not fabricated). Pending reads live
+`ORDER_PUNCH.STATUS === "PRE TRANSPORT COMPLETED"` (label `"Transport Pending"`); Completed
+reads `Transport_Products` directly instead of a live status filter (label `"Vehicle Arrange
+Completed"`) — same reasoning as PDI's own Completed view (see above): a live-status equality
+check would make an order that's since progressed even further (Transport Reached, etc.)
+silently vanish from this Completed view too.
 **Frontend for the trip system does not exist yet** — `tripRoutes.ts` is verified end-to-end
 via API only so far; the "Transport" module UI still needs a trip list/detail + multi-order
 picker, not just a form (unlike every other module so far).

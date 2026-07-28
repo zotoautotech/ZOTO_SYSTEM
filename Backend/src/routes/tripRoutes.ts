@@ -64,15 +64,40 @@ tripsRouter.get("/eligible-orders", async (_req, res, next) => {
   }
 });
 
-/** Item-level view of the same eligible orders (one row per item: Timestamp, CUST ID,
- * Customer Name, Part No., Part Name, Quantity, Unit) — read-only visibility into what's
- * about to be picked up in "Arrange Vehicle" before a trip is actually created, matching the
- * old CRR "Pending Transport" reference view. That reference also showed Balance Quantity/
- * NUG/Packing Type columns, but those came from the now-removed Pre Transport stage's own
- * manual entry — no longer collected anywhere, so they're intentionally left out here rather
- * than shown as fabricated data. */
-tripsRouter.get("/eligible-items", async (_req, res, next) => {
+/** Item-level view of orders waiting for (or already picked up by) vehicle arrangement —
+ * Timestamp, CUST ID, Customer Name, Part No., Part Name, Quantity, Unit, plus a literal
+ * Status label ("Transport Pending" / "Vehicle Arrange Completed"), matching the old CRR
+ * "Pending Transport" reference view's visibility intent. That reference also showed Balance
+ * Quantity/NUG/Packing Type columns, but those came from the now-removed Pre Transport
+ * stage's own manual entry — no longer collected anywhere, so they're intentionally left out
+ * here rather than shown as fabricated data.
+ *
+ * status=COMPLETED reads `Transport_Products` directly instead of filtering live
+ * ORDER_PUNCH.STATUS — an order that's since progressed even further (Transport Reached,
+ * etc.) still keeps its own Transport_Products row, so it won't silently vanish from this
+ * Completed view the way a live-status equality filter would (the exact bug class already
+ * hit once on Dispatch Approval's own Completed filter, see orders.ts). */
+tripsRouter.get("/eligible-items", async (req, res, next) => {
   try {
+    const { status } = req.query as { status?: string };
+
+    if (status === "COMPLETED") {
+      const rows = (await readTable(env.sheets.transactions, "Transport_Products")).map((r) => ({
+        CREATED_AT: r["Timestamp"] || "",
+        ORDER_ID: r["ORDER_ID"] || "",
+        ITEM_ID: r["ITEM_ID"] || "",
+        CUST_ID: r["CUST ID"] || "",
+        CUSTOMER_NAME: r["Cutomer Name"] || "",
+        PART_NO: r["Part No."] || "",
+        PART_NAME: r["Part Name"] || "",
+        QTY: r["Quantity"] || "",
+        UOM: r["Unit"] || "",
+        STATUS_LABEL: "Vehicle Arrange Completed",
+      }));
+      res.json(rows);
+      return;
+    }
+
     const [punchRows, itemRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
@@ -94,6 +119,7 @@ tripsRouter.get("/eligible-items", async (_req, res, next) => {
           PART_NAME: item.PART_NAME || "",
           QTY: item.QTY || "",
           UOM: item.UOM || "",
+          STATUS_LABEL: "Transport Pending",
         };
       });
     res.json(rows);

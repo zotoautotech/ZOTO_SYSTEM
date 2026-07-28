@@ -302,6 +302,15 @@ ordersRouter.get("/sale-orders", async (_req, res, next) => {
   }
 });
 
+/** Statuses that mean an order hasn't reached Dispatch Approval Completed yet — anything
+ * else (DISPATCH APPROVAL COMPLETED itself, or any later pipeline stage: PDI, PRE TRANSPORT
+ * COMPLETED, TRANSPORT ASSIGNED, ... DELIVERED) counts as "Completed" for THIS stage's own
+ * view. A strict `=== "DISPATCH APPROVAL COMPLETED"` check used to make an order that had
+ * since progressed further (e.g. into PDI or Transport) silently vanish from both the
+ * pending AND Completed Dispatch Approval views at once — same bug class already fixed once
+ * for Punch Order's own Completed filter (see OrderPunchList.tsx). */
+const BEFORE_DISPATCH_APPROVAL_COMPLETED = new Set(["", "PENDING", "PENDING SALE ORDER", "SALE ORDER", "DISPATCH APPROVAL"]);
+
 /** Confirmed orders become the pending queue for Dispatch Approval. Reads ORDER_PUNCH (not
  * SALE_ORDERS) — SALE_ORDERS has no Approval_Status/Status columns of its own to filter on,
  * ORDER_PUNCH.STATUS is what /:id/so-confirmation actually sets to "DISPATCH APPROVAL". */
@@ -310,7 +319,11 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
     const { status } = req.query as { status?: string };
     const rows = (await readTable(env.sheets.transactions, ORDER_TAB))
       .map(punchFromSheet)
-      .filter((row) => (status === "COMPLETED" ? row.STATUS === "DISPATCH APPROVAL COMPLETED" : row.STATUS === "DISPATCH APPROVAL"));
+      .filter((row) =>
+        status === "COMPLETED"
+          ? !BEFORE_DISPATCH_APPROVAL_COMPLETED.has(row.STATUS ?? "")
+          : row.STATUS === "DISPATCH APPROVAL"
+      );
     res.json(rows);
   } catch (err) {
     next(err);

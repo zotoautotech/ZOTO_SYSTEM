@@ -32,12 +32,13 @@ export interface EligibleItemRow {
   PART_NAME: string;
   QTY: string;
   UOM: string;
+  STATUS_LABEL: string;
 }
 
-/** Item-level view of listEligibleOrders — one row per item, read-only, for visibility into
- * what's about to be picked up in "Arrange Vehicle" before a trip is created. */
-export async function listEligibleItems() {
-  const res = await api.get<EligibleItemRow[]>("/transport-trips/eligible-items");
+/** Item-level view of orders waiting for (status omitted/"Transport Pending") or already
+ * picked up by ("Vehicle Arrange Completed") vehicle arrangement — one row per item. */
+export async function listEligibleItems(status?: string) {
+  const res = await api.get<EligibleItemRow[]>("/transport-trips/eligible-items", { params: { status } });
   return res.data;
 }
 
