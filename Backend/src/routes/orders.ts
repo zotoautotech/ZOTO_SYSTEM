@@ -292,11 +292,18 @@ ordersRouter.get("/", async (req, res, next) => {
   }
 });
 
-/** Saved Sale Orders waiting for review in the SO Confirmation queue. */
+/** Saved Sale Orders waiting for review in the SO Confirmation queue. Excludes
+ * "PENDING SALE ORDER" rows — those are just the blank placeholder createPlaceholderSaleOrder()
+ * writes at the discount step (see below), before the doer has actually uploaded the Sale
+ * Order form; showing them here let an order jump the queue with blank Sale Order No./Date
+ * still showing "—". Only "PENDING" (uploaded, awaiting confirmation), "CHANGES", and
+ * "COMPLETED" are real SO Confirmation states. */
 ordersRouter.get("/sale-orders", async (_req, res, next) => {
   try {
-    const rows = await readTable(env.sheets.transactions, "SALE_ORDERS");
-    res.json(rows.map(saleOrderFromSheet));
+    const rows = (await readTable(env.sheets.transactions, "SALE_ORDERS"))
+      .map(saleOrderFromSheet)
+      .filter((row) => row.STATUS !== "PENDING SALE ORDER");
+    res.json(rows);
   } catch (err) {
     next(err);
   }

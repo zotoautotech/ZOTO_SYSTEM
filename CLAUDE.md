@@ -268,7 +268,10 @@ punch save), `BILLING STRATEGY MASTER`.
 
 **Pipeline so far:** Punch (`ORDER_PUNCH`, `STATUS: PENDING`) → discount applied
 (`STATUS: PENDING SALE ORDER`, logged to `Order Punch Discount`) → Sale Order form uploaded
-(`STATUS: SALE ORDER`) → SO Confirmation queue (`GET /orders/sale-orders`) → `POST
+(`STATUS: SALE ORDER`) → SO Confirmation queue (`GET /orders/sale-orders`, filters out
+`SALE_ORDERS.STATUS === "PENDING SALE ORDER"` — the blank placeholder row from the discount
+step below, before the doer has actually uploaded the form; without this filter an order
+jumped the queue early showing blank Sale Order No./Date) → `POST
 /orders/:id/so-confirmation` outcome:
 
 **`SALE_ORDERS`/`SALE_ORDER_ITEMS` and `SO_Confirmation`/`SO_Confirmation_Items` rows now get
