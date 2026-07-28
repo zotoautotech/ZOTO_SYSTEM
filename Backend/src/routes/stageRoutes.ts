@@ -40,6 +40,36 @@ function buildBodySchema(stage: StageConfig) {
  * ORDER_PUNCH+ORDER_ITEMS directly (no PDI tab row exists yet, so the PDI-specific columns
  * are blank); Completed reads the PDI tab's own rows, which already carry every column
  * needed (see the Quantity/Unit columns added above) with no extra joins required. */
+/** Mirrors the discount revert-on-delete convention (orders.ts's revertOrphanedDiscounts):
+ * if a doer deletes an order's row(s) directly from the live PDI tab, the order is left
+ * sitting at STATUS "PRE TRANSPORT COMPLETED" (PDI's own nextStatus) with no matching PDI
+ * row — this detects that and reverts STATUS back to "DISPATCH APPROVAL COMPLETED" (PDI's
+ * prevStatus) so the order reappears in the PDI pending queue instead of just vanishing from
+ * every queue. Only reverts orders still sitting exactly at that status (not orders that
+ * have since progressed further into Transport) — same "only while still at this stage"
+ * scoping as the discount revert. Runs from a GET, same as the discount revert: there's no
+ * other trigger available since the only way the app learns about a hand-edit made directly
+ * in Sheets is by reading it. */
+async function revertOrphanedPdi(pdiStage: StageConfig) {
+  const [punchRows, pdiRows] = await Promise.all([
+    readTable(env.sheets.transactions, ORDER_TAB),
+    readTable(env.sheets.transactions, pdiStage.tab),
+  ]);
+  const ordersAtPdiComplete = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.nextStatus);
+  if (ordersAtPdiComplete.length === 0) return;
+  const orderIdsWithPdiRow = new Set(pdiRows.map((r) => r.ORDER_ID));
+  for (const order of ordersAtPdiComplete) {
+    if (orderIdsWithPdiRow.has(order.ORDER_ID)) continue;
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      order.ORDER_ID,
+      punchToSheet({ STATUS: pdiStage.prevStatus })
+    );
+  }
+}
+
 function registerPdiItemsRoute(router: Router) {
   const pdiStage = STAGES.find((s) => s.key === "pdi");
   if (!pdiStage) return;
@@ -47,6 +77,10 @@ function registerPdiItemsRoute(router: Router) {
   router.get("/pdi/items", async (req, res, next) => {
     try {
       const { status } = req.query as { status?: string };
+
+      if (status !== "COMPLETED") {
+        await revertOrphanedPdi(pdiStage);
+      }
 
       if (status === "COMPLETED") {
         const rows = (await readTable(env.sheets.transactions, pdiStage.tab)).map((r) => ({
@@ -157,6 +191,11 @@ export function registerStageRoutes(router: Router) {
               ITEM_ID: item.ITEM_ID,
               [stage.idColumn]: stageIds[i],
               ...orderSnapshotToSheet(order),
+              // orderSnapshotToSheet maps CUSTOMER_NAME -> "Cutomer Name" (the trip-family
+              // tabs' real header, typo included) — PDI/Pre Transport's own live tabs use
+              // the correctly-spelled "Customer Name" instead, so that spread key silently
+              // matches nothing there and left this column blank. Write it explicitly too.
+              "Customer Name": order.CUSTOMER_NAME ?? "",
               Segment: item.SEGMENT ?? "",
               Category: item.CATEGORY ?? "",
               "Part Name": item.PART_NAME ?? "",

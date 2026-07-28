@@ -408,7 +408,25 @@ pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly and leaves the PDI-specific c
 needed since every column the table wants is already on that row. Row click still opens the
 order-level detail page (`/modules/pdi/:orderId`) — the PDI form itself still submits at the
 order level (one row per item gets appended on save), only the queue's table reads item-
-level.
+level. **Customer Name was showing blank on every PDI row** — `stageRoutes.ts`'s per-item
+append spreads `orderSnapshotToSheet(order)` (`tripMap.ts`), which maps `CUSTOMER_NAME` to
+`"Cutomer Name"` (the trip-family tabs' real header, typo included) — but the live `PDI` tab
+uses the correctly-spelled `"Customer Name"` instead, so that spread key matched nothing
+there. Fixed by writing `"Customer Name"` explicitly alongside the spread (both keys coexist
+in the object; whichever matches an existing header wins, the other is silently dropped by
+`appendRow`) — if any other snapshot field ever shows blank on a per-item stage tab, suspect
+this same spelling drift between trip-family and PDI/Pre-Transport-family header conventions
+before assuming the map itself is wrong.
+
+**PDI has its own revert-on-delete**, mirroring the discount revert convention exactly:
+`revertOrphanedPdi()` (`stageRoutes.ts`, called from `GET /orders/pdi/items` whenever
+`status !== "COMPLETED"`) detects an order sitting at `STATUS === "PRE TRANSPORT COMPLETED"`
+(PDI's own `nextStatus`) with no matching row in the live `PDI` tab, and reverts it back to
+`"DISPATCH APPROVAL COMPLETED"` (PDI's `prevStatus`) so deleting the PDI row directly in
+Sheets makes the order reappear in the PDI pending queue instead of vanishing from every
+queue. Same scoping as discount revert: only reverts orders still sitting exactly at that
+status, not ones that have since progressed further into Transport. Verified against a
+scratch `ORDER_PUNCH` row.
 
 **From `PRE TRANSPORT COMPLETED` onward, everything is trip-level, not order-level** —
 `Backend/src/routes/tripRoutes.ts` (mounted at `/api/v1/transport-trips`, separate from
