@@ -1076,7 +1076,12 @@ const saleOrderFormSchema = z.object({
  * Attachment/Confirmation Remarks stay blank until the doer actually submits a decision
  * (`/:id/so-confirmation` then updates this same row in place, see `logSoConfirmation()`),
  * STATUS starts as "PENDING". No-op if one already exists for this order. */
-async function createPlaceholderSoConfirmation(orderId: string, saleOrderId: string, employeeId: string): Promise<void> {
+async function createPlaceholderSoConfirmation(
+  orderId: string,
+  saleOrderId: string,
+  employeeId: string,
+  saleOrderFormFields: { soNo: string; soDate: string; soAttachmentUrl: string; soRemarks: string }
+): Promise<void> {
   const existing = (await readTable(env.sheets.transactions, "SO_Confirmation")).find((r) => r.ORDER_ID === orderId);
   if (existing) return;
 
@@ -1099,6 +1104,13 @@ async function createPlaceholderSoConfirmation(orderId: string, saleOrderId: str
       ORDER_ID: orderId,
       SALE_ORDER_ID: saleOrderId,
       CONF_ID: confId,
+      // ORDER_PUNCH has no Sale Order No./Date/Attachment/Remarks columns of its own (those
+      // only live on SALE_ORDERS) — the ...order spread above can't carry them, so they're
+      // passed in explicitly from the /sale-order-form route that just wrote them.
+      SO_NO: saleOrderFormFields.soNo,
+      SO_DATE: saleOrderFormFields.soDate,
+      SO_ATTACHMENT_URL: saleOrderFormFields.soAttachmentUrl,
+      SO_REMARKS: saleOrderFormFields.soRemarks,
       CONFIRMATION: "",
       RECEIVED_PAYMENT_AMOUNT: "",
       PAYMENT_AMOUNT_PCT: "",
@@ -1195,7 +1207,12 @@ ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
       punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.employeeId })
     );
 
-    await createPlaceholderSoConfirmation(req.params.id, saleOrderId, req.user!.employeeId);
+    await createPlaceholderSoConfirmation(req.params.id, saleOrderId, req.user!.employeeId, {
+      soNo: body.soNo,
+      soDate: body.soDate,
+      soAttachmentUrl: body.soAttachmentUrl,
+      soRemarks: body.soRemarks,
+    });
 
     res.json({ orderId: req.params.id, saleOrderId });
   } catch (err) {

@@ -300,6 +300,14 @@ case anything changed since the placeholder was made. It also calls
 from `POST /orders/:id/so-confirmation`) then fills in via `updateRow` instead of appending a
 second row — so `SO_Confirmation` is no longer purely append-only; only `SO_Confirmation_Items`
 still gets delete+recreated each time (item list can change on a "Changes" outcome).
+**`createPlaceholderSoConfirmation()` now takes the Sale Order form's four fields explicitly**
+(`soNo`/`soDate`/`soAttachmentUrl`/`soRemarks`) rather than trying to source them from
+`ORDER_PUNCH` — `ORDER_PUNCH` has no Sale Order No./Date/Attachment/Remarks columns of its
+own (they only live on `SALE_ORDERS`), so the placeholder's `...order` spread could never
+have carried them; they were sitting blank on every `SO_Confirmation` row until this fix.
+`updateRow`'s merge-by-header behavior (only overwrites keys present in the patch, keeps
+everything else) means `logSoConfirmation()`'s later `updateRow` call safely leaves these
+four fields alone since it never includes them in its own patch.
 **This changed what "does `SALE_ORDERS` exist" means** — it used to mean "form was uploaded";
 now it exists from the discount step onward, so `revertOrphanedDiscounts()` (below) checks
 `Sale Order No.` is actually filled in, not just row-existence, and revert additionally
