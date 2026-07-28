@@ -9,7 +9,12 @@ function required(name: string): string {
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   jwtSecret: process.env.JWT_SECRET ?? "dev-secret-change-me",
-  allowedOrigin: process.env.ALLOWED_ORIGIN ?? "http://localhost:5173",
+  // Comma-separated list — the deployed frontend has both its Vercel URL and a custom
+  // domain (platform.myzoto.com) pointing at it, and requests from either need to pass CORS.
+  allowedOrigins: (process.env.ALLOWED_ORIGIN ?? "http://localhost:5173")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
   fiscalYearSeries: process.env.FISCAL_YEAR_SERIES ?? "2627",
 
   googleServiceAccountKeyJson: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON ?? "",

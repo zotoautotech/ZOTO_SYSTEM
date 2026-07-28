@@ -24,7 +24,15 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors({ origin: env.allowedOrigin }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // No Origin header (curl, server-to-server, same-origin) — allow through.
+      if (!origin || env.allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+  })
+);
 app.use(compression());
 app.use(express.json({ limit: "5mb" }));
 
