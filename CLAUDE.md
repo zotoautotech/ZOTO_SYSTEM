@@ -408,15 +408,21 @@ pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly and leaves the PDI-specific c
 needed since every column the table wants is already on that row. Row click still opens the
 order-level detail page (`/modules/pdi/:orderId`) — the PDI form itself still submits at the
 order level (one row per item gets appended on save), only the queue's table reads item-
-level. **Customer Name was showing blank on every PDI row** — `stageRoutes.ts`'s per-item
-append spreads `orderSnapshotToSheet(order)` (`tripMap.ts`), which maps `CUSTOMER_NAME` to
-`"Cutomer Name"` (the trip-family tabs' real header, typo included) — but the live `PDI` tab
-uses the correctly-spelled `"Customer Name"` instead, so that spread key matched nothing
-there. Fixed by writing `"Customer Name"` explicitly alongside the spread (both keys coexist
-in the object; whichever matches an existing header wins, the other is silently dropped by
-`appendRow`) — if any other snapshot field ever shows blank on a per-item stage tab, suspect
-this same spelling drift between trip-family and PDI/Pre-Transport-family header conventions
-before assuming the map itself is wrong.
+level.
+
+**The live sheet's `"Cutomer Name"` typo is gone — the user manually renamed it to the
+correctly-spelled `"Customer Name"` on every tab that had it** (`ORDER_PUNCH`, `SALE_ORDERS`,
+`SO_Confirmation`, `Dispatch Items Approval`, `PDI`, `TRANSPORT`, `Transport_Products`,
+`Pre Dispatch`, `Dispatch`, `LR`, `DELIVERY`, `Tax_Invoice_SO`, and presumably every other
+trip-family tab, confirmed by dumping live headers directly rather than assuming). All three
+places that used to map `CUSTOMER_NAME -> "Cutomer Name"` — `orderPunchMap.ts`'s
+`ORDER_PUNCH_MAP`, `soConfirmationMap.ts`'s `SO_CONFIRMATION_MAP`, and `tripMap.ts`'s
+`ORDER_SNAPSHOT_MAP` (shared by every trip-family tab) — are now `"Customer Name"`, plus one
+literal read in `tripRoutes.ts`'s `eligible-items` Completed branch. **If the live sheet's
+headers ever get hand-edited again, dump them directly before assuming any of these three
+maps is still correct** — this exact class of drift has now hit `Cutomer Name`→`Customer
+Name` (this fix), the `Discount Reason` trailing space, and the "final pass" header rename
+(see Known gotchas) three separate times in this project.
 
 **PDI has its own revert-on-delete**, mirroring the discount revert convention exactly:
 `revertOrphanedPdi()` (`stageRoutes.ts`, called from `GET /orders/pdi/items` whenever

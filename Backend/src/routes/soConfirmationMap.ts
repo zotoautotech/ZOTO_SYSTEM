@@ -45,7 +45,7 @@ export const SO_CONFIRMATION_MAP: Record<string, string> = {
   SELLER_COUNTRY: "Seller Country",
 
   CUST_ID: "CUST ID",
-  CUSTOMER_NAME: "Cutomer Name",
+  CUSTOMER_NAME: "Customer Name",
   BUSINESS_SEGMENT: "Business Segment",
   TYPE_OF_CUSTOMER: "Type of Customer",
   BUYER_GSTIN: "Buyer GSTIN No.",

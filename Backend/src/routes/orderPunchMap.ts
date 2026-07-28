@@ -38,7 +38,7 @@ export const ORDER_PUNCH_MAP: Record<string, string> = {
 
   // Buyer Details
   CUST_ID: "CUST ID",
-  CUSTOMER_NAME: "Cutomer Name",
+  CUSTOMER_NAME: "Customer Name",
   BUSINESS_SEGMENT: "Business Segment",
   TYPE_OF_CUSTOMER: "Type of Customer",
   BUYER_GSTIN: "Buyer GSTIN No.",

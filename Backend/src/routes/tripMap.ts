@@ -12,7 +12,7 @@ import type { SheetRow } from "../services/sheets.js";
  */
 const ORDER_SNAPSHOT_MAP: Record<string, string> = {
   CUST_ID: "CUST ID",
-  CUSTOMER_NAME: "Cutomer Name",
+  CUSTOMER_NAME: "Customer Name",
   BUSINESS_SEGMENT: "Business Segment",
   TYPE_OF_CUSTOMER: "Type of Customer",
   SALE_TYPE: "Sale Type",

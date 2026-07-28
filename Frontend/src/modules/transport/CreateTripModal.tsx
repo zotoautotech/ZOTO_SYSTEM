@@ -132,7 +132,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
-                    <th style={{ padding: "6px 8px" }}>Cutomer Name</th>
+                    <th style={{ padding: "6px 8px" }}>Customer Name</th>
                     <th style={{ padding: "6px 8px" }}>Timestamp</th>
                   </tr>
                 </thead>

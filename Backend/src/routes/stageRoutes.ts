@@ -191,11 +191,6 @@ export function registerStageRoutes(router: Router) {
               ITEM_ID: item.ITEM_ID,
               [stage.idColumn]: stageIds[i],
               ...orderSnapshotToSheet(order),
-              // orderSnapshotToSheet maps CUSTOMER_NAME -> "Cutomer Name" (the trip-family
-              // tabs' real header, typo included) — PDI/Pre Transport's own live tabs use
-              // the correctly-spelled "Customer Name" instead, so that spread key silently
-              // matches nothing there and left this column blank. Write it explicitly too.
-              "Customer Name": order.CUSTOMER_NAME ?? "",
               Segment: item.SEGMENT ?? "",
               Category: item.CATEGORY ?? "",
               "Part Name": item.PART_NAME ?? "",

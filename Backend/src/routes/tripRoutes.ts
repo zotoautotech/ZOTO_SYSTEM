@@ -87,7 +87,7 @@ tripsRouter.get("/eligible-items", async (req, res, next) => {
         ORDER_ID: r["ORDER_ID"] || "",
         ITEM_ID: r["ITEM_ID"] || "",
         CUST_ID: r["CUST ID"] || "",
-        CUSTOMER_NAME: r["Cutomer Name"] || "",
+        CUSTOMER_NAME: r["Customer Name"] || "",
         PART_NO: r["Part No."] || "",
         PART_NAME: r["Part Name"] || "",
         QTY: r["Quantity"] || "",
