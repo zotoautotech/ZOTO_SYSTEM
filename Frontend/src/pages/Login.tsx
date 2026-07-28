@@ -189,6 +189,10 @@ export function Login() {
                 type="text"
                 required
                 autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoComplete="username"
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
                 placeholder="Enter ID"
@@ -234,6 +238,10 @@ export function Login() {
               <input
                 type="password"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="••••••••"

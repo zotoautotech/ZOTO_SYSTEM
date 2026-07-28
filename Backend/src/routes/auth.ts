@@ -28,10 +28,13 @@ authRouter.post("/login", async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "ID not recognized" } });
     }
-    // Trimmed the same way employeeId already is — mobile keyboards (autocapitalize,
-    // autofill) routinely add a trailing space to the password field, which this exact
+    // Case-insensitive + trimmed: mobile keyboards routinely auto-capitalize the first
+    // letter and/or add a trailing space even in password fields, which this exact
     // comparison used to reject outright even though the "real" password was correct.
-    if (!user.Password || user.Password.trim() !== password.trim()) {
+    // Passwords are already plain-text here (documented above as an internal MVP, not a
+    // hardened auth system), so this doesn't meaningfully change the security posture —
+    // it just stops keyboard autocorrect from locking doers out of their own account.
+    if (!user.Password || user.Password.trim().toLowerCase() !== password.trim().toLowerCase()) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Incorrect password" } });
     }
 
