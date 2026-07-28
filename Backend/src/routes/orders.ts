@@ -625,7 +625,6 @@ const discountSchema = z.union([
   z.object({
     applicable: z.literal(true),
     reason: z.string().min(1),
-    description: z.string().optional().default(""),
     scope: z.literal("Invoice"),
     type: z.enum(["Percentage", "Rupees"]),
     discountPct: z.number().min(0).max(100).optional(),
@@ -634,7 +633,6 @@ const discountSchema = z.union([
   z.object({
     applicable: z.literal(true),
     reason: z.string().min(1),
-    description: z.string().optional().default(""),
     scope: z.literal("Item"),
     items: z.array(discountItemSchema).min(1),
   }),
@@ -654,9 +652,10 @@ const DISCOUNT_LOG_TAB = "Order Punch Discount";
 // Dumped directly from the live tab via the Sheets API rather than assumed — the live header
 // is actually "Discount Reason " with a trailing space, but sheets.ts trims every header on
 // both read and write, so the key our own code sees/writes is the trimmed "Discount Reason".
-// There's no separate "Description" column (the form's Description goes into "Discount
-// Details" instead), and "Default Discount Type" (Invoice/Item scope) is a different column
-// from "Default Discount on" (Percentage/Rupees) — easy to conflate the two by name alone.
+// The form's Description field was removed (the user dropped it from the live sheet too) —
+// "Discount Details" is no longer written to from here, just left blank on every new row.
+// "Default Discount Type" (Invoice/Item scope) is a different column from "Default Discount
+// on" (Percentage/Rupees) — easy to conflate the two by name alone.
 const DISCOUNT_LOG_HEADERS = [
   "Timestamp",
   "Useremail",
@@ -814,7 +813,6 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           ITEM_ID: item.ITEM_ID,
           "Discount Applicable": "Yes",
           "Discount Reason": body.reason,
-          "Discount Details": body.description,
           "Default Discount Type": "Item",
           "Default Discount on": line.type,
           "Discount (Rs)": money(itemDiscountRs),
@@ -857,7 +855,6 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
           ITEM_ID: item.ITEM_ID,
           "Discount Applicable": "Yes",
           "Discount Reason": body.reason,
-          "Discount Details": body.description,
           "Default Discount Type": "Invoice",
           "Default Discount on": body.type,
           "Discount (Rs)": money(itemDiscountRs),
@@ -875,7 +872,6 @@ ordersRouter.post("/:id/discount", async (req, res, next) => {
         ORDER_ID: req.params.id,
         "Discount Applicable": "Yes",
         "Discount Reason": body.reason,
-        "Discount Details": body.description,
         "Default Discount Type": "Invoice",
         "Default Discount on": body.type,
         "Discount (Rs)": money(discountRs),

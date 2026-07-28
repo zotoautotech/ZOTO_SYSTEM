@@ -131,7 +131,6 @@ export type OrderDiscountPayload =
   | {
       applicable: true;
       reason: string;
-      description?: string;
       scope: "Invoice";
       type: "Percentage" | "Rupees";
       discountPct?: number;
@@ -140,7 +139,6 @@ export type OrderDiscountPayload =
   | {
       applicable: true;
       reason: string;
-      description?: string;
       scope: "Item";
       items: OrderDiscountItemLine[];
     };

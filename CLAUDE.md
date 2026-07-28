@@ -210,8 +210,9 @@ CRR order data).
   *same* column names as `ORDER_ITEMS` — no translation needed there.
 - `Order Punch Discount` — pre-built audit log of every discount applied (headers, dumped live
   and kept current in `DISCOUNT_LOG_HEADERS`: `Timestamp`, `Useremail`, `ORDER_ID`, `ITEM_ID`,
-  `Punch Discount ID`, `Discount Details` [holds the form's free-text Description — there's no
-  separate `Description` column], `Discount Applicable` [Yes/No], `Discount Reason` [was
+  `Punch Discount ID`, `Discount Details` [no longer written to — held the form's free-text
+  Description field, which the user removed from both the live sheet and the form itself;
+  left blank on every new row now], `Discount Applicable` [Yes/No], `Discount Reason` [was
   `Discount Reasion`, a typo, until a live sheet edit fixed the spelling but added a trailing
   space — `sheets.ts` trims every header on both read and write, so the key our code actually
   uses is the trimmed `Discount Reason`, not the raw sheet text], `Default Discount Type`

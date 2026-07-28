@@ -23,7 +23,6 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const [applicable, setApplicable] = useState<"Yes" | "No" | "">("");
   const [reason, setReason] = useState("");
-  const [description, setDescription] = useState("");
   const [scope, setScope] = useState<"Invoice" | "Item" | "">("");
 
   // Invoice scope
@@ -79,7 +78,6 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
         payload = {
           applicable: true,
           reason,
-          description,
           scope: "Invoice",
           type: invoiceType,
           discountPct: invoiceType === "Percentage" ? Number(invoicePct) : undefined,
@@ -101,7 +99,7 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
             discountRs: line.type === "Rupees" ? Number(line.rs) : undefined,
           });
         }
-        payload = { applicable: true, reason, description, scope: "Item", items: lines };
+        payload = { applicable: true, reason, scope: "Item", items: lines };
       }
     }
 
@@ -213,7 +211,6 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
           {applicable === "Yes" && (
             <>
               <TextField label="Discount Reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
-              <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
               <ToggleGroup
                 label="Discount Type"
                 required
