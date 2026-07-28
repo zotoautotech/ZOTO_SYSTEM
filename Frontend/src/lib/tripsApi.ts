@@ -61,8 +61,20 @@ export async function createTrip(payload: CreateTripPayload) {
   return res.data;
 }
 
-export async function attachOrders(transportId: string, orderIds: string[]) {
-  const res = await api.post<{ transportId: string; attached: number }>(`/transport-trips/${transportId}/orders`, { orderIds });
+export interface AttachOrderItemPick {
+  itemId: string;
+  qty: number;
+}
+
+export interface AttachOrderEntry {
+  orderId: string;
+  /** Optional per-item quantity picks (the "Load Limit Details" flow) — omit to attach the
+   * whole order at its full item quantities. */
+  items?: AttachOrderItemPick[];
+}
+
+export async function attachOrders(transportId: string, orders: AttachOrderEntry[]) {
+  const res = await api.post<{ transportId: string; attached: number }>(`/transport-trips/${transportId}/orders`, { orders });
   return res.data;
 }
 

@@ -5,8 +5,11 @@ import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { useIsMobile } from "../../lib/responsive";
-import { createTrip } from "../../lib/tripsApi";
+import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions } from "../../lib/mastersApi";
+import { listEligibleOrders } from "../../lib/tripsApi";
+import { formatTimestamp } from "../../lib/format";
+import { TransportOrderForm, type QueuedSaleOrder } from "./TransportOrderForm";
 
 interface Props {
   onClose: () => void;
@@ -20,12 +23,19 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
   label: v,
 }));
 
-/** Matches the old "Transport Main Form" reference (docs/04-UIUX-BRIEF.md §9.1): Send
+/** "Arrange Vehicle Form" (renamed from "Transport Main Form" per user request) — Send
  * Through / Vehicle Arrange for toggles, Transporter ID only when Send Through =
  * Transporter, Freight Charge/GST Applicable only when Freight Applicable On Invoice = Y.
  * Transporter ID is a searchable select against the Transporter Data master (TRANSPORT_SHEET_ID,
  * same GET /masters/transporters already used by the Order Punch logistics tab) — selecting
- * one auto-fills Transporter Name, same pattern as Tab4LogisticsDetails.tsx. */
+ * one auto-fills Transporter Name, same pattern as Tab4LogisticsDetails.tsx.
+ *
+ * "Select Sale Orders" queues one or more orders (each with its own picked items/quantities,
+ * via the nested TransportOrderForm → TransportItemsForm flow) client-side before the trip
+ * even exists; Save creates the trip then attaches every queued order in one attachOrders()
+ * call — matches the old CRR reference's nested New-row flow instead of the previous
+ * simplified "create trip, then separately attach whole orders from the trip detail page"
+ * two-step process. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
   const isMobile = useIsMobile();
   const [sendThrough, setSendThrough] = useState<string>("");
@@ -42,9 +52,13 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [queuedOrders, setQueuedOrders] = useState<QueuedSaleOrder[]>([]);
+  const [showOrderForm, setShowOrderForm] = useState(false);
 
   const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
   const transporterOptions = transportersToOptions(transporters);
+  const { data: eligibleOrders = [] } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
+  const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
 
   function handleTransporterSelect(_value: string, option?: { value: string; label: string }) {
     setTransporterId(option?.value ?? "");
@@ -52,7 +66,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }
 
   function canSave() {
-    return !!vehicleArrangeFor && !!vehicleType && !!vehicleNo && !!driverName && !!driverContactNo;
+    return queuedOrders.length > 0 && !!vehicleArrangeFor && !!vehicleType && !!vehicleNo && !!driverName && !!driverContactNo;
   }
 
   async function handleSave() {
@@ -74,6 +88,10 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         freightCharge: freightOnInvoice === "Y" && freightCharge ? Number(freightCharge) : undefined,
         description,
       });
+      await attachOrders(
+        transportId,
+        queuedOrders.map((q) => ({ orderId: q.orderId, items: q.items.map((it) => ({ itemId: it.itemId, qty: it.qty })) }))
+      );
       onCreated(transportId);
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
@@ -93,7 +111,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         style={{ width: "min(560px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Transport Main Form</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Arrange Vehicle Form</h2>
           <button onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer" }}>
             ✕
           </button>
@@ -106,6 +124,33 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         </div>
 
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
+          <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+            Select Sale Orders here that will transport through this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
+          </label>
+          {queuedOrders.length > 0 && (
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
+                    <th style={{ padding: "6px 8px" }}>Cutomer Name</th>
+                    <th style={{ padding: "6px 8px" }}>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queuedOrders.map((q) => (
+                    <tr key={q.orderId} style={{ borderTop: "1px solid var(--color-border)" }}>
+                      <td style={{ padding: "6px 8px" }}>{q.customerName || q.orderId}</td>
+                      <td style={{ padding: "6px 8px" }}>{formatTimestamp(q.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
+            New
+          </button>
+
           <ToggleGroup
             label="Send Through"
             required
@@ -169,6 +214,17 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           </button>
         </div>
       </div>
+
+      {showOrderForm && (
+        <TransportOrderForm
+          eligibleOrders={unqueuedEligibleOrders}
+          onClose={() => setShowOrderForm(false)}
+          onSave={(entry) => {
+            setQueuedOrders((prev) => [...prev, entry]);
+            setShowOrderForm(false);
+          }}
+        />
+      )}
     </div>
   );
 }

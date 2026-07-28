@@ -129,10 +129,20 @@ simplification of the order-level pattern above.
   own route since it's the only one with a create-trip action instead of a stage form),
   `Frontend/src/components/stage/TripQueueList.tsx` (one generic list for all 7
   Transport-family routes), `Frontend/src/modules/transport/` — `TransportList.tsx`
-  (wraps `TripQueueList` + `CreateTripModal`), `CreateTripModal.tsx` ("Transport Main Form"
-  clone), `TripDetail.tsx` (shared detail page across all 7 routes, derives the current
-  stage from the URL segment the same way `OrderDetail.tsx` does), `AttachOrdersModal.tsx`
-  (multi-select eligible-orders picker), `forms/` (one component per stage — `ReachedForm`,
+  (wraps `TripQueueList` + `CreateTripModal`), `CreateTripModal.tsx` ("Arrange Vehicle Form",
+  renamed from "Transport Main Form") — its "Select Sale Orders" section queues one or more
+  orders client-side (each via the nested `TransportOrderForm.tsx` "Order Details"/"Logistic
+  Details" tabs → `TransportItemsForm.tsx` "Load Limit Details" per-item quantity picker)
+  before the trip exists; Save creates the trip then calls `attachOrders()` once for every
+  queued order, matching the old CRR reference's nested New-row flow instead of the previous
+  "create trip, then separately attach whole orders from the trip detail page" two-step
+  process. `POST /transport-trips/:id/orders` (`tripRoutes.ts`) now takes `{ orders: [{
+  orderId, items?: [{ itemId, qty }] }] }` — `items` omitted attaches the whole order at full
+  item quantities (unchanged old behavior, still used by `TripDetail.tsx`'s
+  `AttachOrdersModal.tsx`, multi-select eligible-orders picker), given attaches only the
+  picked items at the doer's chosen quantity (the "Load Limit" concept). `TripDetail.tsx`
+  (shared detail page across all 7 routes, derives the current
+  stage from the URL segment the same way `OrderDetail.tsx` does), `forms/` (one component per stage — `ReachedForm`,
   `StockReleaseForm`, `TaxInvoiceForm`, `DispatchForm`, `LRForm`, `DeliveryForm`; field
   layouts sourced from the old AppSheet frontend screenshots in `docs/04-UIUX-BRIEF.md` §9).
   `DispatchForm` is a deliberate UI compression: the old frontend nested Vehicle Dispatch →

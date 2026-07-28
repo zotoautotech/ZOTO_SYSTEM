@@ -35,7 +35,7 @@ export function AttachOrdersModal({ transportId, onClose, onAttached }: Props) {
     setSaving(true);
     setError("");
     try {
-      await attachOrders(transportId, [...selected]);
+      await attachOrders(transportId, [...selected].map((orderId) => ({ orderId })));
       onAttached();
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;

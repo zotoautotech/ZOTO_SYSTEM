@@ -167,11 +167,25 @@ tripsRouter.post("/", async (req, res, next) => {
   }
 });
 
-const attachOrdersSchema = z.object({ orderIds: z.array(z.string().min(1)).min(1) });
+const attachOrdersSchema = z.object({
+  orders: z
+    .array(
+      z.object({
+        orderId: z.string().min(1),
+        // Optional per-item quantity picks (the "Load Limit Details"/TransportItemsForm
+        // flow) — when given, only these items are loaded onto this trip, at the doer's
+        // chosen quantity rather than the item's full order quantity. Omitted (or an order
+        // with no items array at all) keeps the old whole-order-at-full-quantity behavior.
+        items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive() })).optional(),
+      })
+    )
+    .min(1),
+});
 
 tripsRouter.post("/:transportId/orders", async (req, res, next) => {
   try {
-    const { orderIds } = attachOrdersSchema.parse(req.body);
+    const { orders: orderEntries } = attachOrdersSchema.parse(req.body);
+    const orderIds = orderEntries.map((o) => o.orderId);
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
 
@@ -180,10 +194,10 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
     ]);
     const now = new Date().toISOString();
-    const soIds = await nextIds("TPTSO", "Transport_SO", "Transport_SO_ID", orderIds.length);
+    const soIds = await nextIds("TPTSO", "Transport_SO", "Transport_SO_ID", orderEntries.length);
 
-    for (const [i, orderId] of orderIds.entries()) {
-      const punch = orderPunchRows.find((r) => r.ORDER_ID === orderId);
+    for (const [i, entry] of orderEntries.entries()) {
+      const punch = orderPunchRows.find((r) => r.ORDER_ID === entry.orderId);
       if (!punch) continue;
       const order = punchFromSheet(punch);
       const transportSoId = soIds[i];
@@ -191,20 +205,22 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
       await appendRow(env.sheets.transactions, "Transport_SO", {
         Timestamp: now,
         Useremail: req.user!.employeeId,
-        ORDER_ID: orderId,
+        ORDER_ID: entry.orderId,
         Transport_ID: req.params.transportId,
         Transport_SO_ID: transportSoId,
         ...orderSnapshotToSheet(order),
         Status: "ASSIGNED",
       });
 
-      const items = allItems.filter((it) => it.ORDER_ID === orderId).map(itemFromSheet);
+      const orderItems = allItems.filter((it) => it.ORDER_ID === entry.orderId).map(itemFromSheet);
+      const qtyByItemId = new Map(entry.items?.map((p) => [p.itemId, p.qty]));
+      const items = entry.items ? orderItems.filter((it) => qtyByItemId.has(it.ITEM_ID)) : orderItems;
       const pdIds = await nextIds("TPTPD", "Transport_Products", "Transport_Pd_ID", Math.max(items.length, 1));
       for (const [j, item] of items.entries()) {
         await appendRow(env.sheets.transactions, "Transport_Products", {
           Timestamp: now,
           Useremail: req.user!.employeeId,
-          ORDER_ID: orderId,
+          ORDER_ID: entry.orderId,
           ITEM_ID: item.ITEM_ID,
           Transport_ID: req.params.transportId,
           Transport_SO_ID: transportSoId,
@@ -217,7 +233,7 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
           "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
           "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
           "Additional Notes": item.NOTES ?? "",
-          Quantity: item.QTY ?? "",
+          Quantity: String(qtyByItemId.get(item.ITEM_ID) ?? item.QTY ?? ""),
           Unit: item.UOM ?? "NOS",
           Status: "ASSIGNED",
         });
