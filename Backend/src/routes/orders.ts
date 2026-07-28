@@ -9,6 +9,13 @@ import { dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemT
 import { registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 
+// itemFromSheet only knows ORDER_ITEMS' own columns, so reading SALE_ORDER_ITEMS through it
+// silently drops SALE_ORDER_ITEM_ID (a column that only exists on that tab) — read it back
+// from the raw row alongside every other itemFromSheet call against SALE_ORDER_ITEMS.
+function saleOrderItemFromSheet(row: SheetRow): SheetRow {
+  return { ...itemFromSheet(row), SALE_ORDER_ITEM_ID: row.SALE_ORDER_ITEM_ID ?? "" };
+}
+
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
 ordersRouter.use(requireModule("punch-order"));
@@ -973,7 +980,7 @@ async function createPlaceholderSoConfirmation(orderId: string, saleOrderId: str
     "SO_Confirmation_Items",
     items.map((item, i) =>
       soConfirmationItemToSheet({
-        ...itemFromSheet(item),
+        ...saleOrderItemFromSheet(item),
         CREATED_AT: now,
         CREATED_BY: employeeId,
         ORDER_ID: orderId,
@@ -1242,7 +1249,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
         updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderToSheet({ ...withoutUndefined, ...amountFields, APPROVAL_STATUS: "CHANGES", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })),
       ]);
 
-      const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
+      const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(saleOrderItemFromSheet);
       await logSoConfirmation(
         req.params.id,
         { ...existingPunch, ...saleOrderFromSheet(saleOrder), ...(withoutUndefined as SheetRow), ...amountFields },
@@ -1266,7 +1273,7 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
       updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", req.params.id, punchToSheet({ STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED", APPROVAL_STATUS: confirmed ? "CONFIRMED" : "CANCELLED", APPROVAL_REMARKS: body.remarks, APPROVAL_TIME: confirmedAt, CREATED_BY: req.user!.employeeId })),
     ]);
 
-    const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
+    const snapshotItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(saleOrderItemFromSheet);
     await logSoConfirmation(
       req.params.id,
       { ...punchFromSheet(punch), ...saleOrderFromSheet(saleOrder), STATUS: confirmed ? "DISPATCH APPROVAL" : "CANCELLED" },
@@ -1318,7 +1325,7 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
     const order = punchFromSheet(punch);
-    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
+    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id).map(saleOrderItemFromSheet);
 
     const now = new Date().toISOString();
     const qtyField =

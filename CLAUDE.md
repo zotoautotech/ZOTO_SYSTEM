@@ -207,7 +207,15 @@ CRR order data).
   copy of the punch order-header fields + carried discount + `SO_NO`/`SO_DATE`/attachment,
   and a copy of each `ORDER_ITEMS` row respectively. Mapped via `SALE_ORDER_MAP` (reuses
   `ORDER_PUNCH_MAP`, only the discount column name differs). `SALE_ORDER_ITEMS` uses the
-  *same* column names as `ORDER_ITEMS` — no translation needed there.
+  *same* column names as `ORDER_ITEMS` — no translation needed there — **except**
+  `SALE_ORDER_ITEM_ID` (plus `Timestamp`/`Useremail`/`SALE_ORDER_ID`), which only exists on
+  this tab. `itemFromSheet()` only knows `ORDER_ITEMS`' own columns, so calling it directly
+  on a `SALE_ORDER_ITEMS` row silently drops `SALE_ORDER_ITEM_ID` — this left every
+  `SO_Confirmation_Items` row's own `SALE_ORDER_ITEM_ID` blank (`createPlaceholderSoConfirmation()`
+  and both `logSoConfirmation()` call sites in `orders.ts` all read `SALE_ORDER_ITEMS` through
+  it). Fixed via a `saleOrderItemFromSheet()` wrapper that reads `SALE_ORDER_ITEM_ID` back
+  from the raw row — **always use it instead of bare `itemFromSheet()` when the source table
+  is `SALE_ORDER_ITEMS`**, not `ORDER_ITEMS`.
 - `Order Punch Discount` — pre-built audit log of every discount applied (headers, dumped live
   and kept current in `DISCOUNT_LOG_HEADERS`: `Timestamp`, `Useremail`, `ORDER_ID`, `ITEM_ID`,
   `Punch Discount ID`, `Discount Details` [no longer written to — held the form's free-text

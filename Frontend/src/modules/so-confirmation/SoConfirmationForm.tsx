@@ -136,6 +136,15 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
     if (!confirmation) return;
     if (!remarks.trim()) return setError(`${remarksLabel} is required`);
     if (confirmed && !receivedPaymentAmount) return setError("Received Payment Amount is required");
+    // Same requirement as the punch form's own item validation — without this, a doer could
+    // save a Changes edit with an item's Sale Item ID never picked, leaving FG_ID/Part Name/
+    // Part No blank on that item going forward (re-opening the form later then shows an
+    // empty "Search part…" box with no way to tell which part it actually was).
+    if (changes) {
+      for (const [i, item] of form.items.entries()) {
+        if (!item.fgId) return setError(`Select a Sale Item ID for item ${i + 1} before saving`);
+      }
+    }
 
     setSaving(true);
     setError("");
