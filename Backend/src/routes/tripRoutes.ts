@@ -168,6 +168,7 @@ const createTripSchema = z.object({
   driverContactNo: z.string().optional().default(""),
   freightApplicableOnInvoice: z.string().optional().default(""),
   freightCharge: z.number().optional(),
+  freightGstApplicable: z.string().optional().default(""),
   description: z.string().optional().default(""),
 });
 
@@ -190,6 +191,7 @@ tripsRouter.post("/", async (req, res, next) => {
       "Driver Contact No.": body.driverContactNo,
       "Freight Applicable On Invoice?": body.freightApplicableOnInvoice,
       "Freight Charge": body.freightCharge !== undefined ? String(body.freightCharge) : "",
+      "Freight GST Applicable": body.freightGstApplicable,
       Description: body.description,
       Status: "OPEN",
     });
@@ -204,11 +206,16 @@ const attachOrdersSchema = z.object({
     .array(
       z.object({
         orderId: z.string().min(1),
-        // Optional per-item quantity picks (the "Load Limit Details"/TransportItemsForm
+        // Optional per-item quantity+box picks (the "Load Limit Details"/TransportItemsForm
         // flow) — when given, only these items are loaded onto this trip, at the doer's
         // chosen quantity rather than the item's full order quantity. Omitted (or an order
         // with no items array at all) keeps the old whole-order-at-full-quantity behavior.
-        items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive() })).optional(),
+        items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive(), loadBoxes: z.number().optional() })).optional(),
+        // The Transport Form's own Logistic Details tab — editable per order, not just
+        // copied from the order's own preferred fields (matching the old CRR reference).
+        preferredDeliveryMode: z.string().optional(),
+        freightPaidBy: z.string().optional(),
+        freightPaidAt: z.string().optional(),
       })
     )
     .min(1),
@@ -236,6 +243,12 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
       const order = punchFromSheet(punch);
       const transportSoId = soIds[i];
 
+      const logisticsOverrides = {
+        "Preferred Delivery Mode": entry.preferredDeliveryMode ?? order.PREFERRED_DELIVERY_MODE ?? "",
+        "Freight Paid by": entry.freightPaidBy ?? order.FREIGHT_PAID_BY ?? "",
+        "Freight Paid at": entry.freightPaidAt ?? "",
+      };
+
       await appendRow(env.sheets.transactions, "Transport_SO", {
         Timestamp: now,
         Useremail: req.user!.employeeId,
@@ -243,14 +256,23 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
         Transport_ID: req.params.transportId,
         Transport_SO_ID: transportSoId,
         ...orderSnapshotToSheet(order),
+        // ORDER_SNAPSHOT_MAP writes "Customer Name" (the spelling every other trip-family
+        // tab uses) — Transport_SO alone still has the live sheet's old "Cutomer Name" typo,
+        // so it's written explicitly here too rather than trying to make the shared map
+        // handle two different spellings for the same tab family.
+        "Cutomer Name": order.CUSTOMER_NAME ?? "",
+        ...logisticsOverrides,
         Status: "ASSIGNED",
       });
 
       const orderItems = allItems.filter((it) => it.ORDER_ID === entry.orderId).map(itemFromSheet);
-      const qtyByItemId = new Map(entry.items?.map((p) => [p.itemId, p.qty]));
-      const items = entry.items ? orderItems.filter((it) => qtyByItemId.has(it.ITEM_ID)) : orderItems;
+      const pickByItemId = new Map(entry.items?.map((p) => [p.itemId, p]));
+      const items = entry.items ? orderItems.filter((it) => pickByItemId.has(it.ITEM_ID)) : orderItems;
       const pdIds = await nextIds("TPTPD", "Transport_Products", "Transport_Pd_ID", Math.max(items.length, 1));
       for (const [j, item] of items.entries()) {
+        const pick = pickByItemId.get(item.ITEM_ID);
+        const orderQty = Number(item.QTY || 0);
+        const loadQty = pick?.qty ?? orderQty;
         await appendRow(env.sheets.transactions, "Transport_Products", {
           Timestamp: now,
           Useremail: req.user!.employeeId,
@@ -260,6 +282,7 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
           Transport_SO_ID: transportSoId,
           Transport_Pd_ID: pdIds[j],
           ...orderSnapshotToSheet(order),
+          ...logisticsOverrides,
           Segment: item.SEGMENT ?? "",
           Category: item.CATEGORY ?? "",
           "Part Name": item.PART_NAME ?? "",
@@ -267,8 +290,16 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
           "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
           "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
           "Additional Notes": item.NOTES ?? "",
-          Quantity: String(qtyByItemId.get(item.ITEM_ID) ?? item.QTY ?? ""),
+          // No cross-trip balance tracking exists yet (an item could in principle be split
+          // across multiple vehicles over time) — Balance Qty to Dispatch is shown as the
+          // item's own full order quantity for now, same "no IMS yet" gap flagged elsewhere
+          // in this app, not a fabricated running balance.
+          Quantity: String(orderQty),
           Unit: item.UOM ?? "NOS",
+          "Balance Qty to Dispatch": String(orderQty),
+          "Load Qty": String(loadQty),
+          "New Balance Qty to Dispatch": String(Math.max(orderQty - loadQty, 0)),
+          "Load Boxes": pick?.loadBoxes !== undefined ? String(pick.loadBoxes) : "",
           Status: "ASSIGNED",
         });
       }

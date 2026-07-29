@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
+import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { useIsMobile } from "../../lib/responsive";
 import { getOrder, type OrderRecord } from "../../lib/ordersApi";
 import { TransportItemsForm, type PickedItem } from "./TransportItemsForm";
@@ -11,7 +12,12 @@ export interface QueuedSaleOrder {
   customerName: string;
   timestamp: string;
   items: PickedItem[];
+  preferredDeliveryMode: string;
+  freightPaidBy: string;
+  freightPaidAt: string;
 }
+
+const DELIVERY_MODE_OPTIONS = ["Courier", "Porter", "Transporter", "Cust. Vehicle", "Local Vehicle"].map((v) => ({ value: v, label: v }));
 
 interface Props {
   eligibleOrders: OrderRecord[];
@@ -23,19 +29,23 @@ type Tab = "order" | "logistic";
 
 /** Level-2 nested modal ("Transport Form"), opened from the Arrange Vehicle Form's "Select
  * Sale Orders" New button — Order Details tab picks one pending-transport order and shows
- * its Customer/Shipping fields auto-filled; Logistic Details tab shows that same order's own
- * Preferred Delivery Mode / Freight Paid by (auto-filled from Order Punch, not re-entered)
- * and lets the doer pick specific items + quantities to load via the nested Level-3 "Load
- * Limit Details" form (TransportItemsForm). Saving here queues one row for the parent
- * Arrange Vehicle Form's "Select Sale Orders" table — nothing is persisted to the backend
- * until that outer form's own Save (which creates the trip and attaches every queued order
- * in one go). */
+ * its Customer/Shipping fields auto-filled; Logistic Details tab pre-fills Preferred Delivery
+ * Mode / Freight Paid by from the order's own preferred logistics fields but leaves them
+ * editable (matching the old CRR reference's live toggle buttons), reveals "Freight Paid at"
+ * only when Freight Paid by = Customer, and lets the doer pick specific items + quantities to
+ * load via the nested Level-3 "Load Limit Details" form (TransportItemsForm). Saving here
+ * queues one row for the parent Arrange Vehicle Form's "Select Sale Orders" table — nothing
+ * is persisted to the backend until that outer form's own Save (which creates the trip and
+ * attaches every queued order in one go). */
 export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>("order");
   const [orderId, setOrderId] = useState("");
   const [items, setItems] = useState<PickedItem[]>([]);
   const [showItemsForm, setShowItemsForm] = useState(false);
+  const [preferredDeliveryMode, setPreferredDeliveryMode] = useState("");
+  const [freightPaidBy, setFreightPaidBy] = useState<"ADC" | "Customer" | "">("");
+  const [freightPaidAt, setFreightPaidAt] = useState<"Pay at ADC" | "Pay at Customer" | "">("");
 
   const order = eligibleOrders.find((o) => o.ORDER_ID === orderId);
   const { data: orderDetail } = useQuery({
@@ -44,11 +54,35 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
     enabled: !!orderId,
   });
 
+  // Pre-fill from the order's own preferred logistics fields, but leave editable — matches
+  // the old CRR reference, which shows these as live toggle buttons on this form, not
+  // disabled text.
+  useEffect(() => {
+    if (!order) return;
+    setPreferredDeliveryMode(order.PREFERRED_DELIVERY_MODE || "");
+    setFreightPaidBy((order.FREIGHT_PAID_BY as "ADC" | "Customer") || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.ORDER_ID]);
+
   const orderOptions = eligibleOrders.map((o) => ({ value: o.ORDER_ID, label: o.CUSTOMER_NAME || o.ORDER_ID, subtitle: o.ORDER_ID }));
 
+  function canSave() {
+    if (!order || !preferredDeliveryMode || !freightPaidBy) return false;
+    if (freightPaidBy === "Customer" && !freightPaidAt) return false;
+    return true;
+  }
+
   function handleSave() {
-    if (!order) return;
-    onSave({ orderId: order.ORDER_ID, customerName: order.CUSTOMER_NAME || "", timestamp: new Date().toISOString(), items });
+    if (!canSave() || !order) return;
+    onSave({
+      orderId: order.ORDER_ID,
+      customerName: order.CUSTOMER_NAME || "",
+      timestamp: new Date().toISOString(),
+      items,
+      preferredDeliveryMode,
+      freightPaidBy,
+      freightPaidAt: freightPaidBy === "Customer" ? freightPaidAt : "",
+    });
   }
 
   return (
@@ -65,7 +99,7 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Transport Form</h2>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={!order}>Save</button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
           </div>
         </div>
 
@@ -113,8 +147,36 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
             <>
               {order && (
                 <>
-                  <TextField label="Preferred Delivery Mode" value={order.PREFERRED_DELIVERY_MODE} disabled />
-                  <TextField label="Freight Paid by" value={order.FREIGHT_PAID_BY} disabled />
+                  <ToggleGroup
+                    label="Preferred Delivery Mode"
+                    required
+                    value={preferredDeliveryMode}
+                    onChange={setPreferredDeliveryMode}
+                    options={DELIVERY_MODE_OPTIONS}
+                  />
+                  <p className="text-muted" style={{ fontSize: 12, marginTop: -8 }}>
+                    Select the party that ultimately bears the freight expense (who will finally pay for the
+                    transportation cost).
+                  </p>
+                  <ToggleGroup
+                    label="Freight Paid by"
+                    required
+                    value={freightPaidBy}
+                    onChange={(v) => setFreightPaidBy(v as "ADC" | "Customer")}
+                    options={[{ value: "ADC", label: "ADC" }, { value: "Customer", label: "Customer" }]}
+                  />
+                  <p className="text-muted" style={{ fontSize: 12, marginTop: -8 }}>
+                    Select the stage at which the freight payment is made to the transporter.
+                  </p>
+                  {freightPaidBy === "Customer" && (
+                    <ToggleGroup
+                      label="Freight Paid at"
+                      required
+                      value={freightPaidAt}
+                      onChange={(v) => setFreightPaidAt(v as "Pay at ADC" | "Pay at Customer")}
+                      options={[{ value: "Pay at ADC", label: "Pay at ADC" }, { value: "Pay at Customer", label: "Pay at Customer" }]}
+                    />
+                  )}
                 </>
               )}
 

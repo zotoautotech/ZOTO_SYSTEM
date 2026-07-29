@@ -49,6 +49,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [driverContactNo, setDriverContactNo] = useState("");
   const [freightOnInvoice, setFreightOnInvoice] = useState<string>("");
   const [freightCharge, setFreightCharge] = useState("");
+  const [freightGstApplicable, setFreightGstApplicable] = useState<string>("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -66,6 +67,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }
 
   function canSave() {
+    if (freightOnInvoice === "Y" && !freightGstApplicable) return false;
     return queuedOrders.length > 0 && !!vehicleArrangeFor && !!vehicleType && !!vehicleNo && !!driverName && !!driverContactNo;
   }
 
@@ -86,11 +88,18 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         driverContactNo,
         freightApplicableOnInvoice: freightOnInvoice,
         freightCharge: freightOnInvoice === "Y" && freightCharge ? Number(freightCharge) : undefined,
+        freightGstApplicable: freightOnInvoice === "Y" ? freightGstApplicable : undefined,
         description,
       });
       await attachOrders(
         transportId,
-        queuedOrders.map((q) => ({ orderId: q.orderId, items: q.items.map((it) => ({ itemId: it.itemId, qty: it.qty })) }))
+        queuedOrders.map((q) => ({
+          orderId: q.orderId,
+          items: q.items.map((it) => ({ itemId: it.itemId, qty: it.qty, loadBoxes: it.loadBoxes })),
+          preferredDeliveryMode: q.preferredDeliveryMode,
+          freightPaidBy: q.freightPaidBy,
+          freightPaidAt: q.freightPaidAt,
+        }))
       );
       onCreated(transportId);
     } catch (err) {
@@ -197,7 +206,16 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             options={[{ value: "N", label: "N" }, { value: "Y", label: "Y" }]}
           />
           {freightOnInvoice === "Y" && (
-            <TextField label="Freight Charge" type="number" value={freightCharge} onChange={(e) => setFreightCharge(e.target.value)} />
+            <>
+              <TextField label="Freight Charge" type="number" value={freightCharge} onChange={(e) => setFreightCharge(e.target.value)} />
+              <ToggleGroup
+                label="Freight GST Applicable"
+                required
+                value={freightGstApplicable as "Yes" | "No" | ""}
+                onChange={setFreightGstApplicable}
+                options={[{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }]}
+              />
+            </>
           )}
 
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />

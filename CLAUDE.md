@@ -541,7 +541,31 @@ trip-family tab (they all repeat the same ~30 denormalized columns; `appendRow` 
 drops whichever don't exist on a given tab, so one spread works everywhere).
 `CreateTripModal.tsx`'s Transporter ID is a searchable select against the `Transporter Data`
 master (`GET /masters/transporters`, `TRANSPORT_SHEET_ID`) — selecting one auto-fills
-Transporter Name, same pattern as the Order Punch logistics tab. **`TransportList.tsx`'s
+Transporter Name, same pattern as the Order Punch logistics tab.
+
+**The nested Arrange Vehicle → Transport Form → Load Limit Details flow now matches the old
+CRR reference field-for-field** — the user manually restructured the live `Transport_SO`/
+`Transport_Products`/`TRANSPORT` tabs to match (confirmed directly against the old CRR
+reference spreadsheet, not assumed): `Transport_Products` gained a full "Goods Details" +
+"Load Limit Details" column section it was previously missing entirely (`Part Name`/`Part
+No.`/`Segment`/`Category`/`Quantity`/`Unit`/`Balance Qty to Dispatch`/`Load Qty`/`New Balance
+Qty to Dispatch`/`Load Boxes` — all silently dropped by `appendRow` before these columns
+existed). `CreateTripModal.tsx` gained "Freight GST Applicable" (Yes/No, alongside Freight
+Charge). `TransportOrderForm.tsx`'s Preferred Delivery Mode / Freight Paid by are now live
+`ToggleGroup`s (pre-filled from the order's own preferred fields but editable, matching the
+reference) instead of disabled text, with "Freight Paid at" revealed only when Freight Paid
+by = Customer. `TransportItemsForm.tsx` now shows read-only Quantity/Unit/Balance Qty to
+Dispatch (no cross-trip balance tracking exists yet, so Balance is just the item's own order
+quantity — same "no IMS" gap as Available Stock Quantity elsewhere) plus editable required
+Load Qty (validated against Balance) and Load Boxes. `tripRoutes.ts`'s `POST
+/:transportId/orders` writes all of this to both `Transport_SO`/`Transport_Products` via the
+per-order `preferredDeliveryMode`/`freightPaidBy`/`freightPaidAt` and per-item `loadBoxes`
+fields now accepted in the attach payload. **`Transport_SO`'s live header is still `"Cutomer
+Name"` (the typo) while every other trip-family tab, including `Transport_Products`, uses the
+correctly-spelled `"Customer Name"`** — `ORDER_SNAPSHOT_MAP` can only carry one spelling, so
+`"Cutomer Name"` is written explicitly alongside it in the `Transport_SO` append only; dump
+this tab's live header again before assuming either spelling if it's ever hand-edited further.
+**`TransportList.tsx`'s
 main view is item-level, not the generic trip list** — matches the old CRR "Pending
 Transport" reference exactly (customer filter sidebar via `CustomerFilterPanel`, main table,
 header actions row with a "Completed Transport" toggle + "+ Arrange Vehicle" button, same

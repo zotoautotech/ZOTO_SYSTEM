@@ -9,6 +9,7 @@ export interface PickedItem {
   partName: string;
   qty: number;
   unit: string;
+  loadBoxes?: number;
 }
 
 interface Props {
@@ -18,13 +19,16 @@ interface Props {
   onAdd: (picked: PickedItem) => void;
 }
 
-/** Level-3 nested modal ("Load Limit Details") — Select Product from the sale order's own
- * items, pick a Quantity to load onto this vehicle. Opened from TransportOrderForm's
- * "Select Products & Quantity" New button. */
+/** Level-3 nested modal ("Load Limit Details") — matches the old CRR reference field-for-
+ * field: Select Product, then read-only Quantity/Unit/Balance Qty to Dispatch (no cross-trip
+ * balance tracking exists yet — Balance is just the item's own order quantity, same "no IMS"
+ * gap flagged elsewhere in this app), then the doer's own Load Qty and Load Boxes. Opened
+ * from TransportOrderForm's "Select Products & Quantity" New button. */
 export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Props) {
   const isMobile = useIsMobile();
   const [itemId, setItemId] = useState("");
-  const [qty, setQty] = useState("");
+  const [loadQty, setLoadQty] = useState("");
+  const [loadBoxes, setLoadBoxes] = useState("");
 
   const pickedIds = new Set(alreadyPicked.map((p) => p.itemId));
   const options = items
@@ -36,18 +40,29 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
     }));
 
   const selected = items.find((it) => it.ITEM_ID === itemId);
-  const maxQty = selected ? Number(selected.QTY || 0) : undefined;
-  const qtyError = selected && qty && maxQty && Number(qty) > maxQty ? `Can't exceed the order quantity (${maxQty}).` : "";
+  const balanceQty = selected ? Number(selected.QTY || 0) : undefined;
+  const loadQtyError =
+    selected && loadQty && balanceQty && Number(loadQty) > balanceQty ? `Can't exceed the Balance Qty to Dispatch (${balanceQty}).` : "";
 
   function handleSelect(id: string) {
     setItemId(id);
-    const item = items.find((it) => it.ITEM_ID === id);
-    setQty(item?.QTY ? String(item.QTY) : "");
+    setLoadQty("");
+    setLoadBoxes("");
+  }
+
+  function canSave() {
+    return !!selected && !!loadQty && Number(loadQty) > 0 && !loadQtyError && !!loadBoxes && Number(loadBoxes) > 0;
   }
 
   function handleSave() {
-    if (!selected || !qty || Number(qty) <= 0 || qtyError) return;
-    onAdd({ itemId: selected.ITEM_ID, partName: selected.PART_NAME, qty: Number(qty), unit: selected.UOM || "NOS" });
+    if (!canSave() || !selected) return;
+    onAdd({
+      itemId: selected.ITEM_ID,
+      partName: selected.PART_NAME,
+      qty: Number(loadQty),
+      unit: selected.UOM || "NOS",
+      loadBoxes: Number(loadBoxes),
+    });
   }
 
   return (
@@ -76,14 +91,20 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           <SearchableSelect label="Select Product" required value={itemId} onChange={handleSelect} options={options} placeholder="Search" />
           {selected && (
-            <TextField
-              label={`Quantity${maxQty ? ` (max ${maxQty} ${selected.UOM || ""})` : ""}`}
-              required
-              type="number"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              error={qtyError || undefined}
-            />
+            <>
+              <TextField label="Quantity" value={selected.QTY || ""} disabled />
+              <TextField label="Unit" value={selected.UOM || ""} disabled />
+              <TextField label="Balance Qty to Dispatch" value={balanceQty !== undefined ? String(balanceQty) : ""} disabled />
+              <TextField
+                label="Load Qty"
+                required
+                type="number"
+                value={loadQty}
+                onChange={(e) => setLoadQty(e.target.value)}
+                error={loadQtyError || undefined}
+              />
+              <TextField label="Load Boxes" required type="number" value={loadBoxes} onChange={(e) => setLoadBoxes(e.target.value)} />
+            </>
           )}
         </div>
 
@@ -91,7 +112,7 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!selected || !qty || Number(qty) <= 0 || !!qtyError}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>
             Save
           </button>
         </div>

@@ -54,6 +54,7 @@ export interface CreateTripPayload {
   driverContactNo?: string;
   freightApplicableOnInvoice?: string;
   freightCharge?: number;
+  freightGstApplicable?: string;
   description?: string;
 }
 
@@ -65,6 +66,7 @@ export async function createTrip(payload: CreateTripPayload) {
 export interface AttachOrderItemPick {
   itemId: string;
   qty: number;
+  loadBoxes?: number;
 }
 
 export interface AttachOrderEntry {
@@ -72,6 +74,10 @@ export interface AttachOrderEntry {
   /** Optional per-item quantity picks (the "Load Limit Details" flow) — omit to attach the
    * whole order at its full item quantities. */
   items?: AttachOrderItemPick[];
+  /** The Transport Form's own Logistic Details tab — editable per order. */
+  preferredDeliveryMode?: string;
+  freightPaidBy?: string;
+  freightPaidAt?: string;
 }
 
 export async function attachOrders(transportId: string, orders: AttachOrderEntry[]) {
