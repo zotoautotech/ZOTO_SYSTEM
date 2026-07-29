@@ -9,6 +9,7 @@ import { Tab2OrderDetails } from "./form/Tab2OrderDetails";
 import { Tab3BillingAddress } from "./form/Tab3BillingAddress";
 import { Tab4LogisticsDetails } from "./form/Tab4LogisticsDetails";
 import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 
 const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
 
@@ -157,64 +158,7 @@ export function OrderPunchForm() {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(17, 17, 20, 0.5)",
-        display: "flex",
-        alignItems: isMobile ? "flex-start" : "center",
-        justifyContent: "center",
-        zIndex: 50,
-        padding: isMobile ? 0 : 24,
-      }}
-      onClick={() => navigate("/modules/punch-order")}
-    >
-      <div
-        className="card modal-in"
-        style={{
-          width: "min(880px, 100%)",
-          height: isMobile ? "calc(100dvh - 34px)" : undefined,
-          maxHeight: isMobile ? "calc(100dvh - 34px)" : "90vh",
-          background: "var(--color-bg)",
-          borderRadius: isMobile ? 0 : 18,
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: isMobile ? "28px var(--space) 12px" : "22px var(--space) 12px",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Order Punch Form</h2>
-          <button
-            onClick={() => navigate("/modules/punch-order")}
-            aria-label="Close"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              border: "none",
-              background: "var(--color-bg-page)",
-              fontSize: 16,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
+    <FormModal title="Order Punch Form" onClose={() => navigate("/modules/punch-order")} size="standard">
         {isMobile && (
           <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, padding: "0 var(--space)" }}>
             {TABS[tab]}
@@ -308,7 +252,7 @@ export function OrderPunchForm() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
+            padding: "14px var(--space)",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
@@ -333,7 +277,6 @@ export function OrderPunchForm() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

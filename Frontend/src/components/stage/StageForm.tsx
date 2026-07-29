@@ -3,6 +3,7 @@ import { isAxiosError } from "axios";
 import { TextField } from "../form/TextField";
 import { ToggleGroup } from "../form/ToggleGroup";
 import { FileDropzone } from "../form/FileDropzone";
+import { FormModal } from "../form/FormModal";
 import { submitStageForm, submitPdiItemForm } from "../../lib/ordersApi";
 import type { StageDef } from "../../lib/stages";
 import { useIsMobile } from "../../lib/responsive";
@@ -59,32 +60,7 @@ export function StageForm({ stage, orderId, itemId, onClose, onSaved }: Props) {
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(17, 17, 20, 0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(560px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>{stage.label} Form</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: "8px var(--space) 0" }}>
-          <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, color: "var(--color-primary)", paddingBottom: 10, borderBottom: "2px solid var(--color-primary)" }}>
-            {stage.label} Details
-          </div>
-        </div>
-
+    <FormModal title={`${stage.label} Form`} onClose={onClose} size="standard" sectionLabel={`${stage.label} Details`}>
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           {stage.fields.map((field) => {
             const value = values[field.key] ?? "";
@@ -146,7 +122,6 @@ export function StageForm({ stage, orderId, itemId, onClose, onSaved }: Props) {
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

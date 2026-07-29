@@ -4,8 +4,8 @@ import { isAxiosError } from "axios";
 import { applyOrderDiscount, getOrder, type OrderDiscountItemLine, type OrderDiscountPayload } from "../../lib/ordersApi";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { TextField } from "../../components/form/TextField";
+import { FormModal } from "../../components/form/FormModal";
 import { formatCurrency } from "../../lib/format";
-import { useIsMobile } from "../../lib/responsive";
 
 interface Props {
   orderId: string;
@@ -20,7 +20,6 @@ interface ItemLineState {
 }
 
 export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
-  const isMobile = useIsMobile();
   const [applicable, setApplicable] = useState<"Yes" | "No" | "">("");
   const [reason, setReason] = useState("");
   const [scope, setScope] = useState<"Invoice" | "Item" | "">("");
@@ -117,79 +116,7 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(17, 17, 20, 0.5)",
-        display: "flex",
-        alignItems: isMobile ? "flex-start" : "center",
-        justifyContent: "center",
-        zIndex: 50,
-        padding: isMobile ? 0 : 24,
-      }}
-      onClick={onClose}
-    >
-      <div
-        className="card modal-in"
-        style={{
-          width: "min(680px, 100%)",
-          height: isMobile ? "calc(100dvh - 34px)" : undefined,
-          maxHeight: isMobile ? "calc(100dvh - 34px)" : "90vh",
-          background: "var(--color-bg)",
-          borderRadius: isMobile ? 0 : 18,
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: isMobile ? "28px var(--space) 12px" : "22px var(--space) 12px",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Sale Order Discount Form</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              border: "none",
-              background: "var(--color-bg-page)",
-              fontSize: 16,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: "8px var(--space) 0" }}>
-          <div
-            style={{
-              textAlign: "center",
-              fontWeight: 600,
-              fontSize: 14,
-              color: "var(--color-primary)",
-              paddingBottom: 10,
-              borderBottom: "2px solid var(--color-primary)",
-            }}
-          >
-            Discount Details
-          </div>
-        </div>
-
+    <FormModal title="Sale Order Discount Form" onClose={onClose} size="standard" sectionLabel="Discount Details">
         <div style={{ padding: "20px var(--space)", overflowY: "auto", flex: 1 }}>
           {error && (
             <div className="error-banner" style={{ marginBottom: 16 }}>
@@ -359,7 +286,7 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
+            padding: "14px var(--space)",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
@@ -371,7 +298,6 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

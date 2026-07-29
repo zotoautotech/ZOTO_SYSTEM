@@ -4,7 +4,7 @@ import { isAxiosError } from "axios";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
-import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
@@ -37,7 +37,6 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
  * simplified "create trip, then separately attach whole orders from the trip detail page"
  * two-step process. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
-  const isMobile = useIsMobile();
   const [sendThrough, setSendThrough] = useState<string>("");
   const [vehicleArrangeFor, setVehicleArrangeFor] = useState<string>("");
   const [transporterId, setTransporterId] = useState("");
@@ -110,56 +109,8 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(17,17,20,0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(560px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Arrange Vehicle Form</h2>
-          <button onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: "8px var(--space) 0" }}>
-          <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, color: "var(--color-primary)", paddingBottom: 10, borderBottom: "2px solid var(--color-primary)" }}>
-            Vehicle Details
-          </div>
-        </div>
-
+    <FormModal title="Arrange Vehicle Form" onClose={onClose} size="standard" sectionLabel="Vehicle Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-          <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
-            Select Sale Orders here that will transport through this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
-          </label>
-          {queuedOrders.length > 0 && (
-            <div style={{ overflowX: "auto", marginBottom: 12 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
-                    <th style={{ padding: "6px 8px" }}>Customer Name</th>
-                    <th style={{ padding: "6px 8px" }}>Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queuedOrders.map((q) => (
-                    <tr key={q.orderId} style={{ borderTop: "1px solid var(--color-border)" }}>
-                      <td style={{ padding: "6px 8px" }}>{q.customerName || q.orderId}</td>
-                      <td style={{ padding: "6px 8px" }}>{formatTimestamp(q.timestamp)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
-            New
-          </button>
-
           <ToggleGroup
             label="Send Through"
             required
@@ -220,10 +171,37 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
 
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
 
+          <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+            Select Sale Orders here that will transport through this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
+          </label>
+          {queuedOrders.length > 0 && (
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
+                    <th style={{ padding: "6px 8px" }}>Customer Name</th>
+                    <th style={{ padding: "6px 8px" }}>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queuedOrders.map((q) => (
+                    <tr key={q.orderId} style={{ borderTop: "1px solid var(--color-border)" }}>
+                      <td style={{ padding: "6px 8px" }}>{q.customerName || q.orderId}</td>
+                      <td style={{ padding: "6px 8px" }}>{formatTimestamp(q.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
+            New
+          </button>
+
           {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
           <button className="btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
@@ -231,7 +209,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-      </div>
 
       {showOrderForm && (
         <TransportOrderForm
@@ -243,6 +220,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           }}
         />
       )}
-    </div>
+    </FormModal>
   );
 }

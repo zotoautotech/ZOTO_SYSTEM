@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
-import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 import type { OrderItemRecord } from "../../lib/ordersApi";
 
 export interface PickedItem {
@@ -25,7 +25,6 @@ interface Props {
  * gap flagged elsewhere in this app), then the doer's own Load Qty and Load Boxes. Opened
  * from TransportOrderForm's "Select Products & Quantity" New button. */
 export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Props) {
-  const isMobile = useIsMobile();
   const [itemId, setItemId] = useState("");
   const [loadQty, setLoadQty] = useState("");
   const [loadBoxes, setLoadBoxes] = useState("");
@@ -66,28 +65,7 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(17,17,20,0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(520px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "85vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Transport Items Form</h2>
-          <button onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: "8px var(--space) 0" }}>
-          <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, color: "var(--color-primary)", paddingBottom: 10, borderBottom: "2px solid var(--color-primary)" }}>
-            Load Limit Details
-          </div>
-        </div>
-
+    <FormModal title="Transport Items Form" onClose={onClose} size="small" zIndex={60} sectionLabel="Load Limit Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           <SearchableSelect label="Select Product" required value={itemId} onChange={handleSelect} options={options} placeholder="Search" />
           {selected && (
@@ -108,7 +86,7 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
@@ -116,7 +94,6 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
             Save
           </button>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

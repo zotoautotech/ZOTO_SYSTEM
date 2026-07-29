@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { listEligibleOrders, attachOrders } from "../../lib/tripsApi";
-import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 
 interface Props {
   transportId: string;
@@ -15,7 +15,6 @@ interface Props {
  * of the old one-at-a-time nested New-row flow, since attaching several orders at once in
  * one click is strictly better UX and the backend already supports a batch call. */
 export function AttachOrdersModal({ transportId, onClose, onAttached }: Props) {
-  const isMobile = useIsMobile();
   const { data: orders = [], isLoading } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
@@ -45,21 +44,7 @@ export function AttachOrdersModal({ transportId, onClose, onAttached }: Props) {
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(17,17,20,0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(640px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "85vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Select Sale Orders</h2>
-          <button onClick={onClose} aria-label="Close" style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
+    <FormModal title="Select Sale Orders" onClose={onClose} size="small">
         <p className="text-muted" style={{ padding: "0 var(--space)", fontSize: 13 }}>
           Orders that will transport through this vehicle. Every item on a selected order is loaded onto this trip.
         </p>
@@ -94,7 +79,7 @@ export function AttachOrdersModal({ transportId, onClose, onAttached }: Props) {
           {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
           <button className="btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
@@ -102,7 +87,6 @@ export function AttachOrdersModal({ transportId, onClose, onAttached }: Props) {
             {saving ? "Attaching…" : `Attach ${selected.size || ""}`}
           </button>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

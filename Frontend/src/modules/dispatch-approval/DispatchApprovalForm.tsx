@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
-import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 import { submitDispatchApproval } from "../../lib/ordersApi";
 import { listDropdowns, dropdownValues } from "../../lib/mastersApi";
 import { UOM_OPTIONS } from "../../lib/modules";
@@ -35,7 +35,6 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * item editor's UOM select), not manually typed.
  */
 export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Props) {
-  const isMobile = useIsMobile();
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
   const [shortQty, setShortQty] = useState("");
@@ -102,46 +101,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(17, 17, 20, 0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(event) => event.stopPropagation()}
-        style={{
-          width: "min(560px, 100%)",
-          height: isMobile ? "100dvh" : undefined,
-          // The card clips its contents (overflow: hidden, needed for the rounded corners),
-          // which was cutting off the Dispatch Approval dropdown's floating options panel
-          // whenever the modal was still short (before an outcome is picked, before the
-          // per-outcome fields below have appeared) — a tall-enough minHeight means the
-          // panel always has room to render fully instead of getting clipped.
-          minHeight: isMobile ? undefined : 480,
-          maxHeight: isMobile ? "100dvh" : "90vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          borderRadius: isMobile ? 0 : 18,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Dispatch Items Approval Form</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: "8px var(--space) 0" }}>
-          <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, color: "var(--color-primary)", paddingBottom: 10, borderBottom: "2px solid var(--color-primary)" }}>
-            Dispatch Details
-          </div>
-        </div>
-
+    <FormModal title="Dispatch Items Approval Form" onClose={onClose} size="standard" sectionLabel="Dispatch Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           <SearchableSelect
             label="Dispatch Approval"
@@ -240,7 +200,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
+            padding: "14px var(--space)",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
@@ -252,7 +212,6 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }

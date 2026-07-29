@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isAxiosError } from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Modal } from "../../../components/Modal";
+import { FormModal } from "../../../components/form/FormModal";
 import { TextField } from "../../../components/form/TextField";
 import { SearchableSelect } from "../../../components/form/SearchableSelect";
 import { createCustomer, listFieldRepresentatives } from "../../../lib/mastersApi";
@@ -73,8 +73,8 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
   }
 
   return (
-    <Modal title="Add New Customer" onClose={onClose}>
-      <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+    <FormModal title="Add New Customer" onClose={onClose} size="standard" zIndex={60}>
+      <form autoComplete="off" onSubmit={(e) => e.preventDefault()} style={{ padding: "20px var(--space)", overflowY: "auto", flex: 1 }}>
         <TextField
           label="Customer Name"
           required
@@ -145,6 +145,6 @@ export function AddNewCustomerModal({ onClose, onCreated }: AddNewCustomerModalP
           {saving ? "Saving…" : "Save & Select"}
         </button>
       </form>
-    </Modal>
+    </FormModal>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isAxiosError } from "axios";
 import { useQueryClient } from "@tanstack/react-query";
-import { Modal } from "../../../components/Modal";
+import { FormModal } from "../../../components/form/FormModal";
 import { TextField } from "../../../components/form/TextField";
 import { createPart } from "../../../lib/mastersApi";
 
@@ -57,8 +57,8 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
   }
 
   return (
-    <Modal title="Add New Product" onClose={onClose}>
-      <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+    <FormModal title="Add New Product" onClose={onClose} size="standard" zIndex={60}>
+      <form autoComplete="off" onSubmit={(e) => e.preventDefault()} style={{ padding: "20px var(--space)", overflowY: "auto", flex: 1 }}>
         <TextField
           label="Part Name"
           required
@@ -84,6 +84,6 @@ export function AddNewPartModal({ onClose, onCreated }: AddNewPartModalProps) {
           {saving ? "Saving…" : "Save & Select"}
         </button>
       </form>
-    </Modal>
+    </FormModal>
   );
 }

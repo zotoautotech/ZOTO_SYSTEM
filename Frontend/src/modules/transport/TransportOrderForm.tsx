@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
-import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 import { getOrder, type OrderRecord } from "../../lib/ordersApi";
 import { TransportItemsForm, type PickedItem } from "./TransportItemsForm";
 
@@ -38,7 +38,6 @@ type Tab = "order" | "logistic";
  * is persisted to the backend until that outer form's own Save (which creates the trip and
  * attaches every queued order in one go). */
 export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
-  const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>("order");
   const [orderId, setOrderId] = useState("");
   const [items, setItems] = useState<PickedItem[]>([]);
@@ -86,23 +85,18 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(17,17,20,0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(560px, 100%)", height: isMobile ? "100dvh" : undefined, minHeight: isMobile ? undefined : 480, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>Transport Form</h2>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
-          </div>
+    <FormModal
+      title="Transport Form"
+      onClose={onClose}
+      size="standard"
+      zIndex={55}
+      headerActions={
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
         </div>
-
+      }
+    >
         <div style={{ display: "flex", padding: "0 var(--space)", borderBottom: "1px solid var(--color-border)" }}>
           {(["order", "logistic"] as Tab[]).map((t) => (
             <button
@@ -206,7 +200,6 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
             </>
           )}
         </div>
-      </div>
 
       {showItemsForm && orderDetail && (
         <TransportItemsForm
@@ -219,6 +212,6 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
           }}
         />
       )}
-    </div>
+    </FormModal>
   );
 }

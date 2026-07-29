@@ -10,6 +10,7 @@ import { Tab3BillingAddress } from "../order-punch/form/Tab3BillingAddress";
 import { Tab4LogisticsDetails } from "../order-punch/form/Tab4LogisticsDetails";
 import { ConfirmationItemsTab } from "./ConfirmationItemsTab";
 import { useIsMobile } from "../../lib/responsive";
+import { FormModal } from "../../components/form/FormModal";
 
 type Confirmation = "Confirmed" | "Changes" | "Cancelled" | "";
 
@@ -214,26 +215,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(17, 17, 20, 0.5)", display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}
-    >
-      <div
-        className="card modal-in"
-        onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(680px, 100%)", height: isMobile ? "100dvh" : undefined, maxHeight: isMobile ? "100dvh" : "90vh", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: isMobile ? 0 : 18 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "24px var(--space) 12px" : "20px var(--space) 12px" }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 600 }}>SO Confirmation Form</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: "var(--color-bg-page)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-muted)" }}
-          >
-            ✕
-          </button>
-        </div>
-
+    <FormModal title="SO Confirmation Form" onClose={onClose} size="standard">
         <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--color-border)" }}>
           <button
             type="button"
@@ -370,7 +352,7 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)",
+            padding: "14px var(--space)",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
@@ -395,7 +377,6 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </FormModal>
   );
 }
