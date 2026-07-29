@@ -4,6 +4,7 @@ import { TextField } from "../../../components/form/TextField";
 import { ToggleGroup } from "../../../components/form/ToggleGroup";
 import { getCustomerDetail } from "../../../lib/mastersApi";
 import { getLatestOrderForCustomer } from "../../../lib/ordersApi";
+import { useIsMobile } from "../../../lib/responsive";
 import type { OrderFormState } from "./types";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function Tab3BillingAddress({ form, update }: Props) {
+  const isMobile = useIsMobile();
   const { data: detail } = useQuery({
     queryKey: ["masters", "customer", form.custId],
     queryFn: () => getCustomerDetail(form.custId),
@@ -55,8 +57,8 @@ export function Tab3BillingAddress({ form, update }: Props) {
   }
 
   return (
-    <div>
-      <h3 style={{ fontSize: 15, marginTop: 0 }}>Billing Address</h3>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
+      <h3 style={{ fontSize: 15, marginTop: 0, gridColumn: "1 / -1" }}>Billing Address</h3>
       <TextField
         label="Billing Address"
         required
@@ -80,19 +82,21 @@ export function Tab3BillingAddress({ form, update }: Props) {
         onChange={(e) => update({ billingCountry: e.target.value })}
       />
 
-      <ToggleGroup
-        label="Is Shipping Address Same"
-        required
-        value={form.shippingSame}
-        onChange={handleShippingSameChange}
-        options={[
-          { value: "Yes", label: "Yes" },
-          { value: "No", label: "No" },
-          { value: "Same as Previous Order", label: "Same as Previous Order" },
-        ]}
-      />
+      <div style={{ gridColumn: "1 / -1" }}>
+        <ToggleGroup
+          label="Is Shipping Address Same"
+          required
+          value={form.shippingSame}
+          onChange={handleShippingSameChange}
+          options={[
+            { value: "Yes", label: "Yes" },
+            { value: "No", label: "No" },
+            { value: "Same as Previous Order", label: "Same as Previous Order" },
+          ]}
+        />
+      </div>
 
-      <h3 style={{ fontSize: 15 }}>Shipping Address</h3>
+      <h3 style={{ fontSize: 15, gridColumn: "1 / -1" }}>Shipping Address</h3>
       <TextField
         label="Shipping Address"
         value={form.shippingAddress}

@@ -48,6 +48,22 @@ so far. Adding a 2nd real sub-app later means special-casing its tile name in `H
 
 ## Frontend structure
 
+**Every modal form uses the shared `Frontend/src/components/form/FormModal.tsx`** — a fixed
+desktop frame (`small: 400×420`, `standard: 800×560`; mobile ignores these and stays
+full-width/`100dvh`) so a modal never resizes/jumps as conditional fields appear (the bug that
+used to require one-off `minHeight` hacks to stop `SearchableSelect` dropdowns being clipped —
+gone now that height is never content-driven). `size` picks the tier, `zIndex` for nested
+modals (e.g. Arrange Vehicle 50 → Transport Form 55 → Load Limit Details 60), `sectionLabel`
+for a static centered header bar, `headerActions` to replace the ✕ close button with custom
+buttons. Standard-tier forms with mostly simple `TextField`s lay their field list out in a
+two-column CSS grid on desktop (`gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)"`) to
+use the extra width instead of stacking everything in one narrow column; fields that need the
+full row (file dropzones, multi-option `ToggleGroup`s, section headers, item tables) get an
+explicit `gridColumn: "1 / -1"` wrapper — not every standard form has this grid (forms
+dominated by `ToggleGroup`s, like `Tab2OrderDetails.tsx`'s buyer/item section and the 6
+`StageModalShell`-based transport stage forms, are left single-column since squeezing a
+3-5-option toggle row into half width reads worse than the scroll it would save).
+
 `Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
 list, reused for both Punch Order and Sale Order routes via a `basePath` prop derived from
 the URL), `OrderPunchForm.tsx` (4-tab punch form, `form/Tab1-4*.tsx` + `form/types.ts` for

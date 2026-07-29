@@ -5,6 +5,7 @@ import { applyOrderDiscount, getOrder, type OrderDiscountItemLine, type OrderDis
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { TextField } from "../../components/form/TextField";
 import { FormModal } from "../../components/form/FormModal";
+import { useIsMobile } from "../../lib/responsive";
 import { formatCurrency } from "../../lib/format";
 
 interface Props {
@@ -20,6 +21,7 @@ interface ItemLineState {
 }
 
 export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
+  const isMobile = useIsMobile();
   const [applicable, setApplicable] = useState<"Yes" | "No" | "">("");
   const [reason, setReason] = useState("");
   const [scope, setScope] = useState<"Invoice" | "Item" | "">("");
@@ -117,50 +119,56 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
 
   return (
     <FormModal title="Sale Order Discount Form" onClose={onClose} size="standard" sectionLabel="Discount Details">
-        <div style={{ padding: "20px var(--space)", overflowY: "auto", flex: 1 }}>
+        <div style={{ padding: "20px var(--space)", overflowY: "auto", flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
           {error && (
-            <div className="error-banner" style={{ marginBottom: 16 }}>
+            <div className="error-banner" style={{ marginBottom: 16, gridColumn: "1 / -1" }}>
               ⚠ {error}
             </div>
           )}
 
-          <ToggleGroup
-            label="Discount Applicable"
-            required
-            value={applicable}
-            onChange={(v) => setApplicable(v)}
-            options={[
-              { value: "Yes", label: "Yes" },
-              { value: "No", label: "No" },
-            ]}
-          />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ToggleGroup
+              label="Discount Applicable"
+              required
+              value={applicable}
+              onChange={(v) => setApplicable(v)}
+              options={[
+                { value: "Yes", label: "Yes" },
+                { value: "No", label: "No" },
+              ]}
+            />
+          </div>
 
           {applicable === "Yes" && (
             <>
               <TextField label="Discount Reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
-              <ToggleGroup
-                label="Discount Type"
-                required
-                value={scope}
-                onChange={(v) => setScope(v)}
-                options={[
-                  { value: "Invoice", label: "IN Invoice" },
-                  { value: "Item", label: "IN Item" },
-                ]}
-              />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <ToggleGroup
+                  label="Discount Type"
+                  required
+                  value={scope}
+                  onChange={(v) => setScope(v)}
+                  options={[
+                    { value: "Invoice", label: "IN Invoice" },
+                    { value: "Item", label: "IN Item" },
+                  ]}
+                />
+              </div>
 
               {scope === "Invoice" && (
                 <>
-                  <ToggleGroup
-                    label="Discount On"
-                    required
-                    value={invoiceType}
-                    onChange={(v) => setInvoiceType(v)}
-                    options={[
-                      { value: "Rupees", label: "Discount In Rs" },
-                      { value: "Percentage", label: "Discount In %" },
-                    ]}
-                  />
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <ToggleGroup
+                      label="Discount On"
+                      required
+                      value={invoiceType}
+                      onChange={(v) => setInvoiceType(v)}
+                      options={[
+                        { value: "Rupees", label: "Discount In Rs" },
+                        { value: "Percentage", label: "Discount In %" },
+                      ]}
+                    />
+                  </div>
                   {invoiceType === "Rupees" && (
                     <TextField
                       label="Discount (Rs)"
@@ -183,7 +191,7 @@ export function SaleOrderDiscountForm({ orderId, onClose, onSaved }: Props) {
               )}
 
               {scope === "Item" && (
-                <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: 20, gridColumn: "1 / -1" }}>
                   <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
                     Items <span style={{ color: "var(--color-error)" }}>*</span>
                   </label>

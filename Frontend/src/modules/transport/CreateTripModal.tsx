@@ -9,6 +9,7 @@ import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
 import { formatTimestamp } from "../../lib/format";
+import { useIsMobile } from "../../lib/responsive";
 import { TransportOrderForm, type QueuedSaleOrder } from "./TransportOrderForm";
 
 interface Props {
@@ -37,6 +38,7 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
  * simplified "create trip, then separately attach whole orders from the trip detail page"
  * two-step process. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
+  const isMobile = useIsMobile();
   const [sendThrough, setSendThrough] = useState<string>("");
   const [vehicleArrangeFor, setVehicleArrangeFor] = useState<string>("");
   const [transporterId, setTransporterId] = useState("");
@@ -110,22 +112,26 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
 
   return (
     <FormModal title="Arrange Vehicle Form" onClose={onClose} size="standard" sectionLabel="Vehicle Details">
-        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-          <ToggleGroup
-            label="Send Through"
-            required
-            value={sendThrough as (typeof SEND_THROUGH_OPTIONS)[number] | ""}
-            onChange={setSendThrough}
-            options={SEND_THROUGH_OPTIONS.map((v) => ({ value: v, label: v }))}
-          />
-          <ToggleGroup
-            label="Vehicle Arrange for"
-            required
-            value={vehicleArrangeFor as (typeof VEHICLE_ARRANGE_OPTIONS)[number] | ""}
-            onChange={setVehicleArrangeFor}
-            options={VEHICLE_ARRANGE_OPTIONS.map((v) => ({ value: v, label: v }))}
-          />
-          <p className="text-muted" style={{ fontSize: 12, marginTop: -8 }}>
+        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ToggleGroup
+              label="Send Through"
+              required
+              value={sendThrough as (typeof SEND_THROUGH_OPTIONS)[number] | ""}
+              onChange={setSendThrough}
+              options={SEND_THROUGH_OPTIONS.map((v) => ({ value: v, label: v }))}
+            />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ToggleGroup
+              label="Vehicle Arrange for"
+              required
+              value={vehicleArrangeFor as (typeof VEHICLE_ARRANGE_OPTIONS)[number] | ""}
+              onChange={setVehicleArrangeFor}
+              options={VEHICLE_ARRANGE_OPTIONS.map((v) => ({ value: v, label: v }))}
+            />
+          </div>
+          <p className="text-muted" style={{ fontSize: 12, marginTop: -8, gridColumn: "1 / -1" }}>
             Customer - If material direct dispatch to customer. Transport Booking - If material dispatch for
             transport booking. Multi location - If material dispatch by multiple points.
           </p>
@@ -149,13 +155,15 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
           <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} />
 
-          <ToggleGroup
-            label="Freight Applicable On Invoice?"
-            required
-            value={freightOnInvoice as "N" | "Y" | ""}
-            onChange={setFreightOnInvoice}
-            options={[{ value: "N", label: "N" }, { value: "Y", label: "Y" }]}
-          />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ToggleGroup
+              label="Freight Applicable On Invoice?"
+              required
+              value={freightOnInvoice as "N" | "Y" | ""}
+              onChange={setFreightOnInvoice}
+              options={[{ value: "N", label: "N" }, { value: "Y", label: "Y" }]}
+            />
+          </div>
           {freightOnInvoice === "Y" && (
             <>
               <TextField label="Freight Charge" type="number" value={freightCharge} onChange={(e) => setFreightCharge(e.target.value)} />
@@ -171,11 +179,11 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
 
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
 
-          <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+          <label style={{ display: "block", fontSize: 14, marginBottom: 8, gridColumn: "1 / -1" }}>
             Select Sale Orders here that will transport through this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
           </label>
           {queuedOrders.length > 0 && (
-            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+            <div style={{ overflowX: "auto", marginBottom: 12, gridColumn: "1 / -1" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
@@ -194,11 +202,11 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
               </table>
             </div>
           )}
-          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
+          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20, gridColumn: "1 / -1" }} onClick={() => setShowOrderForm(true)}>
             New
           </button>
 
-          {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
+          {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8, gridColumn: "1 / -1" }}>{error}</p>}
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>

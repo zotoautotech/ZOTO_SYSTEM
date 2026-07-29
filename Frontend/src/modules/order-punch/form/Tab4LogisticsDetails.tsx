@@ -3,6 +3,7 @@ import { ToggleGroup } from "../../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../../components/form/SearchableSelect";
 import { TextField } from "../../../components/form/TextField";
 import { listTransporters, transportersToOptions } from "../../../lib/mastersApi";
+import { useIsMobile } from "../../../lib/responsive";
 import type { OrderFormState } from "./types";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function Tab4LogisticsDetails({ form, update }: Props) {
+  const isMobile = useIsMobile();
   const { data: transporters = [] } = useQuery({
     queryKey: ["masters", "transporters"],
     queryFn: listTransporters,
@@ -31,20 +33,22 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
   }
 
   return (
-    <div>
-      <ToggleGroup
-        label="Preferred Delivery Mode"
-        required
-        value={form.preferredDeliveryMode}
-        onChange={(v) => update({ preferredDeliveryMode: v })}
-        options={[
-          { value: "Courier", label: "Courier" },
-          { value: "Porter", label: "Porter" },
-          { value: "Transporter", label: "Transporter" },
-          { value: "Cust. Vehicle", label: "Cust. Vehicle" },
-          { value: "Local Vehicle", label: "Local Vehicle" },
-        ]}
-      />
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <ToggleGroup
+          label="Preferred Delivery Mode"
+          required
+          value={form.preferredDeliveryMode}
+          onChange={(v) => update({ preferredDeliveryMode: v })}
+          options={[
+            { value: "Courier", label: "Courier" },
+            { value: "Porter", label: "Porter" },
+            { value: "Transporter", label: "Transporter" },
+            { value: "Cust. Vehicle", label: "Cust. Vehicle" },
+            { value: "Local Vehicle", label: "Local Vehicle" },
+          ]}
+        />
+      </div>
       <ToggleGroup
         label="Preferred Transportation Mode"
         required
@@ -69,14 +73,16 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
 
       {form.preferredDeliveryMode === "Transporter" && (
         <>
-          <SearchableSelect
-            label="Preferred Transporter ID"
-            required
-            value={form.preferredTptId}
-            onChange={handleTransporterSelect}
-            options={options}
-            placeholder="Search transporter…"
-          />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SearchableSelect
+              label="Preferred Transporter ID"
+              required
+              value={form.preferredTptId}
+              onChange={handleTransporterSelect}
+              options={options}
+              placeholder="Search transporter…"
+            />
+          </div>
           {form.preferredTptId && (
             <>
               <TextField label="Transporter Type" value={form.transporterType} disabled />

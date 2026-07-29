@@ -6,6 +6,7 @@ import { FormModal } from "../../components/form/FormModal";
 import { submitDispatchApproval } from "../../lib/ordersApi";
 import { listDropdowns, dropdownValues } from "../../lib/mastersApi";
 import { UOM_OPTIONS } from "../../lib/modules";
+import { useIsMobile } from "../../lib/responsive";
 
 interface Props {
   orderId: string;
@@ -35,6 +36,7 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * item editor's UOM select), not manually typed.
  */
 export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Props) {
+  const isMobile = useIsMobile();
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
   const [shortQty, setShortQty] = useState("");
@@ -102,15 +104,17 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
 
   return (
     <FormModal title="Dispatch Items Approval Form" onClose={onClose} size="standard" sectionLabel="Dispatch Details">
-        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-          <SearchableSelect
-            label="Dispatch Approval"
-            required
-            value={outcome}
-            onChange={(v) => setOutcome(v as Outcome)}
-            options={DISPATCH_APPROVAL_OPTIONS}
-            placeholder="Search"
-          />
+        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SearchableSelect
+              label="Dispatch Approval"
+              required
+              value={outcome}
+              onChange={(v) => setOutcome(v as Outcome)}
+              options={DISPATCH_APPROVAL_OPTIONS}
+              placeholder="Search"
+            />
+          </div>
 
           {outcome && (
             <TextField
@@ -192,7 +196,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
             <TextField label="Dispatch Remarks" required value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           )}
 
-          {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
+          {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8, gridColumn: "1 / -1" }}>{error}</p>}
         </div>
 
         <div
