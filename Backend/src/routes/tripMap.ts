@@ -10,7 +10,7 @@ import type { SheetRow } from "../services/sheets.js";
  * single combined snapshot — appendRow silently drops whichever keys don't match a given
  * tab's actual headers, so the same spread works for every trip-family tab.
  */
-const ORDER_SNAPSHOT_MAP: Record<string, string> = {
+export const ORDER_SNAPSHOT_MAP: Record<string, string> = {
   CUST_ID: "CUST ID",
   CUSTOMER_NAME: "Customer Name",
   BUSINESS_SEGMENT: "Business Segment",

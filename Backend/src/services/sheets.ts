@@ -88,24 +88,42 @@ export async function readTable(
   });
 }
 
-/** Creates `tab` with the given header row if it doesn't already exist in the spreadsheet.
- * Additive only — never touches an existing tab's data, even if its headers differ. */
+/** Creates `tab` with the given header row if it doesn't already exist in the spreadsheet,
+ * or writes the header row if the tab exists but its row 1 is entirely blank (a pre-built
+ * live tab that was created without ever getting headers set — real case: "Transport_SO",
+ * which made every appendRow against it throw "has no header row — cannot append" until
+ * this was added). Additive only — never touches an existing tab's data otherwise, even if
+ * its headers differ from what's passed in here. */
 export async function ensureSheetTab(spreadsheetId: string, tab: string, headers: string[]): Promise<void> {
   const sheets = await getSheetsClient();
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const exists = (meta.data.sheets ?? []).some((s) => s.properties?.title === tab);
-  if (exists) return;
 
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
-  });
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${tab}!A1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [headers] },
+    });
+    return;
+  }
+
+  const existingRow1 = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A1:ZZ1` });
+  const hasHeaders = (existingRow1.data.values?.[0]?.length ?? 0) > 0;
+  if (hasHeaders) return;
+
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${tab}!A1`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [headers] },
   });
+  cache.delete(cacheKey(spreadsheetId, tab, 1));
 }
 
 /** Appends one or more rows in a SINGLE Sheets API call, mapping each object's keys to the

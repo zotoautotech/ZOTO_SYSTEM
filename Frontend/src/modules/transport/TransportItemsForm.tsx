@@ -29,12 +29,24 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
   const pickedIds = new Set(alreadyPicked.map((p) => p.itemId));
   const options = items
     .filter((it) => !pickedIds.has(it.ITEM_ID))
-    .map((it) => ({ value: it.ITEM_ID, label: `${it.PART_NAME} (${it.FG_ID})`, subtitle: it.PART_NO }));
+    .map((it) => ({
+      value: it.ITEM_ID,
+      label: it.FG_ID ? `${it.PART_NAME} (${it.FG_ID})` : it.PART_NAME || it.ITEM_ID,
+      subtitle: it.PART_NO,
+    }));
 
   const selected = items.find((it) => it.ITEM_ID === itemId);
+  const maxQty = selected ? Number(selected.QTY || 0) : undefined;
+  const qtyError = selected && qty && maxQty && Number(qty) > maxQty ? `Can't exceed the order quantity (${maxQty}).` : "";
+
+  function handleSelect(id: string) {
+    setItemId(id);
+    const item = items.find((it) => it.ITEM_ID === id);
+    setQty(item?.QTY ? String(item.QTY) : "");
+  }
 
   function handleSave() {
-    if (!selected || !qty || Number(qty) <= 0) return;
+    if (!selected || !qty || Number(qty) <= 0 || qtyError) return;
     onAdd({ itemId: selected.ITEM_ID, partName: selected.PART_NAME, qty: Number(qty), unit: selected.UOM || "NOS" });
   }
 
@@ -62,9 +74,16 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
         </div>
 
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-          <SearchableSelect label="Select Product" required value={itemId} onChange={(v) => setItemId(v)} options={options} placeholder="Search" />
+          <SearchableSelect label="Select Product" required value={itemId} onChange={handleSelect} options={options} placeholder="Search" />
           {selected && (
-            <TextField label="Quantity" required type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <TextField
+              label={`Quantity${maxQty ? ` (max ${maxQty} ${selected.UOM || ""})` : ""}`}
+              required
+              type="number"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              error={qtyError || undefined}
+            />
           )}
         </div>
 
@@ -72,7 +91,7 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!selected || !qty || Number(qty) <= 0}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!selected || !qty || Number(qty) <= 0 || !!qtyError}>
             Save
           </button>
         </div>

@@ -665,6 +665,15 @@ directly with the service account, no impersonation needed there).
   bubbling up as a 500. This is what fixed `GET /orders/:id` permanently 500ing ("Order not
   found" in the UI) because it unconditionally read a `DISPATCH_PLAN` tab that was never
   created on the live sheet. Any other Sheets API error still throws normally.
+- **`ensureSheetTab` now also fixes a tab that exists but has a genuinely blank row 1**, not
+  just a fully-missing tab — `POST /transport-trips/:id/orders` was throwing `Tab
+  "Transport_SO" has no header row — cannot append` because `Transport_SO` (unlike every
+  other trip-family tab) never actually had `ensureSheetTab` called for it at all. Since
+  `readTable` treats "tab doesn't exist" the same as "empty table" (see above), `appendRow`'s
+  own `headers.length === 0` check can't tell "missing tab" apart from "tab exists but
+  blank" — `ensureSheetTab` now handles both, and `tripRoutes.ts` calls it defensively before
+  every `Transport_SO` append using headers derived from `tripMap.ts`'s (now exported)
+  `ORDER_SNAPSHOT_MAP`, matching the literal shape of the object actually being appended.
 - **A stale frontend-only route can silently shadow a real one at the same URL.** React
   Router resolves two `<Route>`s with the identical literal path by declaration order, not
   by which one is "correct" — `Frontend/src/lib/stages.ts` once still had a leftover

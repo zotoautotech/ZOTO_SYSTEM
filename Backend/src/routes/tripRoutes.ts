@@ -1,12 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, readTable, updateRow, type SheetRow } from "../services/sheets.js";
+import { appendRow, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 import { itemFromSheet } from "./itemMap.js";
-import { orderSnapshotToSheet, vehicleSnapshotToSheet } from "./tripMap.js";
+import { ORDER_SNAPSHOT_MAP, orderSnapshotToSheet, vehicleSnapshotToSheet } from "./tripMap.js";
+
+// "Transport_SO" turned out to be a pre-built live tab that never actually got a header row
+// set (readTable tolerates a missing TAB, but appendRow throws on a tab that exists with a
+// blank row 1 — that's what was happening here) — this defensively (re)creates the header
+// row to match, mirroring the object shape attachOrders below actually appends.
+const TRANSPORT_SO_HEADERS = ["Timestamp", "Useremail", "ORDER_ID", "Transport_ID", "Transport_SO_ID", ...Object.values(ORDER_SNAPSHOT_MAP), "Status"];
 import { getSellerFields } from "./orders.js";
 
 export const tripsRouter = Router();
@@ -214,6 +220,8 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
     const orderIds = orderEntries.map((o) => o.orderId);
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
+
+    await ensureSheetTab(env.sheets.transactions, "Transport_SO", TRANSPORT_SO_HEADERS);
 
     const [orderPunchRows, allItems] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),

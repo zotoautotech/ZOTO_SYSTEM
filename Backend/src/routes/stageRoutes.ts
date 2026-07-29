@@ -6,6 +6,7 @@ import { nextId, nextIds } from "../services/ids.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 import { itemFromSheet } from "./itemMap.js";
 import { orderSnapshotToSheet } from "./tripMap.js";
+import { dispatchApprovalFromSheet } from "./soConfirmationMap.js";
 import { STAGES, type StageConfig } from "./stageConfig.js";
 
 const ORDER_TAB = "ORDER_PUNCH";
@@ -100,19 +101,27 @@ function registerPdiItemsRoute(router: Router) {
         return;
       }
 
-      const [punchRows, itemRows] = await Promise.all([
+      const [punchRows, itemRows, dispatchApprovalRows] = await Promise.all([
         readTable(env.sheets.transactions, ORDER_TAB),
         readTable(env.sheets.transactions, "ORDER_ITEMS"),
+        readTable(env.sheets.transactions, "Dispatch Items Approval"),
       ]);
       const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.prevStatus);
       const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
+      // The item's own "became eligible for PDI" moment is when its Dispatch Approval
+      // decision was made — same source the Dispatch Approval item-level detail page already
+      // reads. Last-occurrence-wins for an item with more than one decision logged.
+      const latestDispatchApprovalByItemId = new Map<string, string>();
+      for (const row of dispatchApprovalRows.map(dispatchApprovalFromSheet)) {
+        if (row.ITEM_ID) latestDispatchApprovalByItemId.set(row.ITEM_ID, row.CREATED_AT || "");
+      }
       const rows = itemRows
         .filter((i) => orderById.has(i.ORDER_ID))
         .map(itemFromSheet)
         .map((item) => {
           const order = orderById.get(item.ORDER_ID)!;
           return {
-            CREATED_AT: "",
+            CREATED_AT: latestDispatchApprovalByItemId.get(item.ITEM_ID) || "",
             ORDER_ID: order.ORDER_ID,
             ITEM_ID: item.ITEM_ID,
             PART_NAME: item.PART_NAME || "",
