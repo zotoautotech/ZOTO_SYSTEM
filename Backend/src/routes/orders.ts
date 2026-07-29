@@ -382,17 +382,39 @@ async function revertOrphanedSoConfirmation(rows: SheetRow[]): Promise<SheetRow[
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
-/** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" with no matching
- * rows left in "Dispatch Items Approval" (all deleted) reverts back to "DISPATCH APPROVAL" —
- * so it reappears in the pending Dispatch Approval queue. Nothing to reset in place here
- * (unlike the two above) since Dispatch Items Approval has no early-created placeholder. */
+/** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" where at least one
+ * of its items no longer has a matching row in "Dispatch Items Approval" (deleted directly in
+ * Sheets) reverts back to "DISPATCH APPROVAL" — so it reappears in the pending Dispatch
+ * Approval queue. Dispatch Approval is per-item (see /:orderId/items/:itemId/dispatch-approval
+ * above — approving one item never advances the order on its own; STATUS only flips once
+ * EVERY item has its own row), so revert has to check the same "every item" condition in
+ * reverse: **any** item missing its row is enough to send the whole order back, not just "zero
+ * rows left." Nothing to reset in place here (unlike the two stages above) since Dispatch
+ * Items Approval has no early-created placeholder. */
 async function revertOrphanedDispatchApproval(rows: SheetRow[]): Promise<SheetRow[]> {
   if (!rows.some((r) => r.STATUS === "DISPATCH APPROVAL COMPLETED")) return rows;
 
-  const dispatchRows = await readTable(env.sheets.transactions, "Dispatch Items Approval", { refresh: true });
-  const orderIdsWithRow = new Set(dispatchRows.map((r) => r.ORDER_ID));
+  const [dispatchRows, itemRows] = await Promise.all([
+    readTable(env.sheets.transactions, "Dispatch Items Approval", { refresh: true }),
+    readTable(env.sheets.transactions, "ORDER_ITEMS", { refresh: true }),
+  ]);
+  const decidedItemIdsByOrderId = new Map<string, Set<string>>();
+  for (const r of dispatchRows) {
+    if (!decidedItemIdsByOrderId.has(r.ORDER_ID)) decidedItemIdsByOrderId.set(r.ORDER_ID, new Set());
+    decidedItemIdsByOrderId.get(r.ORDER_ID)!.add(r.ITEM_ID);
+  }
+  const itemIdsByOrderId = new Map<string, string[]>();
+  for (const r of itemRows) {
+    if (!itemIdsByOrderId.has(r.ORDER_ID)) itemIdsByOrderId.set(r.ORDER_ID, []);
+    itemIdsByOrderId.get(r.ORDER_ID)!.push(r.ITEM_ID);
+  }
 
-  const orphaned = rows.filter((r) => r.STATUS === "DISPATCH APPROVAL COMPLETED" && !orderIdsWithRow.has(r.ORDER_ID));
+  const orphaned = rows.filter((r) => {
+    if (r.STATUS !== "DISPATCH APPROVAL COMPLETED") return false;
+    const orderItemIds = itemIdsByOrderId.get(r.ORDER_ID) ?? [];
+    const decided = decidedItemIdsByOrderId.get(r.ORDER_ID) ?? new Set();
+    return !orderItemIds.every((id) => decided.has(id));
+  });
   if (orphaned.length === 0) return rows;
 
   const revertedById = new Map<string, SheetRow>();
@@ -491,14 +513,19 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
   try {
     await revertOrphanedDispatchApproval((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
 
-    const [punchRows, itemRows] = await Promise.all([
+    const [punchRows, itemRows, dispatchRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
+      readTable(env.sheets.transactions, "Dispatch Items Approval"),
     ]);
     const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "DISPATCH APPROVAL");
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
+    // Dispatch Approval is per-item — an order can sit at STATUS "DISPATCH APPROVAL" with
+    // some of its items already individually decided (order only flips to COMPLETED once
+    // every item has a row), so those already-decided items must not show as pending too.
+    const decidedItemIds = new Set(dispatchRows.map((r) => r.ITEM_ID));
     const rows = itemRows
-      .filter((i) => orderById.has(i.ORDER_ID))
+      .filter((i) => orderById.has(i.ORDER_ID) && !decidedItemIds.has(i.ITEM_ID))
       .map(itemFromSheet)
       .map((item) => {
         const order = orderById.get(item.ORDER_ID)!;
@@ -1462,22 +1489,30 @@ const dispatchApprovalSchema = z.object({
   unit: z.string().optional(),
 });
 
-/** Saves the Dispatch Approval decision: appends one Dispatch_Approval row per item
- * (audit log — same append-only pattern as SO Confirmation) and marks the order done
- * so it drops out of the pending Dispatch Approval queue. */
-ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
+/** Saves the Dispatch Approval decision for ONE item only (per-item, not per-order — a
+ * customer's other items on the same order are untouched and stay in the pending queue
+ * until each is individually decided). Appends a single "Dispatch Items Approval" row for
+ * this item, then checks whether every item on the order now has its own row; only once ALL
+ * of them do does the order's own STATUS advance to "DISPATCH APPROVAL COMPLETED" (feeding
+ * PDI eligibility) — approving one item never cascades the whole order forward. */
+ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, next) => {
   try {
     const body = dispatchApprovalSchema.parse(req.body);
-    const [punchRows, items] = await Promise.all([
+    const [punchRows, items, existingDispatchRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "SALE_ORDER_ITEMS"),
+      readTable(env.sheets.transactions, "Dispatch Items Approval"),
     ]);
-    const punch = punchRows.find((row) => row.ORDER_ID === req.params.id);
+    const punch = punchRows.find((row) => row.ORDER_ID === req.params.orderId);
     if (!punch) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
     }
     const order = punchFromSheet(punch);
-    const orderItems = items.filter((i) => i.ORDER_ID === req.params.id).map(saleOrderItemFromSheet);
+    const orderItems = items.filter((i) => i.ORDER_ID === req.params.orderId).map(saleOrderItemFromSheet);
+    const item = orderItems.find((i) => i.ITEM_ID === req.params.itemId);
+    if (!item) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Item not found on this order" } });
+    }
 
     const now = new Date().toISOString();
     const qtyField =
@@ -1486,58 +1521,59 @@ ordersRouter.post("/:id/dispatch-approval", async (req, res, next) => {
       : body.outcome === "Excess Quantity" ? { EXCESS_QTY: body.excessQty }
       : {};
 
-    const dispatchIds = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", Math.max(orderItems.length, 1));
-    const rowsToWrite = orderItems.length > 0 ? orderItems : [{ ITEM_ID: "", SALE_ORDER_ITEM_ID: "" } as SheetRow];
-    await appendRows(
+    const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
+    await appendRow(
       env.sheets.transactions,
       "Dispatch Items Approval",
-      rowsToWrite.map((item, i) =>
-        dispatchApprovalToSheet({
-          CREATED_AT: now,
-          CREATED_BY: req.user!.employeeId,
-          ORDER_ID: req.params.id,
-          ITEM_ID: item.ITEM_ID ?? "",
-          DISPATCH_ID: dispatchIds[i],
-          CUST_ID: order.CUST_ID,
-          CUSTOMER_NAME: order.CUSTOMER_NAME,
-          BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,
-          TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER,
-          SALE_TYPE: order.SALE_TYPE,
-          BUYER_GSTIN: order.BUYER_GSTIN,
-          SEGMENT: item.SEGMENT ?? "",
-          CATEGORY: item.CATEGORY ?? "",
-          PART_NAME: item.PART_NAME ?? "",
-          PART_NO: item.PART_NO ?? "",
-          SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
-          PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
-          NOTES: item.NOTES ?? "",
-          ORDER_QTY: item.QTY ?? "",
-          // Manually typed on the form for now (no Inventory Management System connected
-          // yet) — falls back to the item's own Unit if the doer left it blank.
-          UOM: body.unit || item.UOM || "NOS",
-          DISPATCH_APPROVAL: body.outcome,
-          ...(Object.fromEntries(
-            Object.entries(qtyField)
-              .filter(([, v]) => v !== undefined)
-              .map(([k, v]) => [k, money(v as number)])
-          ) as SheetRow),
-          BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
-          NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
-          DISPATCH_REMARKS: body.remarks,
-          STATUS: body.outcome,
-        })
-      )
+      dispatchApprovalToSheet({
+        CREATED_AT: now,
+        CREATED_BY: req.user!.employeeId,
+        ORDER_ID: req.params.orderId,
+        ITEM_ID: item.ITEM_ID,
+        DISPATCH_ID: dispatchId,
+        CUST_ID: order.CUST_ID,
+        CUSTOMER_NAME: order.CUSTOMER_NAME,
+        BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,
+        TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER,
+        SALE_TYPE: order.SALE_TYPE,
+        BUYER_GSTIN: order.BUYER_GSTIN,
+        SEGMENT: item.SEGMENT ?? "",
+        CATEGORY: item.CATEGORY ?? "",
+        PART_NAME: item.PART_NAME ?? "",
+        PART_NO: item.PART_NO ?? "",
+        SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
+        PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
+        NOTES: item.NOTES ?? "",
+        ORDER_QTY: item.QTY ?? "",
+        // Manually typed on the form for now (no Inventory Management System connected
+        // yet) — falls back to the item's own Unit if the doer left it blank.
+        UOM: body.unit || item.UOM || "NOS",
+        DISPATCH_APPROVAL: body.outcome,
+        ...(Object.fromEntries(
+          Object.entries(qtyField)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, money(v as number)])
+        ) as SheetRow),
+        BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
+        NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
+        DISPATCH_REMARKS: body.remarks,
+        STATUS: body.outcome,
+      })
     );
 
-    await updateRow(
-      env.sheets.transactions,
-      ORDER_TAB,
-      "ORDER_ID",
-      req.params.id,
-      punchToSheet({ STATUS: "DISPATCH APPROVAL COMPLETED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })
-    );
+    const decidedItemIds = new Set([req.params.itemId, ...existingDispatchRows.filter((r) => r.ORDER_ID === req.params.orderId).map((r) => r.ITEM_ID)]);
+    const allItemsDecided = orderItems.every((i) => decidedItemIds.has(i.ITEM_ID));
+    if (allItemsDecided) {
+      await updateRow(
+        env.sheets.transactions,
+        ORDER_TAB,
+        "ORDER_ID",
+        req.params.orderId,
+        punchToSheet({ STATUS: "DISPATCH APPROVAL COMPLETED", APPROVAL_REMARKS: body.remarks, CREATED_BY: req.user!.employeeId })
+      );
+    }
 
-    res.json({ orderId: req.params.id, status: "DISPATCH APPROVAL COMPLETED" });
+    res.json({ orderId: req.params.orderId, itemId: req.params.itemId, orderCompleted: allItemsDecided });
   } catch (err) {
     next(err);
   }

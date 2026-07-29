@@ -387,12 +387,17 @@ Order's Completed filter — an order that progressed even further (into PDI, Tr
 was silently disappearing from both the pending AND Completed Dispatch Approval views at
 once under the old strict check.
 
-Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) → `POST
-/orders/:id/dispatch-approval` sets `ORDER_PUNCH.STATUS: DISPATCH APPROVAL COMPLETED` (which
-is what `?status=COMPLETED` on that same GET route filters on, per the broadened check just
-above), appending one row per item
-to **`Dispatch Items Approval`** (renamed from `Dispatch_Approval` in the sheet's "final"
-pass — see Known gotchas). `POST /orders/:id/so-confirmation`'s Confirmed/Cancelled branch
+Confirmed → Dispatch Approval queue (`GET /orders/dispatch-approvals`) →
+**`POST /orders/:orderId/items/:itemId/dispatch-approval`** appends **one** row to
+**`Dispatch Items Approval`** (renamed from `Dispatch_Approval` in the sheet's "final"
+pass — see Known gotchas) for that single item — approving one item never touches the rest
+of the order's items (a real bug this session: it used to loop every item on the order and
+write the exact same decision to all of them, so approving one item silently auto-approved
+every other item too). `ORDER_PUNCH.STATUS` only advances to `DISPATCH APPROVAL COMPLETED`
+once **every** item on the order has its own row — checked by re-reading `Dispatch Items
+Approval` after each item's write and comparing against that order's full item list.
+`revertOrphanedDispatchApproval()` (below) mirrors this: reverts if **any** item is missing
+its row, not just "zero rows left." `POST /orders/:id/so-confirmation`'s Confirmed/Cancelled branch
 also sets `ORDER_PUNCH.APPROVAL_TIME` (was mapped but never actually written before) — this
 is "SO Confirmation Time" on the Dispatch Approval queue's pending table, the moment the
 order entered that queue. **The pending Dispatch Approval table is item-level, not
@@ -420,12 +425,16 @@ Approval` filtered to that order+item — the first time this tab has ever been 
 the app (previously write-only, see the `SO_Confirmation`/`Dispatch Items Approval` paragraph
 below); added `dispatchApprovalFromSheet()` (`soConfirmationMap.ts`, a `reverseTranslate()`
 mirroring the existing `translate()`) to support it. The "Give Dispatch Approval Form" quick
-action on this page reuses the existing order-level `DispatchApprovalForm` — its Unit field
-is now a real UOM `<select>` (`CRR DD`-backed `dropdownValues(dropdowns, "UOM")`, falling
-back to `UOM_OPTIONS`, defaulting to `"SET"`), same list/reconciliation pattern as the Order
-Punch item editor's own UOM select, not a free-typed `TextField` like Available Stock/
-Balance Dispatch Quantity still are (form itself still submits at the order level, only the
-detail page reading is item-level).
+action lives **only** on this item detail page now — removed entirely from the order-level
+`OrderDetail.tsx` (was previously shown there with an unconditional/order-level check; now
+gone since a single order-level form can't express "just this item"). `DispatchApprovalForm`
+takes an `itemId` prop and calls the item-scoped endpoint above; its Unit field is a real UOM
+`<select>` (`CRR DD`-backed `dropdownValues(dropdowns, "UOM")`, falling back to
+`UOM_OPTIONS`, defaulting to `"SET"`), same list/reconciliation pattern as the Order Punch
+item editor's own UOM select, not a free-typed `TextField` like Available Stock/Balance
+Dispatch Quantity still are. The quick action itself is gated on both `order.STATUS ===
+"DISPATCH APPROVAL"` **and** this item having no existing log rows yet, since the order can
+stay at that status while some of its items are already individually decided.
 
 From there, two simple single-order stages (`Backend/src/routes/stageConfig.ts` /
 `stageRoutes.ts`, `Frontend/src/lib/stages.ts`): `DISPATCH APPROVAL COMPLETED → PDI
@@ -458,12 +467,28 @@ toggle states** (`Frontend/src/modules/stage/PdiList.tsx`, replacing the generic
 Dispatch Approval) — Timestamp/Part Name/Customer Name/Buyer GSTIN No./Quantity/Unit/PDI
 Date/PDI Attachment/PDI Remarks, matching the old CRR reference view. Backend: `GET
 /orders/pdi/items` (`stageRoutes.ts`, registered before the generic per-stage loop) —
-pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly and leaves the PDI-specific columns blank
-(no `PDI` tab row exists yet); Completed reads the `PDI` tab's own rows directly, no joins
-needed since every column the table wants is already on that row. Row click still opens the
-order-level detail page (`/modules/pdi/:orderId`) — the PDI form itself still submits at the
-order level (one row per item gets appended on save), only the queue's table reads item-
-level.
+pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly (excluding items that already have their
+own `PDI` row — see below) and leaves the PDI-specific columns blank; Completed reads the
+`PDI` tab's own rows directly, no joins needed since every column the table wants is already
+on that row. Pending Timestamp is joined from the item's own `Dispatch Items Approval`
+decision — the moment it actually became PDI-eligible.
+
+**PDI is per-item, same shift as Dispatch Approval above** — `registerPdiSubmitRoute()`
+(`stageRoutes.ts`) is `POST /orders/:orderId/items/:itemId/pdi`, appending **one** `PDI` row
+for that item only (used to loop every item on the order and write the identical PDI result
+to all of them, same bug class already fixed for Dispatch Approval). `ORDER_PUNCH.STATUS`
+only advances to `"PRE TRANSPORT COMPLETED"` once every item has its own `PDI` row.
+`revertOrphanedPdi()` mirrors this the same way `revertOrphanedDispatchApproval()` does:
+reverts if **any** item is missing its row. Row click opens a dedicated **item-level detail
+page** (`Frontend/src/modules/stage/PdiItemDetail.tsx`, routed at
+`modules/pdi/:orderId/items/:itemId`) instead of the order-level `OrderDetail.tsx` — the
+"Give PDI Form" quick action lives only there now (`OrderDetail.tsx`'s generic
+`currentStage`-driven action explicitly excludes `"pdi"` so it doesn't also show at the order
+level), gated on both `order.STATUS === "DISPATCH APPROVAL COMPLETED"` **and** this item not
+already having a `PDI` row (checked via `listPdiItems("COMPLETED")`, since the order can stay
+at that status while some items are already individually done). `StageForm.tsx` gained an
+optional `itemId` prop — when given, it posts to `submitPdiItemForm()` instead of the old
+order-level `submitStageForm()`.
 
 **The live sheet's `"Cutomer Name"` typo is gone — the user manually renamed it to the
 correctly-spelled `"Customer Name"` on every tab that had it** (`ORDER_PUNCH`, `SALE_ORDERS`,

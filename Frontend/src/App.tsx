@@ -19,6 +19,7 @@ import { DispatchApprovalList } from "./modules/dispatch-approval/DispatchApprov
 import { DispatchApprovalItemDetail } from "./modules/dispatch-approval/DispatchApprovalItemDetail";
 import { StageQueueList } from "./components/stage/StageQueueList";
 import { PdiList } from "./modules/stage/PdiList";
+import { PdiItemDetail } from "./modules/stage/PdiItemDetail";
 import { STAGES } from "./lib/stages";
 import { TripQueueList } from "./components/stage/TripQueueList";
 import { TripDetail } from "./modules/transport/TripDetail";
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="modules/dispatch-approval/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/dispatch-approval/:orderId/items/:itemId" element={<DispatchApprovalItemDetail />} />
         <Route path="modules/pdi" element={<PdiList />} />
+        <Route path="modules/pdi/:orderId/items/:itemId" element={<PdiItemDetail />} />
         {STAGES.filter((stage) => stage.key !== "pdi").map((stage) => (
           <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
         ))}

@@ -261,8 +261,12 @@ export interface DispatchApprovalPayload {
   unit?: string;
 }
 
-export async function submitDispatchApproval(orderId: string, payload: DispatchApprovalPayload) {
-  const res = await api.post<{ orderId: string; status: string }>(`/orders/${orderId}/dispatch-approval`, payload);
+/** Per-item — approving one item never advances the rest of the order's items. */
+export async function submitDispatchApproval(orderId: string, itemId: string, payload: DispatchApprovalPayload) {
+  const res = await api.post<{ orderId: string; itemId: string; orderCompleted: boolean }>(
+    `/orders/${orderId}/items/${itemId}/dispatch-approval`,
+    payload
+  );
   return res.data;
 }
 
@@ -300,6 +304,15 @@ export async function listStageOrders(stageKey: string, status?: string) {
 
 export async function submitStageForm(stageKey: string, orderId: string, payload: Record<string, string | number>) {
   const res = await api.post<{ orderId: string; stageId: string; status: string }>(`/orders/${orderId}/${stageKey}`, payload);
+  return res.data;
+}
+
+/** PDI is per-item — doing PDI for one item never advances the rest of the order's items. */
+export async function submitPdiItemForm(orderId: string, itemId: string, payload: Record<string, string | number>) {
+  const res = await api.post<{ orderId: string; itemId: string; orderCompleted: boolean }>(
+    `/orders/${orderId}/items/${itemId}/pdi`,
+    payload
+  );
   return res.data;
 }
 

@@ -3,13 +3,16 @@ import { isAxiosError } from "axios";
 import { TextField } from "../form/TextField";
 import { ToggleGroup } from "../form/ToggleGroup";
 import { FileDropzone } from "../form/FileDropzone";
-import { submitStageForm } from "../../lib/ordersApi";
+import { submitStageForm, submitPdiItemForm } from "../../lib/ordersApi";
 import type { StageDef } from "../../lib/stages";
 import { useIsMobile } from "../../lib/responsive";
 
 interface Props {
   stage: StageDef;
   orderId: string;
+  /** When given, submits per-item (currently only PDI works this way — see
+   * submitPdiItemForm) instead of the order-level POST /orders/:id/:stageKey. */
+  itemId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -17,7 +20,7 @@ interface Props {
 /** One generic modal form for all 8 pipeline stages after Dispatch Approval, rendering
  * whichever fields the StageDef declares (text/number/date/datetime-local/yesno/file).
  * Saves via POST /orders/:id/:stageKey (Backend/src/routes/stageRoutes.ts). */
-export function StageForm({ stage, orderId, onClose, onSaved }: Props) {
+export function StageForm({ stage, orderId, itemId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -42,7 +45,11 @@ export function StageForm({ stage, orderId, onClose, onSaved }: Props) {
         if (raw === undefined || raw === "") continue;
         payload[field.key] = field.type === "number" ? Number(raw) : raw;
       }
-      await submitStageForm(stage.key, orderId, payload);
+      if (itemId) {
+        await submitPdiItemForm(orderId, itemId, payload);
+      } else {
+        await submitStageForm(stage.key, orderId, payload);
+      }
       onSaved();
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;

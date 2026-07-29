@@ -131,7 +131,10 @@ export function DispatchApprovalItemDetail() {
             {formatTimestamp(order.APPROVAL_TIME || order.CREATED_AT)}
           </span>
 
-          {order.STATUS === "DISPATCH APPROVAL" && (
+          {/* Dispatch Approval is per-item now — the order can still say "DISPATCH APPROVAL"
+              while this specific item already has its own decision (other items on the same
+              order just haven't been decided yet), so also check this item's own log. */}
+          {order.STATUS === "DISPATCH APPROVAL" && log.length === 0 && (
             <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
               <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowForm(true)}>
                 <path d="M9 11l3 3L22 4" />
@@ -258,6 +261,7 @@ export function DispatchApprovalItemDetail() {
       {showForm && (
         <DispatchApprovalForm
           orderId={orderId!}
+          itemId={itemId!}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false);

@@ -43,24 +43,41 @@ function buildBodySchema(stage: StageConfig) {
  * needed (see the Quantity/Unit columns added above) with no extra joins required. */
 /** Mirrors the discount revert-on-delete convention (orders.ts's revertOrphanedDiscounts):
  * if a doer deletes an order's row(s) directly from the live PDI tab, the order is left
- * sitting at STATUS "PRE TRANSPORT COMPLETED" (PDI's own nextStatus) with no matching PDI
- * row — this detects that and reverts STATUS back to "DISPATCH APPROVAL COMPLETED" (PDI's
- * prevStatus) so the order reappears in the PDI pending queue instead of just vanishing from
- * every queue. Only reverts orders still sitting exactly at that status (not orders that
- * have since progressed further into Transport) — same "only while still at this stage"
- * scoping as the discount revert. Runs from a GET, same as the discount revert: there's no
- * other trigger available since the only way the app learns about a hand-edit made directly
- * in Sheets is by reading it. */
+ * sitting at STATUS "PRE TRANSPORT COMPLETED" (PDI's own nextStatus) with a gap — this
+ * detects that and reverts STATUS back to "DISPATCH APPROVAL COMPLETED" (PDI's prevStatus)
+ * so the order reappears in the PDI pending queue instead of just vanishing from every queue.
+ * PDI is per-item (see registerPdiSubmitRoute below — doing PDI for one item never advances
+ * the order on its own; STATUS only flips once EVERY item has its own PDI row), so — same as
+ * revertOrphanedDispatchApproval in orders.ts — **any** item missing its row is enough to
+ * revert the whole order, not just "zero rows left." Only reverts orders still sitting
+ * exactly at that status (not orders that have since progressed further into Transport).
+ * Runs from a GET, same as the discount revert: there's no other trigger available since the
+ * only way the app learns about a hand-edit made directly in Sheets is by reading it. */
 async function revertOrphanedPdi(pdiStage: StageConfig) {
-  const [punchRows, pdiRows] = await Promise.all([
+  const [punchRows, pdiRows, itemRows] = await Promise.all([
     readTable(env.sheets.transactions, ORDER_TAB),
     readTable(env.sheets.transactions, pdiStage.tab),
+    readTable(env.sheets.transactions, "ORDER_ITEMS"),
   ]);
   const ordersAtPdiComplete = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.nextStatus);
   if (ordersAtPdiComplete.length === 0) return;
-  const orderIdsWithPdiRow = new Set(pdiRows.map((r) => r.ORDER_ID));
+
+  const pdiItemIdsByOrderId = new Map<string, Set<string>>();
+  for (const r of pdiRows) {
+    if (!pdiItemIdsByOrderId.has(r.ORDER_ID)) pdiItemIdsByOrderId.set(r.ORDER_ID, new Set());
+    pdiItemIdsByOrderId.get(r.ORDER_ID)!.add(r.ITEM_ID);
+  }
+  const itemIdsByOrderId = new Map<string, string[]>();
+  for (const r of itemRows) {
+    if (!itemIdsByOrderId.has(r.ORDER_ID)) itemIdsByOrderId.set(r.ORDER_ID, []);
+    itemIdsByOrderId.get(r.ORDER_ID)!.push(r.ITEM_ID);
+  }
+
   for (const order of ordersAtPdiComplete) {
-    if (orderIdsWithPdiRow.has(order.ORDER_ID)) continue;
+    const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
+    const pdiItemIds = pdiItemIdsByOrderId.get(order.ORDER_ID) ?? new Set();
+    if (orderItemIds.every((id) => pdiItemIds.has(id))) continue;
+
     await updateRow(
       env.sheets.transactions,
       ORDER_TAB,
@@ -101,10 +118,11 @@ function registerPdiItemsRoute(router: Router) {
         return;
       }
 
-      const [punchRows, itemRows, dispatchApprovalRows] = await Promise.all([
+      const [punchRows, itemRows, dispatchApprovalRows, pdiRows] = await Promise.all([
         readTable(env.sheets.transactions, ORDER_TAB),
         readTable(env.sheets.transactions, "ORDER_ITEMS"),
         readTable(env.sheets.transactions, "Dispatch Items Approval"),
+        readTable(env.sheets.transactions, pdiStage.tab),
       ]);
       const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.prevStatus);
       const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
@@ -115,8 +133,12 @@ function registerPdiItemsRoute(router: Router) {
       for (const row of dispatchApprovalRows.map(dispatchApprovalFromSheet)) {
         if (row.ITEM_ID) latestDispatchApprovalByItemId.set(row.ITEM_ID, row.CREATED_AT || "");
       }
+      // PDI is per-item — an order can still sit at prevStatus with some of its items
+      // already individually PDI'd (order only flips to nextStatus once every item has a
+      // row), so those already-done items must not show as pending too.
+      const pdiDoneItemIds = new Set(pdiRows.map((r) => r.ITEM_ID));
       const rows = itemRows
-        .filter((i) => orderById.has(i.ORDER_ID))
+        .filter((i) => orderById.has(i.ORDER_ID) && !pdiDoneItemIds.has(i.ITEM_ID))
         .map(itemFromSheet)
         .map((item) => {
           const order = orderById.get(item.ORDER_ID)!;
@@ -141,9 +163,95 @@ function registerPdiItemsRoute(router: Router) {
   });
 }
 
+/** PDI's actual form submission, per item (not per order — see the STAGES comment in
+ * stageConfig.ts and the same shift already made for /orders/:orderId/items/:itemId/
+ * dispatch-approval in orders.ts). Appends a single PDI row for this item, then checks
+ * whether every item on the order now has its own row; only once ALL of them do does the
+ * order's own STATUS advance to "PRE TRANSPORT COMPLETED" (feeding Transport eligibility) —
+ * doing PDI for one item never cascades the whole order forward. */
+function registerPdiSubmitRoute(router: Router) {
+  const pdiStage = STAGES.find((s) => s.key === "pdi");
+  if (!pdiStage) return;
+  const schema = buildBodySchema(pdiStage);
+  const headers = [
+    "Timestamp", "Useremail", "ORDER_ID", "ITEM_ID", pdiStage.idColumn,
+    "CUST ID", "Customer Name", "Business Segment", "Type of Customer", "Sale Type", "Buyer GSTIN No.",
+    "Segment", "Category", "Part Name", "Part No.", "Quantity", "Unit",
+    "Special Instructions", "Packing Requirements", "Additional Notes",
+    ...pdiStage.fields.map((f) => f.header),
+    "Status",
+  ];
+
+  router.post("/:orderId/items/:itemId/pdi", async (req, res, next) => {
+    try {
+      const body = schema.parse(req.body);
+      const now = new Date().toISOString();
+
+      await ensureSheetTab(env.sheets.transactions, pdiStage.tab, headers);
+
+      const fieldValues: SheetRow = {};
+      for (const field of pdiStage.fields) {
+        const value = (body as Record<string, string | number | undefined>)[field.key];
+        fieldValues[field.header] = value === undefined ? "" : String(value);
+      }
+
+      const [punchRows, items, existingPdiRows] = await Promise.all([
+        readTable(env.sheets.transactions, ORDER_TAB),
+        readTable(env.sheets.transactions, "ORDER_ITEMS"),
+        readTable(env.sheets.transactions, pdiStage.tab),
+      ]);
+      const punch = punchRows.find((row) => row.ORDER_ID === req.params.orderId);
+      if (!punch) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+      const order = punchFromSheet(punch);
+      const orderItems = items.filter((i) => i.ORDER_ID === req.params.orderId).map(itemFromSheet);
+      const item = orderItems.find((i) => i.ITEM_ID === req.params.itemId);
+      if (!item) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Item not found on this order" } });
+
+      const [stageId] = await nextIds(pdiStage.idPrefix, pdiStage.tab, pdiStage.idColumn, 1);
+      await appendRow(env.sheets.transactions, pdiStage.tab, {
+        Timestamp: now,
+        Useremail: req.user!.employeeId,
+        ORDER_ID: req.params.orderId,
+        ITEM_ID: item.ITEM_ID,
+        [pdiStage.idColumn]: stageId,
+        ...orderSnapshotToSheet(order),
+        Segment: item.SEGMENT ?? "",
+        Category: item.CATEGORY ?? "",
+        "Part Name": item.PART_NAME ?? "",
+        "Part No.": item.PART_NO ?? "",
+        Quantity: item.QTY ?? "",
+        Unit: item.UOM ?? "",
+        "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
+        "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
+        "Additional Notes": item.NOTES ?? "",
+        ...fieldValues,
+        Status: pdiStage.nextStatus,
+      });
+
+      const doneItemIds = new Set([req.params.itemId, ...existingPdiRows.filter((r) => r.ORDER_ID === req.params.orderId).map((r) => r.ITEM_ID)]);
+      const allItemsDone = orderItems.every((i) => doneItemIds.has(i.ITEM_ID));
+      if (allItemsDone) {
+        await updateRow(
+          env.sheets.transactions,
+          ORDER_TAB,
+          "ORDER_ID",
+          req.params.orderId,
+          punchToSheet({ STATUS: pdiStage.nextStatus, CREATED_BY: req.user!.employeeId })
+        );
+      }
+
+      res.json({ orderId: req.params.orderId, itemId: req.params.itemId, orderCompleted: allItemsDone });
+    } catch (err) {
+      next(err);
+    }
+  });
+}
+
 export function registerStageRoutes(router: Router) {
   registerPdiItemsRoute(router);
+  registerPdiSubmitRoute(router);
   for (const stage of STAGES) {
+    if (stage.key === "pdi") continue; // fully handled by the dedicated per-item routes above
     const schema = buildBodySchema(stage);
     const headers = [
       "Timestamp", "Useremail", "ORDER_ID",

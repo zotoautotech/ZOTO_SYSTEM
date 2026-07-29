@@ -9,6 +9,7 @@ import { UOM_OPTIONS } from "../../lib/modules";
 
 interface Props {
   orderId: string;
+  itemId: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -33,7 +34,7 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * Unit is a real UOM dropdown (same CRR DD-backed list + "SET" default as the Order Punch
  * item editor's UOM select), not manually typed.
  */
-export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
+export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
@@ -81,7 +82,7 @@ export function DispatchApprovalForm({ orderId, onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await submitDispatchApproval(orderId, {
+      await submitDispatchApproval(orderId, itemId, {
         outcome: outcome as Exclude<Outcome, "">,
         approvedQty: outcome === "Dispatch Today" ? Number(approvedQty) : undefined,
         shortQty: outcome === "Short Quantity" ? Number(shortQty) : undefined,

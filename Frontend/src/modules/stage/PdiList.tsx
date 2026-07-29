@@ -105,7 +105,7 @@ export function PdiList() {
           {filtered.map((row) => (
             <button
               key={row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
-              onClick={() => navigate(`/modules/pdi/${row.ORDER_ID}`)}
+              onClick={() => navigate(`/modules/pdi/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
               className="card"
               style={{ display: "block", width: "100%", textAlign: "left", padding: 14, marginBottom: 10, color: "var(--color-text)", cursor: "pointer" }}
             >
@@ -133,7 +133,7 @@ export function PdiList() {
           columns={columns}
           rows={filtered}
           getRowKey={(row) => row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
-          onRowClick={(row) => navigate(`/modules/pdi/${row.ORDER_ID}`)}
+          onRowClick={(row) => navigate(`/modules/pdi/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
           emptyMessage={emptyMessage}
         />
       </div>

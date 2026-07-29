@@ -8,7 +8,6 @@ import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
 import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
 import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
-import { DispatchApprovalForm } from "../dispatch-approval/DispatchApprovalForm";
 import { StageForm } from "../../components/stage/StageForm";
 import { getStage } from "../../lib/stages";
 
@@ -90,7 +89,6 @@ export function OrderDetail() {
   const [showDiscountForm, setShowDiscountForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showSoConfirmationForm, setShowSoConfirmationForm] = useState(false);
-  const [showDispatchApprovalForm, setShowDispatchApprovalForm] = useState(false);
   const [showStageForm, setShowStageForm] = useState(false);
   // The 8 stages after Dispatch Approval (PDI, Transport, Transport Reached, Stock
   // Release, Tax Invoice, Dispatch, Collect LR, Delivery) all share one generic
@@ -279,19 +277,10 @@ export function OrderDetail() {
               </QuickAction>
             </div>
           )}
-          {/* Strict allowlist — this used to show unconditionally on this route regardless
-              of order.STATUS, so the form quick action kept appearing even on orders long
-              since past Dispatch Approval (PDI, Transport, ...), same bug class as the Sale
-              Order actions above. Only actionable while still exactly pending here. */}
-          {basePath === "/modules/dispatch-approval" && order.STATUS === "DISPATCH APPROVAL" && (
-            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
-              <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowDispatchApprovalForm(true)}>
-                <rect x="5" y="10" width="14" height="10" rx="2" />
-                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-              </QuickAction>
-            </div>
-          )}
-          {currentStage && order.STATUS === currentStage.prevStatus && (
+          {/* PDI moved to a dedicated per-item detail page/action (see PdiItemDetail.tsx) —
+              excluded here so this generic stage action doesn't also show at the order
+              level for it. Kept for any future stage added to STAGES that isn't per-item. */}
+          {currentStage && currentStage.key !== "pdi" && order.STATUS === currentStage.prevStatus && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               <QuickAction label={`Give ${currentStage.label} Form`} onClick={() => setShowStageForm(true)}>
                 <rect x="5" y="10" width="14" height="10" rx="2" />
@@ -442,19 +431,6 @@ export function OrderDetail() {
             queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
             queryClient.invalidateQueries({ queryKey: ["dispatchApprovals"] });
             navigate("/modules/so-confirmation");
-          }}
-        />
-      )}
-
-      {showDispatchApprovalForm && (
-        <DispatchApprovalForm
-          orderId={orderId!}
-          onClose={() => setShowDispatchApprovalForm(false)}
-          onSaved={() => {
-            setShowDispatchApprovalForm(false);
-            queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-            queryClient.invalidateQueries({ queryKey: ["dispatchApprovals"] });
-            navigate("/modules/dispatch-approval");
           }}
         />
       )}
