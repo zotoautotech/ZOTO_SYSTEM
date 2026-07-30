@@ -53,14 +53,24 @@ function buildBodySchema(stage: StageConfig) {
  * exactly at that status (not orders that have since progressed further into Transport).
  * Runs from a GET, same as the discount revert: there's no other trigger available since the
  * only way the app learns about a hand-edit made directly in Sheets is by reading it. */
+/** Two-directional reconciliation, since PDI's per-item STATUS flip (registerPdiSubmitRoute)
+ * isn't guaranteed atomic with the appendRow that logs each item — a transient failure on
+ * that final updateRow (real case hit once: both items had their own PDI row, but the order's
+ * own STATUS never advanced past DISPATCH APPROVAL COMPLETED, silently keeping it out of the
+ * Transport queue with no error visible to the doer) leaves the order stuck at prevStatus even
+ * though every item is actually done. So alongside the revert-if-orphaned direction (an order
+ * ahead of its actual PDI rows, e.g. a doer deleted a row straight from the sheet), this also
+ * advances the opposite gap: an order sitting at prevStatus whose items are now ALL done. */
 async function revertOrphanedPdi(pdiStage: StageConfig) {
   const [punchRows, pdiRows, itemRows] = await Promise.all([
     readTable(env.sheets.transactions, ORDER_TAB),
     readTable(env.sheets.transactions, pdiStage.tab),
     readTable(env.sheets.transactions, "ORDER_ITEMS"),
   ]);
-  const ordersAtPdiComplete = punchRows.map(punchFromSheet).filter((o) => o.STATUS === pdiStage.nextStatus);
-  if (ordersAtPdiComplete.length === 0) return;
+  const orders = punchRows.map(punchFromSheet);
+  const ordersAtPdiComplete = orders.filter((o) => o.STATUS === pdiStage.nextStatus);
+  const ordersAtPdiPending = orders.filter((o) => o.STATUS === pdiStage.prevStatus);
+  if (ordersAtPdiComplete.length === 0 && ordersAtPdiPending.length === 0) return;
 
   const pdiItemIdsByOrderId = new Map<string, Set<string>>();
   for (const r of pdiRows) {
@@ -84,6 +94,21 @@ async function revertOrphanedPdi(pdiStage: StageConfig) {
       "ORDER_ID",
       order.ORDER_ID,
       punchToSheet({ STATUS: pdiStage.prevStatus })
+    );
+  }
+
+  for (const order of ordersAtPdiPending) {
+    const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
+    if (orderItemIds.length === 0) continue;
+    const pdiItemIds = pdiItemIdsByOrderId.get(order.ORDER_ID) ?? new Set();
+    if (!orderItemIds.every((id) => pdiItemIds.has(id))) continue;
+
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      order.ORDER_ID,
+      punchToSheet({ STATUS: pdiStage.nextStatus })
     );
   }
 }
