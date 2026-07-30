@@ -11,7 +11,7 @@ import { useIsMobile } from "../../lib/responsive";
  * one-off `minHeight` hack to stop a dropdown panel from being clipped by `overflow:hidden`
  * — that hack is gone now that height is never content-driven). */
 export const FORM_MODAL_SIZES = {
-  small: { width: 400, height: 420 },
+  small: { width: 400, height: 640 },
   standard: { width: 800, height: 560 },
 } as const;
 
