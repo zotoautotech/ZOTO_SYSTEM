@@ -4,7 +4,6 @@ import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { FormModal } from "../../components/form/FormModal";
-import { useIsMobile } from "../../lib/responsive";
 import { getOrder, type OrderRecord } from "../../lib/ordersApi";
 import { TransportItemsForm, type PickedItem } from "./TransportItemsForm";
 
@@ -39,7 +38,6 @@ type Tab = "order" | "logistic";
  * is persisted to the backend until that outer form's own Save (which creates the trip and
  * attaches every queued order in one go). */
 export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
-  const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>("order");
   const [orderId, setOrderId] = useState("");
   const [items, setItems] = useState<PickedItem[]>([]);
@@ -121,12 +119,10 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
           ))}
         </div>
 
-        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", columnGap: 20 }}>
+        <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           {tab === "order" && (
             <>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <SearchableSelect label="Select Order" required value={orderId} onChange={(v) => setOrderId(v)} options={orderOptions} placeholder="Search" />
-              </div>
+              <SearchableSelect label="Select Order" required value={orderId} onChange={(v) => setOrderId(v)} options={orderOptions} placeholder="Search" />
               {order && (
                 <>
                   <TextField label="CUST ID" value={order.CUST_ID} disabled />
@@ -144,7 +140,7 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
           {tab === "logistic" && (
             <>
               {order && (
-                <div style={{ gridColumn: "1 / -1" }}>
+                <>
                   <ToggleGroup
                     label="Preferred Delivery Mode"
                     required
@@ -175,14 +171,14 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
                       options={[{ value: "Pay at ADC", label: "Pay at ADC" }, { value: "Pay at Customer", label: "Pay at Customer" }]}
                     />
                   )}
-                </div>
+                </>
               )}
 
-              <label style={{ display: "block", fontSize: 14, marginBottom: 8, gridColumn: "1 / -1" }}>
+              <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
                 Select Products & Quantity here that will Dispatch in this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
               </label>
               {items.length > 0 && (
-                <div style={{ marginBottom: 12, gridColumn: "1 / -1" }}>
+                <div style={{ marginBottom: 12 }}>
                   {items.map((it) => (
                     <div key={it.itemId} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid var(--color-border)" }}>
                       <span>{it.partName}</span>
@@ -193,7 +189,7 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
               )}
               <button
                 className="btn"
-                style={{ width: "100%", color: "#d32f2f", marginBottom: 20, gridColumn: "1 / -1" }}
+                style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }}
                 onClick={() => setShowItemsForm(true)}
                 disabled={!orderDetail}
               >

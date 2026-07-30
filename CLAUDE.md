@@ -55,14 +55,10 @@ used to require one-off `minHeight` hacks to stop `SearchableSelect` dropdowns b
 gone now that height is never content-driven). `size` picks the tier, `zIndex` for nested
 modals (e.g. Arrange Vehicle 50 → Transport Form 55 → Load Limit Details 60), `sectionLabel`
 for a static centered header bar, `headerActions` to replace the ✕ close button with custom
-buttons. Standard-tier forms with mostly simple `TextField`s lay their field list out in a
-two-column CSS grid on desktop (`gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)"`) to
-use the extra width instead of stacking everything in one narrow column; fields that need the
-full row (file dropzones, multi-option `ToggleGroup`s, section headers, item tables) get an
-explicit `gridColumn: "1 / -1"` wrapper — not every standard form has this grid (forms
-dominated by `ToggleGroup`s, like `Tab2OrderDetails.tsx`'s buyer/item section and the 6
-`StageModalShell`-based transport stage forms, are left single-column since squeezing a
-3-5-option toggle row into half width reads worse than the scroll it would save).
+buttons. Every form's fields stack single-column (a two-column grid layout was tried and
+explicitly rejected by the user — it visually shifted paired fields like Purchase Order No./
+Purchase Order Date left/right instead of the plain top-to-bottom stack expected — so don't
+reintroduce a `gridTemplateColumns`-based field layout without asking first).
 
 `Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
 list, reused for both Punch Order and Sale Order routes via a `basePath` prop derived from
