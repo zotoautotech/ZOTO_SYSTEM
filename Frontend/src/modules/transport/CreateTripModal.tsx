@@ -66,7 +66,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }
 
   function canSave() {
-    if (freightOnInvoice === "Y" && !freightGstApplicable) return false;
+    if (freightOnInvoice === "Y" && (!freightGstApplicable || !freightCharge || Number(freightCharge) < 0)) return false;
     return queuedOrders.length > 0 && !!vehicleArrangeFor && !!vehicleType && !!vehicleNo && !!driverName && !!driverContactNo;
   }
 
@@ -158,7 +158,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           />
           {freightOnInvoice === "Y" && (
             <>
-              <TextField label="Freight Charge" type="number" value={freightCharge} onChange={(e) => setFreightCharge(e.target.value)} />
+              <TextField label="Freight Charge" required type="number" min={0} value={freightCharge} onChange={(e) => setFreightCharge(e.target.value)} />
               <ToggleGroup
                 label="Freight GST Applicable"
                 required

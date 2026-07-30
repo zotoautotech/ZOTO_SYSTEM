@@ -49,10 +49,10 @@ export const STAGES: StageConfig[] = [
       // "PDI No." is a real column on the live sheet, separate from the internal "PDI ID"
       // (idColumn below, auto-generated per ids.ts convention) — matches the old CRR
       // reference form's own manually-typed PDI No. field.
-      { key: "pdiNo", header: "PDI No." },
+      { key: "pdiNo", header: "PDI No.", required: true },
       { key: "pdiDate", header: "PDI Date", required: true },
-      { key: "pdiAttachmentUrl", header: "PDI Attachment" },
-      { key: "boxQuantity", header: "Box Quantity" },
+      { key: "pdiAttachmentUrl", header: "PDI Attachment", required: true },
+      { key: "boxQuantity", header: "Box Quantity", required: true },
       { key: "pdiRemarks", header: "PDI Remarks", required: true },
     ],
   },

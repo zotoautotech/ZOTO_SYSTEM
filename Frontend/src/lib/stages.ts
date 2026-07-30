@@ -36,10 +36,10 @@ export const STAGES: StageDef[] = [
     prevStatus: "DISPATCH APPROVAL COMPLETED",
     nextStatus: "PRE TRANSPORT COMPLETED",
     fields: [
-      { key: "pdiNo", label: "PDI No.", type: "text" },
+      { key: "pdiNo", label: "PDI No.", type: "text", required: true },
       { key: "pdiDate", label: "PDI Date", type: "date", required: true },
-      { key: "pdiAttachmentUrl", label: "PDI Attachment", type: "file" },
-      { key: "boxQuantity", label: "Box Quantity", type: "number" },
+      { key: "pdiAttachmentUrl", label: "PDI Attachment", type: "file", required: true },
+      { key: "boxQuantity", label: "Box Quantity", type: "number", required: true },
       // Was "remarks" here, which never matched Backend/src/routes/stageConfig.ts's
       // "pdiRemarks" key — since StageForm posts the payload keyed by field.key directly
       // (see stageRoutes.ts's buildBodySchema, which builds its zod shape off the SAME

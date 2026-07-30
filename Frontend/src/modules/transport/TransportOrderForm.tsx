@@ -93,7 +93,14 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
       headerActions={
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
+          {tab === "order" ? (
+            <button className="btn btn-primary" onClick={() => setTab("logistic")} disabled={!order}>Next</button>
+          ) : (
+            <>
+              <button className="btn" onClick={() => setTab("order")}>Prev</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
+            </>
+          )}
         </div>
       }
     >
@@ -175,7 +182,7 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
               )}
 
               <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
-                Select Products & Quantity here that will Dispatch in this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
+                Select Products here that will Dispatch in this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
               </label>
               {items.length > 0 && (
                 <div style={{ marginBottom: 12 }}>

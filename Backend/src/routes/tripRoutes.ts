@@ -167,7 +167,7 @@ const createTripSchema = z.object({
   driverName: z.string().optional().default(""),
   driverContactNo: z.string().optional().default(""),
   freightApplicableOnInvoice: z.string().optional().default(""),
-  freightCharge: z.number().optional(),
+  freightCharge: z.number().min(0).optional(),
   freightGstApplicable: z.string().optional().default(""),
   description: z.string().optional().default(""),
 });
