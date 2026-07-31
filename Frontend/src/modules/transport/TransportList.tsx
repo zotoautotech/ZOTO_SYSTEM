@@ -31,6 +31,7 @@ export function TransportList() {
   const { query } = useSearch();
   const isMobile = useIsMobile();
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
+  const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -68,11 +69,24 @@ export function TransportList() {
     return matchesCustomer && matchesSearch;
   });
 
+  // "Send Through" filter sidebar for Completed Transport — matches the old CRR reference's
+  // own Completed Transport sidebar exactly (Courier/Cust. Vehicle/Local Vehicle/Porter/
+  // Transporter with counts), sorted alphabetically the same way that reference view is.
+  const sendThroughOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of trips) {
+      const name = row["Send Through"] || "Unknown";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [trips]);
+
   const filteredTrips = trips.filter((row) => {
-    if (!normalizedQuery) return true;
-    return [row.Transport_ID, row["Transporter Name"], row["Vehicle No."], row["Driver Name"]].some(
+    const matchesSendThrough = !activeSendThrough || (row["Send Through"] || "Unknown") === activeSendThrough;
+    const matchesSearch = !normalizedQuery || [row.Transport_ID, row["Transporter Name"], row["Vehicle No."], row["Driver Name"]].some(
       (value) => (value || "").toLowerCase().includes(normalizedQuery)
     );
+    return matchesSendThrough && matchesSearch;
   });
 
   const columns: Column<EligibleItemRow>[] = [
@@ -115,13 +129,44 @@ export function TransportList() {
     : "No orders awaiting transport.";
 
   const table = showCompleted ? (
-    <DataTable
-      columns={TRIP_COLUMNS}
-      rows={filteredTrips}
-      getRowKey={(row) => row.Transport_ID}
-      emptyMessage={emptyMessage}
-      onRowClick={(row) => navigate(`/modules/transport/${row.Transport_ID}`)}
-    />
+    isMobile ? (
+      <div>
+        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+        <div style={{ padding: "8px 0 24px" }}>
+          {filteredTrips.map((row) => (
+            <div
+              key={row.Transport_ID}
+              className="card"
+              style={{ padding: 14, marginBottom: 10, cursor: "pointer" }}
+              onClick={() => navigate(`/modules/transport/${row.Transport_ID}`)}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ fontWeight: 700 }}>{row["Transporter Name"] || row["Send Through"] || "—"}</span>
+                <span className="text-muted" style={{ fontSize: 12 }}>{row.Timestamp ? formatTimestamp(row.Timestamp) : "—"}</span>
+              </div>
+              <div style={{ marginTop: 8 }}>{row["Vehicle No."] || "—"} · {row["Vehicle type"] || "—"}</div>
+              <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
+                {row["Driver Name"] || "—"}
+              </div>
+            </div>
+          ))}
+          {!isLoading && filteredTrips.length === 0 && <p className="text-muted">{emptyMessage}</p>}
+        </div>
+      </div>
+    ) : (
+      <div style={{ display: "flex", minHeight: "calc(100vh - 128px)" }}>
+        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+        <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
+          <DataTable
+            columns={TRIP_COLUMNS}
+            rows={filteredTrips}
+            getRowKey={(row) => row.Transport_ID}
+            emptyMessage={emptyMessage}
+            onRowClick={(row) => navigate(`/modules/transport/${row.Transport_ID}`)}
+          />
+        </div>
+      </div>
+    )
   ) : isMobile ? (
     <div>
       <CustomerFilterPanel customers={customers} active={activeCustomer} onSelect={setActiveCustomer} />
