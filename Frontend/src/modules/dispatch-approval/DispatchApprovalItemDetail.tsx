@@ -155,6 +155,14 @@ export function DispatchApprovalItemDetail() {
             <Field label="Type of Customer" value={order.TYPE_OF_CUSTOMER} />
           </Section>
 
+          {latest && (
+            <Section title="Dispatch Details">
+              <Field label="Dispatch Approval" value={latest.DISPATCH_APPROVAL} />
+              <Field label="Next Extended Date" value={latest.NEXT_EXTENDED_DATE} />
+              <Field label="Dispatch Remarks" value={latest.DISPATCH_REMARKS} />
+            </Section>
+          )}
+
           {item.SPECIAL_INSTRUCTIONS && (
             <Section title="Special Instructions">
               <p style={{ fontSize: 14, margin: 0 }}>{item.SPECIAL_INSTRUCTIONS}</p>
@@ -227,8 +235,6 @@ export function DispatchApprovalItemDetail() {
             <Field label="Short Quantity" value={latest?.SHORT_QTY} />
             <Field label="Excess Quantity" value={latest?.EXCESS_QTY} />
             <Field label="Unit" value={item.UOM} />
-            <Field label="Next Extended Date" value={latest?.NEXT_EXTENDED_DATE} />
-            <Field label="Dispatch Remarks" value={latest?.DISPATCH_REMARKS} />
           </Section>
 
           <Section title="Dispatch Approval Follow-ups">
