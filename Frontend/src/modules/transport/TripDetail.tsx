@@ -21,6 +21,88 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** Same compact table-card pattern as OrderDetail.tsx's "Order Punch Parts" (title + count
+ * badge + horizontally scrollable table) — used here for "S.O Dispatches" (attached orders)
+ * and "S.O Items Dispatches" (their line items), matching the old CRR reference layout. */
+function TableCard<T>({
+  title,
+  count,
+  columns,
+  rows,
+  getRowKey,
+  onRowClick,
+}: {
+  title: string;
+  count: number;
+  columns: { header: string; render: (row: T) => React.ReactNode }[];
+  rows: T[];
+  getRowKey: (row: T, index: number) => string;
+  onRowClick?: (row: T) => void;
+}) {
+  return (
+    <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{title}</h3>
+        <span
+          style={{
+            background: "var(--color-bg-page)",
+            border: "1px solid var(--color-border)",
+            borderRadius: 999,
+            padding: "1px 9px",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--color-text-muted)",
+          }}
+        >
+          {count}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>No items</p>
+      ) : (
+        <div className="sheet-scroll" style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
+            <thead>
+              <tr>
+                {columns.map((col, i) => (
+                  <th
+                    key={col.header}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 10px",
+                      borderBottom: "1px solid var(--color-border)",
+                      borderRight: i === columns.length - 1 ? "none" : "1px solid var(--color-border)",
+                    }}
+                  >
+                    {col.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr
+                  key={getRowKey(row, i)}
+                  onClick={() => onRowClick?.(row)}
+                  style={{ cursor: onRowClick ? "pointer" : "default" }}
+                  onMouseEnter={(e) => onRowClick && (e.currentTarget.style.background = "var(--color-bg-page)")}
+                  onMouseLeave={(e) => onRowClick && (e.currentTarget.style.background = "transparent")}
+                >
+                  {columns.map((col) => (
+                    <td key={col.header} style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {col.render(row)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
@@ -81,7 +163,7 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders } = data;
+  const { transport, orders, dispatches, items } = data;
   const stage = getTripStage(moduleKey);
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
   const canGiveStageForm = !!stage && transport.Status === stage.prevStatus;
@@ -124,21 +206,33 @@ export function TripDetail() {
         </div>
 
         <div style={{ flex: 1, minWidth: 280 }}>
-          <Section title={`Attached Orders (${orders.length})`}>
-            {orders.length === 0 && <p className="text-muted">No orders attached yet.</p>}
-            {orders.map((o) => (
-              <div
-                key={o.ORDER_ID}
-                onClick={() => navigate(`/modules/punch-order/${o.ORDER_ID}`)}
-                style={{ padding: "10px 0", borderBottom: "1px solid var(--color-border)", cursor: "pointer" }}
-              >
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{o.CUSTOMER_NAME || o.ORDER_ID}</div>
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  {o.ORDER_ID} · ₹{Number(o.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}
-                </div>
-              </div>
-            ))}
-          </Section>
+          <TableCard
+            title="S.O Dispatches"
+            count={dispatches.length}
+            rows={dispatches}
+            getRowKey={(row) => row.transportSoId || row.orderId}
+            onRowClick={(row) => navigate(`/modules/punch-order/${row.orderId}`)}
+            columns={[
+              { header: "Cutomer Name", render: (row) => row.customerName || row.orderId },
+              { header: "Transport_SO_ID", render: (row) => row.transportSoId || "—" },
+              { header: "Timestamp", render: (row) => (row.timestamp ? formatTimestamp(row.timestamp) : "—") },
+            ]}
+          />
+
+          <TableCard
+            title="S.O Items Dispatches"
+            count={items.length}
+            rows={items}
+            getRowKey={(row, i) => `${row.partNo}-${i}`}
+            columns={[
+              { header: "Part No.", render: (row) => row.partNo || "—" },
+              { header: "Part Name", render: (row) => row.partName || "—" },
+              { header: "Total Qty of Order", render: (row) => row.totalQtyOfOrder || "—" },
+              { header: "Quantity", render: (row) => row.loadQty || "—" },
+              { header: "Unit", render: (row) => row.unit || "—" },
+              { header: "Load Boxes", render: (row) => row.loadBoxes || "—" },
+            ]}
+          />
         </div>
       </div>
 

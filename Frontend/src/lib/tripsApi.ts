@@ -12,8 +12,29 @@ export async function listTrips(status?: string) {
   return res.data;
 }
 
+export interface TripDispatchRow {
+  orderId: string;
+  transportSoId: string;
+  customerName: string;
+  timestamp: string;
+}
+
+export interface TripItemDispatchRow {
+  partNo: string;
+  partName: string;
+  totalQtyOfOrder: string;
+  loadQty: string;
+  unit: string;
+  loadBoxes: string;
+}
+
 export async function getTrip(transportId: string) {
-  const res = await api.get<{ transport: TripRecord; orders: OrderRecord[] }>(`/transport-trips/${transportId}`);
+  const res = await api.get<{
+    transport: TripRecord;
+    orders: OrderRecord[];
+    dispatches: TripDispatchRow[];
+    items: TripItemDispatchRow[];
+  }>(`/transport-trips/${transportId}`);
   return res.data;
 }
 

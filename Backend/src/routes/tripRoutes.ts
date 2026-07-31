@@ -153,8 +153,29 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
-    const orders = await getAttachedOrders(req.params.transportId);
-    res.json({ transport, orders: orders.map((o) => o.order) });
+    const [attached, productRows] = await Promise.all([
+      getAttachedOrders(req.params.transportId),
+      readTable(env.sheets.transactions, "Transport_Products"),
+    ]);
+    // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
+    // matches the old CRR reference's trip detail layout exactly.
+    const dispatches = attached.map((a) => ({
+      orderId: a.orderId,
+      transportSoId: a.transportSoId,
+      customerName: a.order.CUSTOMER_NAME || "",
+      timestamp: a.order.CREATED_AT || "",
+    }));
+    const items = productRows
+      .filter((r) => r.Transport_ID === req.params.transportId)
+      .map((r) => ({
+        partNo: r["Part No."] || "",
+        partName: r["Part Name"] || "",
+        totalQtyOfOrder: r["Quantity"] || "",
+        loadQty: r["Load Qty"] || "",
+        unit: r["Unit"] || "",
+        loadBoxes: r["Load Boxes"] || "",
+      }));
+    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items });
   } catch (err) {
     next(err);
   }
