@@ -175,10 +175,15 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders, dispatches, items } = data;
+  const { transport, orders, dispatches, items, stockReleaseDone, taxInvoiceDone } = data;
   const stage = getTripStage(moduleKey);
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
-  const canGiveStageForm = !!stage && transport.Status === stage.prevStatus;
+  // Stock Release / Tax Invoice run in parallel off the same REACHED status — Status alone
+  // can't tell "still pending this branch" apart from "done this branch, other one still
+  // pending," so also check that specific branch's own completion flag (see tripStages.ts).
+  const thisBranchDone =
+    stage?.key === "stock-release" ? stockReleaseDone : stage?.key === "tax-invoice" ? taxInvoiceDone : false;
+  const canGiveStageForm = !!stage && transport.Status === stage.prevStatus && !thisBranchDone;
   // Orders are attached during trip creation now (CreateTripModal's nested Select Sale
   // Orders flow) — this action is only for the defensive edge case of a trip that
   // somehow ended up with zero orders, not a normal next step after Arrange Vehicle.

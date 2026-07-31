@@ -136,13 +136,35 @@ tripsRouter.get("/eligible-items", async (req, res, next) => {
 
 tripsRouter.get("/", async (req, res, next) => {
   try {
-    const { status } = req.query as { status?: string };
+    const { status, excludeIfInTab, includeIfInTab } = req.query as {
+      status?: string;
+      excludeIfInTab?: string;
+      includeIfInTab?: string;
+    };
     const rows = await readTable(env.sheets.transactions, "TRANSPORT");
     // status=ALL powers the "Completed Transport" trip-level list (TransportList.tsx) —
     // matches the old CRR reference's own "Completed Transport" view, which is just every
     // arranged trip regardless of which downstream stage it's since reached, not filtered
     // to one specific status.
-    const filtered = status === "ALL" ? rows : status ? rows.filter((r) => r.Status === status) : rows.filter((r) => r.Status === "OPEN");
+    let filtered = status === "ALL" ? rows : status ? rows.filter((r) => r.Status === status) : rows.filter((r) => r.Status === "OPEN");
+
+    // Stock Release and Tax Invoice run in parallel off the same REACHED status (see the
+    // stock-release/tax-invoice POST handlers above) — excludeIfInTab drops a trip from a
+    // stage's pending queue once that stage's own tab already has a row for it (even though
+    // the trip's overall Status hasn't advanced yet, since the other branch may still be
+    // pending); includeIfInTab powers that same stage's own Completed toggle by checking the
+    // tab directly instead of relying on Status, which may have already moved past REACHED.
+    if (excludeIfInTab) {
+      const other = await readTable(env.sheets.transactions, excludeIfInTab);
+      const doneIds = new Set(other.map((r) => r.Transport_ID));
+      filtered = filtered.filter((r) => !doneIds.has(r.Transport_ID));
+    }
+    if (includeIfInTab) {
+      const other = await readTable(env.sheets.transactions, includeIfInTab);
+      const doneIds = new Set(other.map((r) => r.Transport_ID));
+      filtered = filtered.filter((r) => doneIds.has(r.Transport_ID));
+    }
+
     res.json(filtered);
   } catch (err) {
     next(err);
@@ -153,10 +175,18 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
-    const [attached, productRows] = await Promise.all([
+    const [attached, productRows, stockReleaseRows, taxInvoiceRows] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
+      readTable(env.sheets.transactions, "STOCK_RELEASE"),
+      readTable(env.sheets.transactions, "TAX_INVOICE"),
     ]);
+    // Stock Release / Tax Invoice run in parallel (see TRIP_STAGES' completionTab comment in
+    // tripStages.ts) — TripDetail needs to know per-branch completion directly since
+    // transport.Status alone can't distinguish "still pending this branch" from "done this
+    // branch, other one still pending" while both sit at REACHED.
+    const stockReleaseDone = stockReleaseRows.some((r) => r.Transport_ID === req.params.transportId);
+    const taxInvoiceDone = taxInvoiceRows.some((r) => r.Transport_ID === req.params.transportId);
     // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
     // matches the old CRR reference's trip detail layout exactly.
     const dispatches = attached.map((a) => ({
@@ -175,7 +205,7 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
         unit: r["Unit"] || "",
         loadBoxes: r["Load Boxes"] || "",
       }));
-    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items });
+    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items, stockReleaseDone, taxInvoiceDone });
   } catch (err) {
     next(err);
   }
@@ -349,6 +379,12 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
       sameVehicle: z.string().optional().default(""),
       expectedDateTime: z.string().optional().default(""),
       reason: z.string().optional().default(""),
+      // Only present when Same Vehicle = No — the doer swapped vehicles for this trip.
+      vehicleType: z.string().optional().default(""),
+      vehicleNo: z.string().optional().default(""),
+      vehicleSize: z.string().optional().default(""),
+      driverName: z.string().optional().default(""),
+      driverContactNo: z.string().optional().default(""),
     }).merge(remarksSchema);
     const body = schema.parse(req.body);
     const transport = await getTransportRow(req.params.transportId);
@@ -357,6 +393,14 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
     const now = new Date().toISOString();
     const reachIds = await nextIds("TPTRCH", "Transport_Reached", "Transport_Reach_ID", Math.max(attached.length, 1));
 
+    // Same Vehicle = No means the doer picked a new vehicle on this form — use that instead
+    // of the trip's original vehicle, both for this log row and for the trip going forward.
+    const vehicleType = body.sameVehicle === "No" && body.vehicleType ? body.vehicleType : transport["Vehicle type"] ?? "";
+    const vehicleNo = body.sameVehicle === "No" && body.vehicleNo ? body.vehicleNo : transport["Vehicle No."] ?? "";
+    const vehicleSize = body.sameVehicle === "No" && body.vehicleSize ? body.vehicleSize : transport["Vehicle Size (Ft)"] ?? "";
+    const driverName = body.sameVehicle === "No" && body.driverName ? body.driverName : transport["Driver Name"] ?? "";
+    const driverContactNo = body.sameVehicle === "No" && body.driverContactNo ? body.driverContactNo : transport["Driver Contact No."] ?? "";
+
     for (const [i, a] of attached.entries()) {
       await appendRow(env.sheets.transactions, "Transport_Reached", {
         Timestamp: now,
@@ -364,11 +408,11 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
         ORDER_ID: a.orderId,
         Transport_ID: req.params.transportId,
         Transport_Reach_ID: reachIds[i],
-        "Vehicle type": transport["Vehicle type"] ?? "",
-        "Vehicle No.": transport["Vehicle No."] ?? "",
-        "Vehicle Size (Ft)": transport["Vehicle Size (Ft)"] ?? "",
-        "Driver Name": transport["Driver Name"] ?? "",
-        "Driver Contact No.": transport["Driver Contact No."] ?? "",
+        "Vehicle type": vehicleType,
+        "Vehicle No.": vehicleNo,
+        "Vehicle Size (Ft)": vehicleSize,
+        "Driver Name": driverName,
+        "Driver Contact No.": driverContactNo,
         "Transport Reached": body.reached,
         "Same Vehicle": body.sameVehicle,
         "Expected DateTime": body.expectedDateTime,
@@ -377,7 +421,14 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
       });
     }
 
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "REACHED" });
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, {
+      Status: "REACHED",
+      "Vehicle type": vehicleType,
+      "Vehicle No.": vehicleNo,
+      "Vehicle Size (Ft)": vehicleSize,
+      "Driver Name": driverName,
+      "Driver Contact No.": driverContactNo,
+    });
     await cascadeStatus(attached.map((a) => a.orderId), "TRANSPORT REACHED", req.user!.employeeId);
     res.json({ transportId: req.params.transportId, status: "TRANSPORT REACHED" });
   } catch (err) {
@@ -424,9 +475,21 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
     }
 
     const orderIds = [...new Set(productRows.map((p) => p.ORDER_ID))];
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "STOCK RELEASED" });
+    // Stock Release and Tax Invoice run in parallel off the same REACHED status (the old
+    // CRR reference shows both queues picking up a trip at once, not one gating the other) —
+    // the trip's own Status only advances to TAX INVOICE COMPLETED (Dispatch's own
+    // prevStatus) once BOTH branches are done, checked here by whether a TAX_INVOICE row
+    // already exists for this trip. Until then Status stays REACHED so this trip keeps
+    // showing in whichever of the two queues hasn't done its part yet (see GET / and its
+    // excludeIfInTab/includeIfInTab params, used by both stages' pending/Completed toggles).
+    const taxInvoiceDone = (await readTable(env.sheets.transactions, "TAX_INVOICE")).some(
+      (r) => r.Transport_ID === req.params.transportId
+    );
+    if (taxInvoiceDone) {
+      await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
+    }
     await cascadeStatus(orderIds, "STOCK RELEASED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, status: "STOCK RELEASED" });
+    res.json({ transportId: req.params.transportId, status: taxInvoiceDone ? "TAX INVOICE COMPLETED" : "STOCK RELEASED" });
   } catch (err) {
     next(err);
   }
@@ -530,9 +593,16 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
       }
     }
 
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
+    // Mirrors stock-release's own check in the other direction — Status only advances once
+    // BOTH branches are done.
+    const stockReleaseDone = (await readTable(env.sheets.transactions, "STOCK_RELEASE")).some(
+      (r) => r.Transport_ID === req.params.transportId
+    );
+    if (stockReleaseDone) {
+      await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
+    }
     await cascadeStatus(attached.map((a) => a.orderId), "TAX INVOICE COMPLETED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, invoiceId, status: "TAX INVOICE COMPLETED" });
+    res.json({ transportId: req.params.transportId, invoiceId, status: stockReleaseDone ? "TAX INVOICE COMPLETED" : "REACHED" });
   } catch (err) {
     next(err);
   }

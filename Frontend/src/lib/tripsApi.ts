@@ -7,8 +7,13 @@ export interface TripRecord {
   [key: string]: string;
 }
 
-export async function listTrips(status?: string) {
-  const res = await api.get<TripRecord[]>("/transport-trips", { params: { status } });
+export async function listTrips(
+  status?: string,
+  opts?: { excludeIfInTab?: string; includeIfInTab?: string }
+) {
+  const res = await api.get<TripRecord[]>("/transport-trips", {
+    params: { status, excludeIfInTab: opts?.excludeIfInTab, includeIfInTab: opts?.includeIfInTab },
+  });
   return res.data;
 }
 
@@ -34,6 +39,8 @@ export async function getTrip(transportId: string) {
     orders: OrderRecord[];
     dispatches: TripDispatchRow[];
     items: TripItemDispatchRow[];
+    stockReleaseDone: boolean;
+    taxInvoiceDone: boolean;
   }>(`/transport-trips/${transportId}`);
   return res.data;
 }

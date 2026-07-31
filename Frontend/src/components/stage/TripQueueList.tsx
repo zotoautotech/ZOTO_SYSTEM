@@ -20,12 +20,15 @@ export function TripQueueList({
   label,
   prevStatus,
   nextStatus,
+  completionTab,
   onCreateNew,
 }: {
   moduleKey: string;
   label: string;
   prevStatus: string;
   nextStatus?: string;
+  /** Set only for Stock Release / Tax Invoice — see tripStages.ts for why. */
+  completionTab?: string;
   onCreateNew?: () => void;
 }) {
   const navigate = useNavigate();
@@ -34,7 +37,12 @@ export function TripQueueList({
   const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
   const { data: trips = [], isLoading } = useQuery({
     queryKey: ["trips", moduleKey, showCompleted],
-    queryFn: () => listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
+    queryFn: () =>
+      completionTab
+        ? showCompleted
+          ? listTrips("ALL", { includeIfInTab: completionTab })
+          : listTrips(prevStatus, { excludeIfInTab: completionTab })
+        : listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
     placeholderData: keepPreviousData,
   });
 
