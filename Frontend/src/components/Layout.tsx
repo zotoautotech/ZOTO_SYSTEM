@@ -191,8 +191,15 @@ export function Layout() {
       : pathSegments[0] === "home"
         ? [{ label: "HOME", to: "/" }]
         : [{ label: "SALES CRR", to: "/modules" }];
+  // Dispatch Approval doers shouldn't be able to click through to the full order (see
+  // plans/pure-puzzling-gray.md) — the order-financials view is hidden there now, but the
+  // intermediate "ORD-xxxx" / "Order Punch Items View" crumbs on this module's own per-item
+  // page (modules/dispatch-approval/:orderId/items/:itemId) still linked into it. Collapsed
+  // straight from "Dispatch Approval" to the item crumb instead, skipping both.
+  const isDispatchApprovalItemPage = pathSegments[1] === "dispatch-approval" && pathSegments[3] === "items";
   pathSegments.forEach((seg, i) => {
     if (seg === "modules" || seg === "home") return;
+    if (isDispatchApprovalItemPage && (i === 2 || i === 3)) return;
     crumbs.push({
       label: seg === "items" ? "Order Punch Items View" : seg.replace(/-/g, " "),
       to: "/" + pathSegments.slice(0, i + 1).join("/"),
