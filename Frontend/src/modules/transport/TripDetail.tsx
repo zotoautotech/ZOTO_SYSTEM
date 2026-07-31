@@ -31,6 +31,7 @@ function TableCard<T>({
   rows,
   getRowKey,
   onRowClick,
+  onExpand,
 }: {
   title: string;
   count: number;
@@ -38,24 +39,35 @@ function TableCard<T>({
   rows: T[];
   getRowKey: (row: T, index: number) => string;
   onRowClick?: (row: T) => void;
+  onExpand?: () => void;
 }) {
   return (
     <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{title}</h3>
-        <span
-          style={{
-            background: "var(--color-bg-page)",
-            border: "1px solid var(--color-border)",
-            borderRadius: 999,
-            padding: "1px 9px",
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--color-text-muted)",
-          }}
-        >
-          {count}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{title}</h3>
+          <span
+            style={{
+              background: "var(--color-bg-page)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 999,
+              padding: "1px 9px",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--color-text-muted)",
+            }}
+          >
+            {count}
+          </span>
+        </div>
+        {onExpand && (
+          <button
+            onClick={onExpand}
+            style={{ border: "none", background: "none", color: "var(--color-primary)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 4 }}
+          >
+            Expand
+          </button>
+        )}
       </div>
       {rows.length === 0 ? (
         <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>No items</p>
@@ -212,6 +224,7 @@ export function TripDetail() {
             rows={dispatches}
             getRowKey={(row) => row.transportSoId || row.orderId}
             onRowClick={(row) => navigate(`/modules/punch-order/${row.orderId}`)}
+            onExpand={() => navigate(`/modules/${moduleKey}/${transportId}/dispatches`)}
             columns={[
               { header: "Cutomer Name", render: (row) => row.customerName || row.orderId },
               { header: "Transport_SO_ID", render: (row) => row.transportSoId || "—" },
@@ -224,6 +237,7 @@ export function TripDetail() {
             count={items.length}
             rows={items}
             getRowKey={(row, i) => `${row.partNo}-${i}`}
+            onExpand={() => navigate(`/modules/${moduleKey}/${transportId}/items`)}
             columns={[
               { header: "Part No.", render: (row) => row.partNo || "—" },
               { header: "Part Name", render: (row) => row.partName || "—" },

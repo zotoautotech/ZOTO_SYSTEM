@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { DataTable, type Column } from "../DataTable";
 import { StatusBadge } from "../StatusBadge";
+import { CustomerFilterPanel } from "../CustomerFilterPanel";
 import { formatTimestamp } from "../../lib/format";
 import { listTrips, type TripRecord } from "../../lib/tripsApi";
 import { useSearch } from "../../lib/search";
@@ -10,7 +11,10 @@ import { useSetHeaderActions } from "../../lib/headerActions";
 
 /** One list component for the "Transport" screen (Status=OPEN, create+attach) and every
  * TRIP_STAGES queue (Status=that stage's prevStatus) — same Completed-toggle pattern as
- * every other queue in the app, just trip-shaped rows instead of order-shaped ones. */
+ * every other queue in the app, just trip-shaped rows instead of order-shaped ones. Also has
+ * a "Send Through" filter sidebar (Courier/Cust. Vehicle/Local Vehicle/Porter/Transporter),
+ * same pattern as TransportList.tsx's own Completed Transport view, matching the old CRR
+ * reference's trip-level queues. */
 export function TripQueueList({
   moduleKey,
   label,
@@ -27,18 +31,29 @@ export function TripQueueList({
   const navigate = useNavigate();
   const { query } = useSearch();
   const [showCompleted, setShowCompleted] = useState(false);
+  const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
   const { data: trips = [], isLoading } = useQuery({
     queryKey: ["trips", moduleKey, showCompleted],
     queryFn: () => listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
     placeholderData: keepPreviousData,
   });
 
+  const sendThroughOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of trips) {
+      const name = row["Send Through"] || "Unknown";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [trips]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = trips.filter((t) => {
-    if (!normalizedQuery) return true;
-    return [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"]].some((v) =>
+    const matchesSendThrough = !activeSendThrough || (t["Send Through"] || "Unknown") === activeSendThrough;
+    const matchesSearch = !normalizedQuery || [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"]].some((v) =>
       (v || "").toLowerCase().includes(normalizedQuery)
     );
+    return matchesSendThrough && matchesSearch;
   });
 
   const columns: Column<TripRecord>[] = [
@@ -81,14 +96,17 @@ export function TripQueueList({
     : `No trips awaiting ${label}.`;
 
   return (
-    <div style={{ minHeight: "calc(100vh - 128px)" }}>
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        getRowKey={(t) => t.Transport_ID}
-        onRowClick={(t) => navigate(`/modules/${moduleKey}/${t.Transport_ID}`)}
-        emptyMessage={emptyMessage}
-      />
+    <div style={{ display: "flex", minHeight: "calc(100vh - 128px)" }}>
+      <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+      <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          getRowKey={(t) => t.Transport_ID}
+          onRowClick={(t) => navigate(`/modules/${moduleKey}/${t.Transport_ID}`)}
+          emptyMessage={emptyMessage}
+        />
+      </div>
     </div>
   );
 }

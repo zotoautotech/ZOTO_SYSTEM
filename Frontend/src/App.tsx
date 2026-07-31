@@ -25,6 +25,7 @@ import { TripQueueList } from "./components/stage/TripQueueList";
 import { TripDetail } from "./modules/transport/TripDetail";
 import { TransportList } from "./modules/transport/TransportList";
 import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
+import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -76,6 +77,8 @@ export default function App() {
         <Route path="modules/transport" element={<TransportList />} />
         <Route path="modules/transport/:orderId/items/:itemId" element={<TransportItemDetail />} />
         <Route path="modules/transport/:transportId" element={<TripDetail />} />
+        <Route path="modules/transport/:transportId/dispatches" element={<TripSubTableView kind="dispatches" />} />
+        <Route path="modules/transport/:transportId/items" element={<TripSubTableView kind="items" />} />
         {TRIP_STAGES.flatMap((stage) => [
           <Route
             key={`${stage.key}-list`}
@@ -83,6 +86,8 @@ export default function App() {
             element={<TripQueueList moduleKey={stage.key} label={stage.label} prevStatus={stage.prevStatus} nextStatus={stage.nextStatus} />}
           />,
           <Route key={`${stage.key}-detail`} path={`modules/${stage.key}/:transportId`} element={<TripDetail />} />,
+          <Route key={`${stage.key}-dispatches`} path={`modules/${stage.key}/:transportId/dispatches`} element={<TripSubTableView kind="dispatches" />} />,
+          <Route key={`${stage.key}-items`} path={`modules/${stage.key}/:transportId/items`} element={<TripSubTableView kind="items" />} />,
         ])}
         <Route path="modules/:moduleKey/:orderId" element={<OrderDetail />} />
         <Route path="modules/:moduleKey/:orderId/items" element={<OrderItemsView />} />
