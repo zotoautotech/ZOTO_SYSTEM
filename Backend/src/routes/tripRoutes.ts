@@ -138,7 +138,11 @@ tripsRouter.get("/", async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };
     const rows = await readTable(env.sheets.transactions, "TRANSPORT");
-    const filtered = status ? rows.filter((r) => r.Status === status) : rows.filter((r) => r.Status === "OPEN");
+    // status=ALL powers the "Completed Transport" trip-level list (TransportList.tsx) —
+    // matches the old CRR reference's own "Completed Transport" view, which is just every
+    // arranged trip regardless of which downstream stage it's since reached, not filtered
+    // to one specific status.
+    const filtered = status === "ALL" ? rows : status ? rows.filter((r) => r.Status === status) : rows.filter((r) => r.Status === "OPEN");
     res.json(filtered);
   } catch (err) {
     next(err);

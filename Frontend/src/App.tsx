@@ -24,6 +24,7 @@ import { STAGES } from "./lib/stages";
 import { TripQueueList } from "./components/stage/TripQueueList";
 import { TripDetail } from "./modules/transport/TripDetail";
 import { TransportList } from "./modules/transport/TransportList";
+import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
 import { TRIP_STAGES } from "./lib/tripStages";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -73,6 +74,7 @@ export default function App() {
           <Route key={stage.key} path={`modules/${stage.key}`} element={<StageQueueList stage={stage} />} />
         ))}
         <Route path="modules/transport" element={<TransportList />} />
+        <Route path="modules/transport/:orderId/items/:itemId" element={<TransportItemDetail />} />
         <Route path="modules/transport/:transportId" element={<TripDetail />} />
         {TRIP_STAGES.flatMap((stage) => [
           <Route

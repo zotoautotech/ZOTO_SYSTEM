@@ -3,21 +3,29 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
-import { listEligibleItems, type EligibleItemRow } from "../../lib/tripsApi";
+import { listEligibleItems, listTrips, type EligibleItemRow, type TripRecord } from "../../lib/tripsApi";
 import { formatTimestamp } from "../../lib/format";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
 import { CreateTripModal } from "./CreateTripModal";
 
+const TRIP_COLUMNS: Column<TripRecord>[] = [
+  { key: "timestamp", header: "Timestamp", render: (row) => (row.Timestamp ? formatTimestamp(row.Timestamp) : "—") },
+  { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (row) => row["Vehicle Arrange for"] || "—" },
+  { key: "sendThrough", header: "Send Through", render: (row) => row["Send Through"] || "—" },
+  { key: "transporterName", header: "Transporter Name", render: (row) => row["Transporter Name"] || "—" },
+  { key: "vehicleType", header: "Vehicle type", render: (row) => row["Vehicle type"] || "—" },
+  { key: "vehicleNo", header: "Vehicle No.", render: (row) => row["Vehicle No."] || "—" },
+  { key: "vehicleSize", header: "Vehicle Size (Ft)", render: (row) => row["Vehicle Size (Ft)"] || "—" },
+  { key: "driverName", header: "Driver Name", render: (row) => row["Driver Name"] || "—" },
+];
+
 /** "Pending Transport" (matches the old CRR reference view exactly) — item-level, one row
- * per item, with a customer filter sidebar and a "Completed Transport" toggle instead of the
- * generic trip-status list. Pending reads live ORDER_PUNCH.STATUS === "PRE TRANSPORT
- * COMPLETED"; Completed reads Transport_Products directly (see tripRoutes.ts) so an order
- * that's since progressed even further doesn't vanish from this view. Balance Quantity/
- * Balance BOX Quantity/NUG/BOX Quantity/Packing Type from the reference came from the now-
- * removed Pre Transport stage's own manual entry and are intentionally left out, not
- * fabricated — "Quantity" here is the item's own order quantity, not a tracked balance. */
+ * per item, with a customer filter sidebar; clicking a row opens the item's detail page.
+ * "Completed Transport" is trip-level instead — matches the old CRR reference's own
+ * "Completed Transport" list (every arranged trip, one row per trip, not per item); clicking
+ * a row opens that trip's detail page (TripDetail.tsx). */
 export function TransportList() {
   const navigate = useNavigate();
   const { query } = useSearch();
@@ -26,11 +34,21 @@ export function TransportList() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ["transportEligibleItems", showCompleted],
-    queryFn: () => listEligibleItems(showCompleted ? "COMPLETED" : undefined),
+  const { data: items = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ["transportEligibleItems"],
+    queryFn: () => listEligibleItems(),
+    enabled: !showCompleted,
     placeholderData: keepPreviousData,
   });
+
+  const { data: trips = [], isLoading: tripsLoading } = useQuery({
+    queryKey: ["trips", "ALL"],
+    queryFn: () => listTrips("ALL"),
+    enabled: showCompleted,
+    placeholderData: keepPreviousData,
+  });
+
+  const isLoading = showCompleted ? tripsLoading : itemsLoading;
 
   const customers = useMemo(() => {
     const counts = new Map<string, number>();
@@ -42,12 +60,19 @@ export function TransportList() {
   }, [items]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const filtered = items.filter((row) => {
+  const filteredItems = items.filter((row) => {
     const matchesCustomer = !activeCustomer || row.CUSTOMER_NAME === activeCustomer;
     const matchesSearch = !normalizedQuery || [row.ORDER_ID, row.CUSTOMER_NAME, row.PART_NAME, row.PART_NO].some(
       (value) => (value || "").toLowerCase().includes(normalizedQuery)
     );
     return matchesCustomer && matchesSearch;
+  });
+
+  const filteredTrips = trips.filter((row) => {
+    if (!normalizedQuery) return true;
+    return [row.Transport_ID, row["Transporter Name"], row["Vehicle No."], row["Driver Name"]].some(
+      (value) => (value || "").toLowerCase().includes(normalizedQuery)
+    );
   });
 
   const columns: Column<EligibleItemRow>[] = [
@@ -84,20 +109,29 @@ export function TransportList() {
   const emptyMessage = isLoading
     ? "Loading…"
     : normalizedQuery
-    ? `No items match “${query}”`
+    ? `No records match “${query}”`
     : showCompleted
     ? "No completed transport records."
     : "No orders awaiting transport.";
 
-  const table = isMobile ? (
+  const table = showCompleted ? (
+    <DataTable
+      columns={TRIP_COLUMNS}
+      rows={filteredTrips}
+      getRowKey={(row) => row.Transport_ID}
+      emptyMessage={emptyMessage}
+      onRowClick={(row) => navigate(`/modules/transport/${row.Transport_ID}`)}
+    />
+  ) : isMobile ? (
     <div>
       <CustomerFilterPanel customers={customers} active={activeCustomer} onSelect={setActiveCustomer} />
       <div style={{ padding: "8px 0 24px" }}>
-        {filtered.map((row) => (
+        {filteredItems.map((row) => (
           <div
             key={row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
             className="card"
-            style={{ padding: 14, marginBottom: 10 }}
+            style={{ padding: 14, marginBottom: 10, cursor: "pointer" }}
+            onClick={() => navigate(`/modules/transport/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <span style={{ fontWeight: 700 }}>{row.CUSTOMER_NAME || "Customer not set"}</span>
@@ -110,7 +144,7 @@ export function TransportList() {
             <div className="text-muted" style={{ fontSize: 12, marginTop: 5 }}>{row.STATUS_LABEL}</div>
           </div>
         ))}
-        {!isLoading && filtered.length === 0 && <p className="text-muted">{emptyMessage}</p>}
+        {!isLoading && filteredItems.length === 0 && <p className="text-muted">{emptyMessage}</p>}
       </div>
     </div>
   ) : (
@@ -119,9 +153,10 @@ export function TransportList() {
       <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
         <DataTable
           columns={columns}
-          rows={filtered}
+          rows={filteredItems}
           getRowKey={(row) => row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
           emptyMessage={emptyMessage}
+          onRowClick={(row) => navigate(`/modules/transport/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
         />
       </div>
     </div>
@@ -135,7 +170,10 @@ export function TransportList() {
           onClose={() => setShowCreate(false)}
           onCreated={(transportId) => {
             setShowCreate(false);
-            navigate(`/modules/transport/${transportId}`);
+            // Orders are already attached at creation, so the real next step is Transport
+            // Reached, not the generic /modules/transport detail page (which doesn't know
+            // about that stage and used to wrongly offer "Attach Orders" instead).
+            navigate(`/modules/transport-reached/${transportId}`);
           }}
         />
       )}

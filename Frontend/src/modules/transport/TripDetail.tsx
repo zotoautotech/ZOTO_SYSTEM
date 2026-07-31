@@ -85,7 +85,10 @@ export function TripDetail() {
   const stage = getTripStage(moduleKey);
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
   const canGiveStageForm = !!stage && transport.Status === stage.prevStatus;
-  const canAttachOrders = transport.Status === "OPEN";
+  // Orders are attached during trip creation now (CreateTripModal's nested Select Sale
+  // Orders flow) — this action is only for the defensive edge case of a trip that
+  // somehow ended up with zero orders, not a normal next step after Arrange Vehicle.
+  const canAttachOrders = transport.Status === "OPEN" && orders.length === 0;
 
   return (
     <div>
