@@ -43,8 +43,9 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
   const [items, setItems] = useState<PickedItem[]>([]);
   const [showItemsForm, setShowItemsForm] = useState(false);
   const [preferredDeliveryMode, setPreferredDeliveryMode] = useState("");
-  const [freightPaidBy, setFreightPaidBy] = useState<"ADC" | "Customer" | "">("");
-  const [freightPaidAt, setFreightPaidAt] = useState<"Pay at ADC" | "Pay at Customer" | "">("");
+  const [freightPaidBy, setFreightPaidBy] = useState<"ZOTO" | "Customer" | "">("");
+  const [freightPaidAt, setFreightPaidAt] = useState<"Pay at ZOTO" | "Pay at Customer" | "">("");
+  const [saveError, setSaveError] = useState("");
 
   const order = eligibleOrders.find((o) => o.ORDER_ID === orderId);
   const { data: orderDetail } = useQuery({
@@ -59,20 +60,33 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
   useEffect(() => {
     if (!order) return;
     setPreferredDeliveryMode(order.PREFERRED_DELIVERY_MODE || "");
-    setFreightPaidBy((order.FREIGHT_PAID_BY as "ADC" | "Customer") || "");
+    setFreightPaidBy((order.FREIGHT_PAID_BY as "ZOTO" | "Customer") || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.ORDER_ID]);
 
   const orderOptions = eligibleOrders.map((o) => ({ value: o.ORDER_ID, label: o.CUSTOMER_NAME || o.ORDER_ID, subtitle: o.ORDER_ID }));
 
+  function missingFields(): string[] {
+    const missing: string[] = [];
+    if (!order) missing.push("Select Order");
+    if (!preferredDeliveryMode) missing.push("Preferred Delivery Mode");
+    if (!freightPaidBy) missing.push("Freight Paid by");
+    if (freightPaidBy === "Customer" && !freightPaidAt) missing.push("Freight Paid at");
+    if (items.length === 0) missing.push("Select Products");
+    return missing;
+  }
+
   function canSave() {
-    if (!order || !preferredDeliveryMode || !freightPaidBy) return false;
-    if (freightPaidBy === "Customer" && !freightPaidAt) return false;
-    return true;
+    return missingFields().length === 0;
   }
 
   function handleSave() {
-    if (!canSave() || !order) return;
+    const missing = missingFields();
+    if (missing.length > 0 || !order) {
+      setSaveError(`Please fill: ${missing.join(", ")}`);
+      return;
+    }
+    setSaveError("");
     onSave({
       orderId: order.ORDER_ID,
       customerName: order.CUSTOMER_NAME || "",
@@ -98,7 +112,7 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
           ) : (
             <>
               <button className="btn" onClick={() => setTab("order")}>Prev</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>Save</button>
+              <button className="btn btn-primary" onClick={handleSave}>Save</button>
             </>
           )}
         </div>
@@ -146,6 +160,11 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
 
           {tab === "logistic" && (
             <>
+              {saveError && (
+                <div className="error-banner" style={{ marginBottom: 16 }}>
+                  ⚠ {saveError}
+                </div>
+              )}
               {order && (
                 <>
                   <ToggleGroup
@@ -163,8 +182,8 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
                     label="Freight Paid by"
                     required
                     value={freightPaidBy}
-                    onChange={(v) => setFreightPaidBy(v as "ADC" | "Customer")}
-                    options={[{ value: "ADC", label: "ADC" }, { value: "Customer", label: "Customer" }]}
+                    onChange={(v) => setFreightPaidBy(v as "ZOTO" | "Customer")}
+                    options={[{ value: "ZOTO", label: "ZOTO" }, { value: "Customer", label: "Customer" }]}
                   />
                   <p className="text-muted" style={{ fontSize: 12, marginTop: -8 }}>
                     Select the stage at which the freight payment is made to the transporter.
@@ -174,8 +193,8 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
                       label="Freight Paid at"
                       required
                       value={freightPaidAt}
-                      onChange={(v) => setFreightPaidAt(v as "Pay at ADC" | "Pay at Customer")}
-                      options={[{ value: "Pay at ADC", label: "Pay at ADC" }, { value: "Pay at Customer", label: "Pay at Customer" }]}
+                      onChange={(v) => setFreightPaidAt(v as "Pay at ZOTO" | "Pay at Customer")}
+                      options={[{ value: "Pay at ZOTO", label: "Pay at ZOTO" }, { value: "Pay at Customer", label: "Pay at Customer" }]}
                     />
                   )}
                 </>
