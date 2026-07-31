@@ -1382,7 +1382,13 @@ async function logSoConfirmation(
  * still appends its own fresh row on top — this placeholder is just the initial visible
  * state, not something later updated in place, since that route's own audit-log/follow-ups
  * design already expects one row per decision. */
-async function createPlaceholderDispatchItemsApproval(order: SheetRow, items: SheetRow[], userEmployeeId: string) {
+async function createPlaceholderDispatchItemsApproval(
+  order: SheetRow,
+  items: SheetRow[],
+  saleOrderId: string,
+  confIdByItemId: Map<string, { confId: string; confItemId: string }>,
+  userEmployeeId: string
+) {
   if (items.length === 0) return;
   const existingIds = new Set(
     (await readTable(env.sheets.transactions, "Dispatch Items Approval"))
@@ -1403,6 +1409,9 @@ async function createPlaceholderDispatchItemsApproval(order: SheetRow, items: Sh
         CREATED_BY: userEmployeeId,
         ORDER_ID: order.ORDER_ID,
         ITEM_ID: item.ITEM_ID,
+        SALE_ORDER_ID: saleOrderId,
+        CONF_ID: confIdByItemId.get(item.ITEM_ID)?.confId ?? "",
+        CONF_ITEM_ID: confIdByItemId.get(item.ITEM_ID)?.confItemId ?? "",
         DISPATCH_ID: dispatchIds[i],
         CUST_ID: order.CUST_ID ?? "",
         CUSTOMER_NAME: order.CUSTOMER_NAME ?? "",
@@ -1565,7 +1574,12 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
 
     if (confirmed) {
       const orderItems = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
-      await createPlaceholderDispatchItemsApproval(punchFromSheet(punch), orderItems, req.user!.employeeId);
+      // logSoConfirmation (just above) minted a fresh Conf_ID/Conf Item ID per item on
+      // SO_Confirmation_Items — re-read it so Dispatch Items Approval's placeholder rows can
+      // carry the same reference IDs, matching the live sheet's own linked-tab convention.
+      const confItemRows = (await readTable(env.sheets.transactions, "SO_Confirmation_Items")).filter((r) => r.ORDER_ID === req.params.id);
+      const confIdByItemId = new Map(confItemRows.map((r) => [r.ITEM_ID, { confId: r.Conf_ID ?? "", confItemId: r["Conf Item ID"] ?? "" }]));
+      await createPlaceholderDispatchItemsApproval(punchFromSheet(punch), orderItems, saleOrder.SALE_ORDER_ID, confIdByItemId, req.user!.employeeId);
     }
 
     res.json({ orderId: req.params.id, status: "COMPLETED", nextStage: confirmed ? "dispatch-approval" : undefined });

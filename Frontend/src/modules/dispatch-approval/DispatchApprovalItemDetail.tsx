@@ -227,6 +227,8 @@ export function DispatchApprovalItemDetail() {
             <Field label="Short Quantity" value={latest?.SHORT_QTY} />
             <Field label="Excess Quantity" value={latest?.EXCESS_QTY} />
             <Field label="Unit" value={item.UOM} />
+            <Field label="Next Extended Date" value={latest?.NEXT_EXTENDED_DATE} />
+            <Field label="Dispatch Remarks" value={latest?.DISPATCH_REMARKS} />
           </Section>
 
           <Section title="Dispatch Approval Follow-ups">
@@ -241,6 +243,8 @@ export function DispatchApprovalItemDetail() {
                       <th style={{ padding: "6px 8px" }}>Part No.</th>
                       <th style={{ padding: "6px 8px" }}>Part Name</th>
                       <th style={{ padding: "6px 8px" }}>Dispatch Approval</th>
+                      <th style={{ padding: "6px 8px" }}>Next Extended Date</th>
+                      <th style={{ padding: "6px 8px" }}>Dispatch Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -250,6 +254,8 @@ export function DispatchApprovalItemDetail() {
                         <td style={{ padding: "6px 8px" }}>{row.PART_NO}</td>
                         <td style={{ padding: "6px 8px" }}>{row.PART_NAME}</td>
                         <td style={{ padding: "6px 8px" }}>{row.DISPATCH_APPROVAL}</td>
+                        <td style={{ padding: "6px 8px" }}>{row.NEXT_EXTENDED_DATE || "—"}</td>
+                        <td style={{ padding: "6px 8px" }}>{row.DISPATCH_REMARKS || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

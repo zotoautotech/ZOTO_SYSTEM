@@ -94,6 +94,8 @@ export function OrderDetail() {
   // Release, Tax Invoice, Dispatch, Collect LR, Delivery) all share one generic
   // form/queue pair, keyed off whichever module this detail view was opened from.
   const currentStage = getStage(basePath.replace("/modules/", ""));
+  // Dispatch Approval doers shouldn't see order financials at all — see plans/pure-puzzling-gray.md.
+  const hideFinancials = basePath === "/modules/dispatch-approval";
 
   const { data, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -160,10 +162,7 @@ export function OrderDetail() {
                 "Category",
                 "Qty",
                 "UOM",
-                "Price",
-                "Basic Amount",
-                "Tax Amount",
-                "Total Amount",
+                ...(hideFinancials ? [] : ["Price", "Basic Amount", "Tax Amount", "Total Amount"]),
                 "Remarks",
               ].map((h, i, arr) => (
                 <th
@@ -197,18 +196,22 @@ export function OrderDetail() {
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.CATEGORY}</td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.QTY}</td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.UOM}</td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
-                  {formatCurrency(it.PRICE)}
-                </td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
-                  {formatCurrency(it.BASIC_AMOUNT)}
-                </td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
-                  {formatCurrency(it.TAX_AMOUNT)}
-                </td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
-                  {formatCurrency(it.TOTAL_AMOUNT)}
-                </td>
+                {!hideFinancials && (
+                  <>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {formatCurrency(it.PRICE)}
+                    </td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {formatCurrency(it.BASIC_AMOUNT)}
+                    </td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {formatCurrency(it.TAX_AMOUNT)}
+                    </td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>
+                      {formatCurrency(it.TOTAL_AMOUNT)}
+                    </td>
+                  </>
+                )}
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)", whiteSpace: "normal" }}>
                   {it.NOTES}
                 </td>
@@ -312,12 +315,14 @@ export function OrderDetail() {
             <Field label="Pin Code" value={order.SHIPPING_PINCODE} />
           </Section>
 
-          <Section title="GST Details">
-            <Field label="Invoice Discount (Rs)" value={formatCurrency(order.INVOICE_DISCOUNT_RS)} />
-            <Field label="Basic Amount" value={formatCurrency(order.BASIC_AMOUNT)} />
-            <Field label="Tax Amount" value={formatCurrency(order.TAX_AMOUNT)} />
-            <Field label="Total Amount" value={formatCurrency(order.TOTAL_AMOUNT)} />
-          </Section>
+          {!hideFinancials && (
+            <Section title="GST Details">
+              <Field label="Invoice Discount (Rs)" value={formatCurrency(order.INVOICE_DISCOUNT_RS)} />
+              <Field label="Basic Amount" value={formatCurrency(order.BASIC_AMOUNT)} />
+              <Field label="Tax Amount" value={formatCurrency(order.TAX_AMOUNT)} />
+              <Field label="Total Amount" value={formatCurrency(order.TOTAL_AMOUNT)} />
+            </Section>
+          )}
         </div>
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>

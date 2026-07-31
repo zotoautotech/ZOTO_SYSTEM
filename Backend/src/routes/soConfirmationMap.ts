@@ -146,6 +146,9 @@ export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   CREATED_BY: "Useremail",
   ORDER_ID: "ORDER_ID",
   ITEM_ID: "ITEM_ID",
+  SALE_ORDER_ID: "SALE_ORDER_ID",
+  CONF_ID: "Conf_ID",
+  CONF_ITEM_ID: "Conf Item ID",
   DISPATCH_ID: "Disp Conf Item ID",
 
   CUST_ID: "CUST ID",

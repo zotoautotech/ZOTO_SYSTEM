@@ -34,14 +34,19 @@ const COLUMNS = [
   { label: "Remarks", width: 180 },
 ];
 
+const FINANCIAL_LABELS = new Set(["Price", "Basic Amount", "Tax Amount", "Total Amount"]);
+
 export function OrderItemsView() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
+  // Dispatch Approval doers shouldn't see order financials at all — see plans/pure-puzzling-gray.md.
+  const hideFinancials = basePath === "/modules/dispatch-approval";
+  const columns = hideFinancials ? COLUMNS.filter((c) => !FINANCIAL_LABELS.has(c.label)) : COLUMNS;
   const isCompact = useIsCompact();
   const isMobile = useIsMobile();
-  const [colWidths, setColWidths] = useState(() => COLUMNS.map((c) => c.width));
+  const [colWidths, setColWidths] = useState(() => columns.map((c) => c.width));
   const dragState = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
 
   const onColMouseMove = useCallback((e: MouseEvent) => {
@@ -112,7 +117,7 @@ export function OrderItemsView() {
           </colgroup>
           <thead>
             <tr>
-              {COLUMNS.map((c, i) => (
+              {columns.map((c, i) => (
                 <th
                   key={c.label}
                   style={{
@@ -120,7 +125,7 @@ export function OrderItemsView() {
                     padding: "10px 14px",
                     paddingLeft: i === 0 ? firstColPad : 14,
                     borderBottom: "1px solid var(--color-border)",
-                    borderRight: i === COLUMNS.length - 1 ? "none" : "1px solid var(--color-border)",
+                    borderRight: i === columns.length - 1 ? "none" : "1px solid var(--color-border)",
                     position: "relative",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -132,7 +137,7 @@ export function OrderItemsView() {
                       onMouseDown={onColMouseDown(i)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
-                        setColWidths((w) => w.map((v, idx) => (idx === i ? COLUMNS[i].width : v)));
+                        setColWidths((w) => w.map((v, idx) => (idx === i ? columns[i].width : v)));
                       }}
                       title="Drag to resize column"
                       style={{
@@ -172,10 +177,14 @@ export function OrderItemsView() {
                   <td style={cell}>{pick(g, "Standard Packing", "Standard", "STANDARD PACKING")}</td>
                   <td style={cell}>{it.QTY}</td>
                   <td style={cell}>{it.UOM}</td>
-                  <td style={cell}>{formatCurrency(it.PRICE)}</td>
-                  <td style={cell}>{formatCurrency(it.BASIC_AMOUNT)}</td>
-                  <td style={cell}>{formatCurrency(it.TAX_AMOUNT)}</td>
-                  <td style={cell}>{formatCurrency(it.TOTAL_AMOUNT)}</td>
+                  {!hideFinancials && (
+                    <>
+                      <td style={cell}>{formatCurrency(it.PRICE)}</td>
+                      <td style={cell}>{formatCurrency(it.BASIC_AMOUNT)}</td>
+                      <td style={cell}>{formatCurrency(it.TAX_AMOUNT)}</td>
+                      <td style={cell}>{formatCurrency(it.TOTAL_AMOUNT)}</td>
+                    </>
+                  )}
                   <td style={{ ...cell, whiteSpace: "normal" }}>{it.NOTES}</td>
                 </tr>
               );

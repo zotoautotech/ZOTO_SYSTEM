@@ -334,6 +334,16 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
           ) : tab === 2 ? (
             <>
               <ToggleGroup
+                label="Sale Type"
+                value={form.saleType}
+                onChange={(v) => update({ saleType: v })}
+                options={[
+                  { value: "Order", label: "Order" },
+                  { value: "Sample", label: "Sample" },
+                  { value: "Return Order", label: "Return Order" },
+                ]}
+              />
+              <ToggleGroup
                 label="Order Type"
                 value={form.orderType}
                 onChange={(v) => update({ orderType: v })}
