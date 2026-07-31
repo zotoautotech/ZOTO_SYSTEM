@@ -407,7 +407,9 @@ function latestDispatchDecisionByItemId(rows: SheetRow[]): Map<string, { outcome
 }
 
 function isDispatchItemDecided(decision: { outcome: string } | undefined): boolean {
-  return !!decision && decision.outcome !== "Dispatch Extended";
+  // Blank outcome = the placeholder row created at SO Confirmation time (see
+  // createPlaceholderDispatchItemsApproval) — not a real decision yet, same as Extended.
+  return !!decision && decision.outcome !== "" && decision.outcome !== "Dispatch Extended";
 }
 
 /** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" where at least one
@@ -590,7 +592,10 @@ ordersRouter.get("/:orderId/items/:itemId/dispatch-approval-log", async (req, re
     const { orderId, itemId } = req.params;
     const rows = (await readTable(env.sheets.transactions, "Dispatch Items Approval"))
       .map(dispatchApprovalFromSheet)
-      .filter((r) => r.ORDER_ID === orderId && r.ITEM_ID === itemId)
+      // Excludes the blank placeholder row created at SO Confirmation time (see
+      // createPlaceholderDispatchItemsApproval) — it's not a real decision, so it shouldn't
+      // show up as an empty entry in this item's Follow-ups history.
+      .filter((r) => r.ORDER_ID === orderId && r.ITEM_ID === itemId && r.DISPATCH_APPROVAL)
       .sort((a, b) => (a.CREATED_AT ?? "").localeCompare(b.CREATED_AT ?? ""));
     res.json(rows);
   } catch (err) {
@@ -1367,6 +1372,60 @@ async function logSoConfirmation(
   );
 }
 
+/** Creates one blank "Dispatch Items Approval" placeholder row per item the moment an order
+ * is Confirmed — same "row exists one stage earlier than the form that fills it in"
+ * convention as createPlaceholderSaleOrder()/createPlaceholderSoConfirmation() (see
+ * CLAUDE.md), so the item is visible in the sheet with Status "Dispatch Approval Pending"
+ * from confirmation onward instead of only appearing once a decision is actually submitted.
+ * No-ops per item if a row already exists (order can be re-confirmed, e.g. after a Changes
+ * round-trip). The doer's actual decision (POST /:orderId/items/:itemId/dispatch-approval)
+ * still appends its own fresh row on top — this placeholder is just the initial visible
+ * state, not something later updated in place, since that route's own audit-log/follow-ups
+ * design already expects one row per decision. */
+async function createPlaceholderDispatchItemsApproval(order: SheetRow, items: SheetRow[], userEmployeeId: string) {
+  if (items.length === 0) return;
+  const existingIds = new Set(
+    (await readTable(env.sheets.transactions, "Dispatch Items Approval"))
+      .filter((r) => r.ORDER_ID === order.ORDER_ID)
+      .map((r) => r.ITEM_ID)
+  );
+  const pending = items.filter((item) => !existingIds.has(item.ITEM_ID));
+  if (pending.length === 0) return;
+
+  const now = new Date().toISOString();
+  const dispatchIds = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", pending.length);
+  await appendRows(
+    env.sheets.transactions,
+    "Dispatch Items Approval",
+    pending.map((item, i) =>
+      dispatchApprovalToSheet({
+        CREATED_AT: now,
+        CREATED_BY: userEmployeeId,
+        ORDER_ID: order.ORDER_ID,
+        ITEM_ID: item.ITEM_ID,
+        DISPATCH_ID: dispatchIds[i],
+        CUST_ID: order.CUST_ID ?? "",
+        CUSTOMER_NAME: order.CUSTOMER_NAME ?? "",
+        BUSINESS_SEGMENT: order.BUSINESS_SEGMENT ?? "",
+        TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER ?? "",
+        SALE_TYPE: order.SALE_TYPE ?? "",
+        BUYER_GSTIN: order.BUYER_GSTIN ?? "",
+        SEGMENT: item.SEGMENT ?? "",
+        CATEGORY: item.CATEGORY ?? "",
+        PART_NAME: item.PART_NAME ?? "",
+        PART_NO: item.PART_NO ?? "",
+        SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
+        PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
+        NOTES: item.NOTES ?? "",
+        ORDER_QTY: item.QTY ?? "",
+        UOM: item.UOM ?? "",
+        DISPATCH_APPROVAL: "",
+        STATUS: "Dispatch Approval Pending",
+      })
+    )
+  );
+}
+
 /** Saves the SO Confirmation decision. Confirmed orders advance to Dispatch Approval;
  * cancelled orders finish in this queue; requested changes update both source rows and stay pending. */
 ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
@@ -1503,6 +1562,11 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
       },
       req.user!.employeeId
     );
+
+    if (confirmed) {
+      const orderItems = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
+      await createPlaceholderDispatchItemsApproval(punchFromSheet(punch), orderItems, req.user!.employeeId);
+    }
 
     res.json({ orderId: req.params.id, status: "COMPLETED", nextStage: confirmed ? "dispatch-approval" : undefined });
   } catch (err) {

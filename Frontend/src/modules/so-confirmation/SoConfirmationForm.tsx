@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { FileDropzone } from "../../components/form/FileDropzone";
 import { TextField } from "../../components/form/TextField";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { getOrder, submitSoConfirmation, type OrderItemRecord, type OrderRecord } from "../../lib/ordersApi";
+import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { emptyItem, emptyOrderForm, type ItemFormState, type OrderFormState } from "../order-punch/form/types";
 import { Tab1PurchaseOrder } from "../order-punch/form/Tab1PurchaseOrder";
 import { Tab3BillingAddress } from "../order-punch/form/Tab3BillingAddress";
@@ -61,23 +63,42 @@ function orderToFormState(order: OrderRecord): OrderFormState {
 }
 
 /** Maps ORDER_ITEMS rows into the punch form's item shape, for the same GST Details /
- * items editor the punch form itself uses. */
-function itemsToFormState(items: OrderItemRecord[]): ItemFormState[] {
+ * items editor the punch form itself uses.
+ *
+ * ORDER_ITEMS has never actually had an "FG ID" column on the live sheet — Order Punch's
+ * item-save always tried to write item.fgId, but itemToSheet() silently drops any key with
+ * no matching header, so item.FG_ID has always come back blank on every read. That left the
+ * "Sale Item ID" dropdown here empty on every "Changes" edit, forcing the doer to re-pick
+ * every item's part from scratch. Rather than adding a new column to the live sheet (a real
+ * schema change to a hand-curated production tab), this derives the FG ID by matching the
+ * item's own Part Name against the goods master — good enough to prefill the dropdown
+ * correctly without touching the sheet's structure. */
+function itemsToFormState(items: OrderItemRecord[], goods: GoodsRow[]): ItemFormState[] {
   if (items.length === 0) return [emptyItem()];
-  return items.map((item) => ({
-    ...emptyItem(),
-    partType: item.FG_ID ? "Existing" : "",
-    fgId: item.FG_ID || "",
-    partNo: item.PART_NO || "",
-    partName: item.PART_NAME || "",
-    segment: item.SEGMENT || "",
-    category: item.CATEGORY || "",
-    qty: item.QTY ? Number(item.QTY) : undefined,
-    uom: item.UOM || "SET",
-    price: item.PRICE ? Number(item.PRICE) : undefined,
-    gstSlabPct: item.GST_SLAB_PCT ? Number(item.GST_SLAB_PCT) : 18,
-    remarks: item.NOTES || "",
-  }));
+  return items.map((item) => {
+    const matched = item.FG_ID
+      ? undefined
+      : goods.find(
+          (g) =>
+            (g.Name || "").trim().toLowerCase() === (item.PART_NAME || "").trim().toLowerCase() ||
+            (item.PART_NO && (g["PART NO."] || "").trim().toLowerCase() === item.PART_NO.trim().toLowerCase())
+        );
+    const fgId = item.FG_ID || matched?.["FG ID"] || "";
+    return {
+      ...emptyItem(),
+      partType: fgId ? "Existing" : "",
+      fgId,
+      partNo: item.PART_NO || "",
+      partName: item.PART_NAME || "",
+      segment: item.SEGMENT || "",
+      category: item.CATEGORY || "",
+      qty: item.QTY ? Number(item.QTY) : undefined,
+      uom: item.UOM || "SET",
+      price: item.PRICE ? Number(item.PRICE) : undefined,
+      gstSlabPct: item.GST_SLAB_PCT ? Number(item.GST_SLAB_PCT) : 18,
+      remarks: item.NOTES || "",
+    };
+  });
 }
 
 const TABS = ["Confirmation Details", "Purchase Order Details", "Order Details", "Billing Address", "Logistics Details", "GST Details"];
@@ -97,15 +118,19 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
   const [paymentAttachment, setPaymentAttachment] = useState("");
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
   const [invoiceDiscountRs, setInvoiceDiscountRs] = useState("");
+  const { data: goods = [] } = useQuery({ queryKey: ["goods"], queryFn: listGoods });
 
   useEffect(() => {
     getOrder(orderId)
       .then((data) => {
-        setForm({ ...orderToFormState(data.order), items: itemsToFormState(data.items) });
+        setForm({ ...orderToFormState(data.order), items: itemsToFormState(data.items, goods) });
         setInvoiceDiscountRs(data.order.INVOICE_DISCOUNT_RS || "");
       })
       .finally(() => setLoading(false));
-  }, [orderId]);
+    // Re-runs once goods finishes loading (usually after the order fetch) so the Sale Item ID
+    // match-by-Part-Name lookup above has data to search — harmless to redo the order fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, goods.length]);
 
   function update(patch: Partial<OrderFormState>) {
     setForm((f) => ({ ...f, ...patch }));
