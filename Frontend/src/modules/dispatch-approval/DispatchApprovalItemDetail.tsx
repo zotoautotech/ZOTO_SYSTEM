@@ -133,8 +133,10 @@ export function DispatchApprovalItemDetail() {
 
           {/* Dispatch Approval is per-item now — the order can still say "DISPATCH APPROVAL"
               while this specific item already has its own decision (other items on the same
-              order just haven't been decided yet), so also check this item's own log. */}
-          {order.STATUS === "DISPATCH APPROVAL" && log.length === 0 && (
+              order just haven't been decided yet), so also check this item's own log. A
+              "Dispatch Extended" latest decision is a hold, not a real decision — the form
+              stays actionable so the doer can revisit it once the extended date arrives. */}
+          {order.STATUS === "DISPATCH APPROVAL" && (log.length === 0 || latest?.DISPATCH_APPROVAL === "Dispatch Extended") && (
             <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
               <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowForm(true)}>
                 <path d="M9 11l3 3L22 4" />

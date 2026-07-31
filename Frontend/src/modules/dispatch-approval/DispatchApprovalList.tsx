@@ -76,6 +76,13 @@ export function DispatchApprovalList() {
     { key: "total", header: "Total Amount", render: (order) => `₹${Number(order.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}` },
   ];
 
+  // "Dispatch Extended" rows stay pending (not a real decision) — once the doer's own Next
+  // Extended Date arrives, flag the row red so it's obviously due for a follow-up decision.
+  const today = new Date().toISOString().slice(0, 10);
+  function isDueExtended(row: DispatchApprovalItemRow) {
+    return row.DISPATCH_EXTENDED && !!row.NEXT_EXTENDED_DATE && row.NEXT_EXTENDED_DATE <= today;
+  }
+
   const itemColumns: Column<DispatchApprovalItemRow>[] = [
     { key: "soConfTime", header: "SO Confirmation Time", render: (row) => (row.SO_CONFIRMATION_TIME ? formatTimestamp(row.SO_CONFIRMATION_TIME) : "—") },
     { key: "customer", header: "Customer Name", render: (row) => row.CUSTOMER_NAME || "—" },
@@ -126,7 +133,15 @@ export function DispatchApprovalList() {
                   key={row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
                   onClick={() => navigate(`/modules/dispatch-approval/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
                   className="card"
-                  style={{ display: "block", width: "100%", textAlign: "left", padding: 14, marginBottom: 10, color: "var(--color-text)", cursor: "pointer" }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: 14,
+                    marginBottom: 10,
+                    cursor: "pointer",
+                    ...(isDueExtended(row) ? { background: "#fdecea", color: "#b71c1c" } : { color: "var(--color-text)" }),
+                  }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     <span style={{ fontWeight: 700 }}>{row.CUSTOMER_NAME || "Customer not set"}</span>
@@ -164,6 +179,7 @@ export function DispatchApprovalList() {
             getRowKey={(row) => row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NAME}`}
             onRowClick={(row) => navigate(`/modules/dispatch-approval/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
             emptyMessage={isLoading ? "Loading…" : normalizedQuery ? `No items match “${query}”` : "No orders awaiting dispatch approval."}
+            getRowStyle={(row) => (isDueExtended(row) ? { background: "#fdecea", color: "#b71c1c" } : undefined)}
           />
         )}
       </div>

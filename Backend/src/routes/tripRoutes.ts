@@ -55,6 +55,26 @@ async function cascadeStatus(orderIds: string[], status: string, employeeId: str
   }
 }
 
+/** STOCK_RELEASE has no Transport_ID column of its own on the live sheet — only
+ * Transport_Pd_ID, which references Transport_Products' own Transport_Pd_ID (that tab DOES
+ * carry Transport_ID). So "does this trip have a Stock Release row yet" has to join through
+ * Transport_Products rather than matching Transport_ID directly, unlike TAX_INVOICE (which
+ * does have its own Transport_ID column). Caught by an actual end-to-end run against the live
+ * sheet — a direct Transport_ID match here always returned false. */
+async function getTransportIdsWithStockRelease(): Promise<Set<string>> {
+  const [stockRows, productRows] = await Promise.all([
+    readTable(env.sheets.transactions, "STOCK_RELEASE"),
+    readTable(env.sheets.transactions, "Transport_Products"),
+  ]);
+  const transportIdByPdId = new Map(productRows.map((p) => [p.Transport_Pd_ID, p.Transport_ID]));
+  const ids = new Set<string>();
+  for (const r of stockRows) {
+    const tid = transportIdByPdId.get(r.Transport_Pd_ID);
+    if (tid) ids.add(tid);
+  }
+  return ids;
+}
+
 async function getTransportRow(transportId: string) {
   const rows = await readTable(env.sheets.transactions, "TRANSPORT");
   return rows.find((r) => r.Transport_ID === transportId);
@@ -155,13 +175,11 @@ tripsRouter.get("/", async (req, res, next) => {
     // pending); includeIfInTab powers that same stage's own Completed toggle by checking the
     // tab directly instead of relying on Status, which may have already moved past REACHED.
     if (excludeIfInTab) {
-      const other = await readTable(env.sheets.transactions, excludeIfInTab);
-      const doneIds = new Set(other.map((r) => r.Transport_ID));
+      const doneIds = excludeIfInTab === "STOCK_RELEASE" ? await getTransportIdsWithStockRelease() : new Set((await readTable(env.sheets.transactions, excludeIfInTab)).map((r) => r.Transport_ID));
       filtered = filtered.filter((r) => !doneIds.has(r.Transport_ID));
     }
     if (includeIfInTab) {
-      const other = await readTable(env.sheets.transactions, includeIfInTab);
-      const doneIds = new Set(other.map((r) => r.Transport_ID));
+      const doneIds = includeIfInTab === "STOCK_RELEASE" ? await getTransportIdsWithStockRelease() : new Set((await readTable(env.sheets.transactions, includeIfInTab)).map((r) => r.Transport_ID));
       filtered = filtered.filter((r) => doneIds.has(r.Transport_ID));
     }
 
@@ -175,17 +193,17 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
-    const [attached, productRows, stockReleaseRows, taxInvoiceRows] = await Promise.all([
+    const [attached, productRows, stockReleaseIds, taxInvoiceRows] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
-      readTable(env.sheets.transactions, "STOCK_RELEASE"),
+      getTransportIdsWithStockRelease(),
       readTable(env.sheets.transactions, "TAX_INVOICE"),
     ]);
     // Stock Release / Tax Invoice run in parallel (see TRIP_STAGES' completionTab comment in
     // tripStages.ts) — TripDetail needs to know per-branch completion directly since
     // transport.Status alone can't distinguish "still pending this branch" from "done this
     // branch, other one still pending" while both sit at REACHED.
-    const stockReleaseDone = stockReleaseRows.some((r) => r.Transport_ID === req.params.transportId);
+    const stockReleaseDone = stockReleaseIds.has(req.params.transportId);
     const taxInvoiceDone = taxInvoiceRows.some((r) => r.Transport_ID === req.params.transportId);
     // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
     // matches the old CRR reference's trip detail layout exactly.
@@ -595,9 +613,7 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
 
     // Mirrors stock-release's own check in the other direction — Status only advances once
     // BOTH branches are done.
-    const stockReleaseDone = (await readTable(env.sheets.transactions, "STOCK_RELEASE")).some(
-      (r) => r.Transport_ID === req.params.transportId
-    );
+    const stockReleaseDone = (await getTransportIdsWithStockRelease()).has(req.params.transportId);
     if (stockReleaseDone) {
       await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
     }

@@ -239,6 +239,10 @@ export interface DispatchApprovalItemRow {
   PART_NAME: string;
   ORDER_QTY: string;
   UOM: string;
+  /** True when this item's latest decision is "Dispatch Extended" (a hold, not a real
+   * decision) — still shows in the pending queue, unlike a real decision. */
+  DISPATCH_EXTENDED: boolean;
+  NEXT_EXTENDED_DATE: string;
 }
 
 /** Item-level rows (one per item, not per order) for the pending Dispatch Approval table. */

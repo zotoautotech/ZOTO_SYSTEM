@@ -382,6 +382,34 @@ async function revertOrphanedSoConfirmation(rows: SheetRow[]): Promise<SheetRow[
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
+/** "Dispatch Extended" is a hold, not a decision — the doer picked it because the item isn't
+ * ready to dispatch yet and gave a Next Extended Date to revisit, not because dispatch was
+ * actually approved/short/excess. So an item whose LATEST "Dispatch Items Approval" row is
+ * "Dispatch Extended" must keep showing in the pending queue (and must not count toward the
+ * order's own "every item decided" advancement to DISPATCH APPROVAL COMPLETED) exactly as if
+ * no decision had been made yet — only once a later resubmission picks a real outcome does it
+ * count as decided. Reads raw rows (literal "ITEM_ID"/"Timestamp"/"Dispatch Approval" sheet
+ * headers — ITEM_ID/ORDER_ID happen to map 1:1 so raw access is safe there, unlike CREATED_AT/
+ * DISPATCH_APPROVAL which don't). */
+function latestDispatchDecisionByItemId(rows: SheetRow[]): Map<string, { outcome: string; nextExtendedDate: string }> {
+  const latestByItem = new Map<string, SheetRow>();
+  for (const r of rows) {
+    const existing = latestByItem.get(r.ITEM_ID);
+    if (!existing || (r.Timestamp || "") > (existing.Timestamp || "")) {
+      latestByItem.set(r.ITEM_ID, r);
+    }
+  }
+  const result = new Map<string, { outcome: string; nextExtendedDate: string }>();
+  for (const [itemId, row] of latestByItem) {
+    result.set(itemId, { outcome: row["Dispatch Approval"] || "", nextExtendedDate: row["Next Extended Date"] || "" });
+  }
+  return result;
+}
+
+function isDispatchItemDecided(decision: { outcome: string } | undefined): boolean {
+  return !!decision && decision.outcome !== "Dispatch Extended";
+}
+
 /** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" where at least one
  * of its items no longer has a matching row in "Dispatch Items Approval" (deleted directly in
  * Sheets) reverts back to "DISPATCH APPROVAL" — so it reappears in the pending Dispatch
@@ -398,8 +426,10 @@ async function revertOrphanedDispatchApproval(rows: SheetRow[]): Promise<SheetRo
     readTable(env.sheets.transactions, "Dispatch Items Approval", { refresh: true }),
     readTable(env.sheets.transactions, "ORDER_ITEMS", { refresh: true }),
   ]);
+  const latestDecisionByItemId = latestDispatchDecisionByItemId(dispatchRows);
   const decidedItemIdsByOrderId = new Map<string, Set<string>>();
   for (const r of dispatchRows) {
+    if (!isDispatchItemDecided(latestDecisionByItemId.get(r.ITEM_ID))) continue;
     if (!decidedItemIdsByOrderId.has(r.ORDER_ID)) decidedItemIdsByOrderId.set(r.ORDER_ID, new Set());
     decidedItemIdsByOrderId.get(r.ORDER_ID)!.add(r.ITEM_ID);
   }
@@ -523,12 +553,16 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
     // Dispatch Approval is per-item — an order can sit at STATUS "DISPATCH APPROVAL" with
     // some of its items already individually decided (order only flips to COMPLETED once
     // every item has a row), so those already-decided items must not show as pending too.
-    const decidedItemIds = new Set(dispatchRows.map((r) => r.ITEM_ID));
+    // "Dispatch Extended" is a hold, not a decision (see latestDispatchDecisionByItemId) — an
+    // item whose latest row is Extended stays in this pending list, carrying its own Next
+    // Extended Date so the frontend can flag the row once that date arrives.
+    const latestDecisionByItemId = latestDispatchDecisionByItemId(dispatchRows);
     const rows = itemRows
-      .filter((i) => orderById.has(i.ORDER_ID) && !decidedItemIds.has(i.ITEM_ID))
+      .filter((i) => orderById.has(i.ORDER_ID) && !isDispatchItemDecided(latestDecisionByItemId.get(i.ITEM_ID)))
       .map(itemFromSheet)
       .map((item) => {
         const order = orderById.get(item.ORDER_ID)!;
+        const decision = latestDecisionByItemId.get(item.ITEM_ID);
         return {
           ORDER_ID: order.ORDER_ID,
           ITEM_ID: item.ITEM_ID,
@@ -537,6 +571,8 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
           PART_NAME: item.PART_NAME || "",
           ORDER_QTY: item.QTY || "",
           UOM: item.UOM || "",
+          DISPATCH_EXTENDED: decision?.outcome === "Dispatch Extended",
+          NEXT_EXTENDED_DATE: decision?.nextExtendedDate || "",
         };
       });
     res.json(rows);
@@ -1561,8 +1597,14 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       })
     );
 
-    const decidedItemIds = new Set([req.params.itemId, ...existingDispatchRows.filter((r) => r.ORDER_ID === req.params.orderId).map((r) => r.ITEM_ID)]);
-    const allItemsDecided = orderItems.every((i) => decidedItemIds.has(i.ITEM_ID));
+    // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item
+    // decided" (see latestDispatchDecisionByItemId). existingDispatchRows was read before
+    // this submission's own append, so the just-picked outcome is folded in explicitly.
+    const latestDecisionByItemId = latestDispatchDecisionByItemId(
+      existingDispatchRows.filter((r) => r.ORDER_ID === req.params.orderId)
+    );
+    latestDecisionByItemId.set(req.params.itemId, { outcome: body.outcome, nextExtendedDate: body.nextExtendedDate ?? "" });
+    const allItemsDecided = orderItems.every((i) => isDispatchItemDecided(latestDecisionByItemId.get(i.ITEM_ID)));
     if (allItemsDecided) {
       await updateRow(
         env.sheets.transactions,
