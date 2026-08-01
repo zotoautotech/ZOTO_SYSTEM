@@ -702,6 +702,71 @@ a plain service account has zero storage quota and can't own files it creates in
 else's folder. Sheets access is a separate, unimpersonated auth client (sheets are shared
 directly with the service account, no impersonation needed there).
 
+**Docs API access (for the Dispatch Gate Pass below) is deliberately a SEPARATE JWT
+client/scope set from the plain Drive client above**, not just "documents" scope added
+to `DRIVE_SCOPES` — domain-wide delegation authorizes a Client ID for one exact scope set
+at a time, so combining scopes on the already-working Drive client would have made the
+existing upload feature wait on a Workspace admin re-authorizing the combined set too.
+`getDocsClient()`/`getDriveClientForDocs()` (`googleAuth.ts`) use their own `DOCS_SCOPES`
+(`drive` + `documents`) client instead, so uploads keep working regardless of when Docs
+access gets authorized. If a future feature needs yet another new scope, follow this same
+isolate-it-on-its-own-client pattern rather than expanding an existing client's scopes.
+
+## Dispatch Gate Pass (auto-generated PDF)
+
+`Backend/src/services/gatePass.ts` — `ensureDispatchGatePass(transportId)`, called both from
+`tripRoutes.ts`'s `attachOrders` (`POST /:transportId/orders`, right after `cascadeStatus` —
+the "instant, on Save" trigger) and from `GET /:transportId` (self-healing retry, same
+`revertOrphaned*()` reasoning used elsewhere in this app: the only way the app learns a
+generation attempt failed is by seeing the column still blank on the next read). Generated
+**once per trip** (not per order — the doer's own call, even though the template only shows
+one Bill To/Ship To), combining every attached order's `Transport_Products` items into one
+table; the **first** attached order's buyer/billing/shipping snapshot fills Bill To/Ship To.
+No-ops instantly if a `"Dispatch Gate Pass"` value already exists on any `Transport_SO` row
+for that trip — safe because a trip can never gain additional orders after its first attach
+(`TripDetail.tsx`'s own "Attach Orders" quick action only shows when `orders.length === 0`).
+Never throws — every failure is caught, logged, and turned into `null`.
+
+Copies the "Sales-CRR Gate Pass Template" Google Doc
+(`DISPATCH_GATE_PASS_TEMPLATE_DOC_ID` env var) — an old AppSheet document-merge template
+(`<<[Transport ID].[Customer Name]>>`, `<<Start:...>>...<<End>>` for the repeating item row,
+`<<sum(select(...))>>` for totals) that this app has to fill in by hand via the real Docs
+API, since there's no AppSheet backend anymore. Two things about this template were **not**
+obvious from its visible header labels and cost real debugging time — dump the template's
+actual cell structure directly (`docs.documents.get`) before assuming either holds if the
+template is ever redesigned:
+- **The item table has 8 underlying cells per row, not the 6 visible column headers** — two
+  blank spacer cells (index 3 and 4) sit between PART NAME and QUANTITY, invisible because
+  the header row merges/hides them. `ITEM_ROW_COLUMN_COUNT = 8` and `valueForCell()`'s
+  switch in `gatePass.ts` account for this; writing to index 3/4 as if they were
+  Quantity/Unit (the "obvious" 6-column mapping) silently landed values in the wrong,
+  invisible cells while leaving the real Quantity/Unit/Box cells untouched.
+- **The TOTAL row's sum placeholders use `select(...)` with a parenthesis**, not
+  `select[...]` with a square bracket as a quick screenshot read suggested — `replaceAllText`
+  requires an exact substring match, so a one-character guess was enough to leave both totals
+  showing the raw `<<sum(...)>>` token instead of a number.
+
+Row-filling algorithm (`fillItemTable`/`fillRow` in `gatePass.ts`): the template's single
+placeholder data row is filled first (clear + insert per cell, right-to-left, with a fresh
+`documents.get()` before touching each cell — Docs API character indices shift after every
+edit, so re-fetching is what keeps the index math correct across a multi-step edit instead
+of chasing stale positions). Every additional item gets an `insertTableRow` below the last
+row filled, then the same per-cell fill. The item table is re-located on every fresh read by
+searching for its header row's `"SR. NO."` text (`locateItemTable`) rather than tracking raw
+indices across edits — the header row is never edited, so this anchor stays valid throughout
+the whole multi-step process. Scalar fields (customer, addresses, vehicle, date, totals) are
+filled in one final `replaceAllText` batch, safe to run last since none of those tokens live
+inside the item table by that point.
+
+After filling, the copied Doc is exported to PDF (`drive.files.export`), uploaded as a
+normal private Drive file via the same `uploadBufferToDrive()` helper the doer-facing
+uploads route uses (`Backend/src/services/drive.ts`, factored out of `uploads.ts` for this
+reuse), and the intermediate native Doc copy is deleted — only the final PDF is kept. The
+resulting fileId is written to `"Dispatch Gate Pass"` on every `Transport_SO` row for that
+trip and exposed via `openAttachment()` (same "View attachment" pattern as every other
+attachment in this app) on `TripDetail.tsx`'s Vehicle Details section — no new viewer UI was
+needed since it's just a normal PDF fileId by that point.
+
 ## Known gotchas
 
 - **A negative "!== done" check on `ORDER_PUNCH.STATUS` resurrects quick-action buttons on

@@ -5,13 +5,17 @@ import { uploadBufferToDrive } from "./drive.js";
 import { readTable, updateRow } from "./sheets.js";
 import { punchFromSheet } from "../routes/orderPunchMap.js";
 
-// Fixed shape of the "Sales-CRR Gate Pass Template" Google Doc's item table — SR. NO. /
-// PART NO. / PART NAME / QUANTITY / UNIT / NO. OF BOX. The header row (row 0) is used as a
-// stable anchor to re-locate this exact table on every fresh read (see locateItemTable) —
-// far more robust than tracking raw character indices across edits, which shift after every
-// insertText/insertTableRow.
+// The "Sales-CRR Gate Pass Template" Google Doc's item table actually has 8 underlying
+// cells per data row, not the 6 visible header labels (SR. NO. / PART NO. / PART NAME /
+// QUANTITY / UNIT / NO. OF BOX) — cells 3 and 4 are blank spacer columns between PART NAME
+// and QUANTITY that don't show a distinct header (the header row merges/hides them),
+// confirmed by dumping the template's real cell structure directly rather than assuming a
+// 1:1 header-to-cell mapping, same discipline this project always uses for live data. The
+// header row (row 0) is used as a stable anchor to re-locate this exact table on every
+// fresh read (see locateItemTable) — far more robust than tracking raw character indices
+// across edits, which shift after every insertText/insertTableRow.
 const ITEM_TABLE_HEADER_ANCHOR = "SR. NO.";
-const ITEM_ROW_COLUMN_COUNT = 6;
+const ITEM_ROW_COLUMN_COUNT = 8;
 const FIRST_ITEM_ROW_INDEX = 1; // row 0 is the header row
 
 interface GatePassItem {
@@ -54,9 +58,11 @@ function valueForCell(item: GatePassItem, srNo: number, cellIndex: number): stri
     case 0: return String(srNo);
     case 1: return item.partNo;
     case 2: return item.partName;
-    case 3: return item.loadQty;
-    case 4: return item.unit;
-    case 5: return item.loadBoxes;
+    case 3: return ""; // blank spacer column in the template — left as-is
+    case 4: return ""; // blank spacer column in the template — left as-is
+    case 5: return item.loadQty;
+    case 6: return item.unit;
+    case 7: return item.loadBoxes;
     default: return "";
   }
 }
@@ -78,7 +84,13 @@ async function fillRow(docs: docs_v1.Docs, documentId: string, rowIndex: number,
     if (cellEnd - 1 > contentStart) {
       requests.push({ deleteContentRange: { range: { startIndex: contentStart, endIndex: cellEnd - 1 } } });
     }
-    requests.push({ insertText: { location: { index: contentStart }, text: valueForCell(item, srNo, cellIndex) } });
+    // Docs API rejects an insertText request with an empty string outright (e.g. an item
+    // with no Load Boxes value yet) — leaving the cell blank is fine, just skip the request.
+    const value = valueForCell(item, srNo, cellIndex);
+    if (value) {
+      requests.push({ insertText: { location: { index: contentStart }, text: value } });
+    }
+    if (requests.length === 0) continue;
     await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
   }
 }
@@ -191,8 +203,10 @@ export async function ensureDispatchGatePass(transportId: string): Promise<strin
         "<<[Transport ID].[Vehicle No.]>>": transport["Vehicle No."] ?? "",
         "<<[Transport ID].[Vehicle Size (Ft)]>>": transport["Vehicle Size (Ft)"] ?? "",
         "<<[Transport ID].[Driver Contact No.]>>": transport["Driver Contact No."] ?? "",
-        "<<sum(select[Transport Items[Load Qty],[Transport ID]=[_Thisrow].[Transport ID]])>>": sumNumeric(items, "loadQty"),
-        "<<sum(select[Transport Items[Load Boxes],[Transport ID]=[_Thisrow].[Transport ID]])>>": sumNumeric(items, "loadBoxes"),
+        // Exact text confirmed by dumping the template's TOTAL row cells directly — uses
+        // "select(" with a parenthesis, not "select[", and no comma after "select(".
+        "<<sum(select(Transport Items[Load Qty],[Transport ID]=[_Thisrow].[Transport ID]))>>": sumNumeric(items, "loadQty"),
+        "<<sum(select(Transport Items[Load Boxes],[Transport ID]=[_Thisrow].[Transport ID]))>>": sumNumeric(items, "loadBoxes"),
       };
       await docs.documents.batchUpdate({
         documentId,
