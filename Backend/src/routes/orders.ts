@@ -1410,6 +1410,7 @@ async function createPlaceholderDispatchItemsApproval(
         ORDER_ID: order.ORDER_ID,
         ITEM_ID: item.ITEM_ID,
         SALE_ORDER_ID: saleOrderId,
+        SALE_ORDER_ITEM_ID: item.SALE_ORDER_ITEM_ID ?? "",
         CONF_ID: confIdByItemId.get(item.ITEM_ID)?.confId ?? "",
         CONF_ITEM_ID: confIdByItemId.get(item.ITEM_ID)?.confItemId ?? "",
         DISPATCH_ID: dispatchIds[i],
@@ -1573,7 +1574,11 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
     );
 
     if (confirmed) {
-      const orderItems = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(itemFromSheet);
+      // Sourced from SALE_ORDER_ITEMS (not ORDER_ITEMS) specifically so each item's own
+      // SALE_ORDER_ITEM_ID (minted when the Sale Order form was saved) is available to carry
+      // onto the Dispatch Items Approval placeholder row below — ORDER_ITEMS has no such
+      // column at all.
+      const orderItems = (await readTable(env.sheets.transactions, "SALE_ORDER_ITEMS")).filter((i) => i.ORDER_ID === req.params.id).map(saleOrderItemFromSheet);
       // logSoConfirmation (just above) minted a fresh Conf_ID/Conf Item ID per item on
       // SO_Confirmation_Items — re-read it so Dispatch Items Approval's placeholder rows can
       // carry the same reference IDs, matching the live sheet's own linked-tab convention.
@@ -1640,6 +1645,10 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       CREATED_BY: req.user!.employeeId,
       ORDER_ID: req.params.orderId,
       ITEM_ID: item.ITEM_ID,
+      // Only actually written on the fallback append path (updateRow's merge-by-header
+      // leaves an existing placeholder's own SALE_ORDER_ITEM_ID untouched, since it's not
+      // part of what a resubmission's own patch changes).
+      SALE_ORDER_ITEM_ID: item.SALE_ORDER_ITEM_ID ?? "",
       CUST_ID: order.CUST_ID,
       CUSTOMER_NAME: order.CUSTOMER_NAME,
       BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,

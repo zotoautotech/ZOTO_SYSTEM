@@ -147,6 +147,10 @@ export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   ORDER_ID: "ORDER_ID",
   ITEM_ID: "ITEM_ID",
   SALE_ORDER_ID: "SALE_ORDER_ID",
+  // Was a second column literally named "ITEM_ID" (a duplicate header — appendRows can only
+  // ever fill the first of two identically-named columns) until the live sheet was renamed
+  // to this unique name, matching SO_Confirmation_Items' own column.
+  SALE_ORDER_ITEM_ID: "SALE_ORDER_ITEM_ID",
   CONF_ID: "Conf_ID",
   CONF_ITEM_ID: "Conf Item ID",
   DISPATCH_ID: "Disp Conf Item ID",

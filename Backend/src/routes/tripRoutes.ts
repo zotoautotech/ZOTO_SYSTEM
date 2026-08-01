@@ -334,6 +334,17 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
         // so it's written explicitly here too rather than trying to make the shared map
         // handle two different spellings for the same tab family.
         "Cutomer Name": order.CUSTOMER_NAME ?? "",
+        // Missing here (every other trip-stage handler already spreads this) meant Vehicle
+        // Details/Freight fields landed blank on every Transport_SO row — caught by dumping
+        // the live sheet's actual data directly, not by assumption.
+        ...vehicleSnapshotToSheet(transport),
+        // vehicleSnapshotToSheet doesn't carry these — Transport_SO has its own literal
+        // "Vehicle Arrange for"/"Send Through"/"Freight GST Applicable"/"Description"
+        // columns (Transport_Products doesn't, so these aren't needed on that append below).
+        "Vehicle Arrange for": transport["Vehicle Arrange for"] ?? "",
+        "Send Through": transport["Send Through"] ?? "",
+        "Freight GST Applicable": transport["Freight GST Applicable"] ?? "",
+        Description: transport["Description"] ?? "",
         ...logisticsOverrides,
         Status: "ASSIGNED",
       });
@@ -355,6 +366,8 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
           Transport_SO_ID: transportSoId,
           Transport_Pd_ID: pdIds[j],
           ...orderSnapshotToSheet(order),
+          // Same gap as Transport_SO above — Vehicle Details landed blank without this.
+          ...vehicleSnapshotToSheet(transport),
           ...logisticsOverrides,
           Segment: item.SEGMENT ?? "",
           Category: item.CATEGORY ?? "",
