@@ -125,10 +125,12 @@ export function PdiItemDetail() {
             {formatTimestamp(order.CREATED_AT)}
           </span>
 
-          {/* PDI is per-item — the order can still say "DISPATCH APPROVAL COMPLETED" while
-              this specific item already has its own PDI row (other items on the same order
-              just haven't been PDI'd yet), so also check this item's own completion. */}
-          {order.STATUS === pdiStage.prevStatus && !done && (
+          {/* PDI is per-item and its own placeholder now exists as soon as this item's
+              Dispatch Approval decision is made (see createPlaceholderPdi in
+              stageRoutes.ts) — no longer gated on the whole order's STATUS reaching
+              "DISPATCH APPROVAL COMPLETED", since a sibling item can still be undecided
+              while this one is already eligible. Just check this item's own completion. */}
+          {!done && (
             <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
               <QuickAction label="Give PDI Form" onClick={() => setShowForm(true)}>
                 <rect x="5" y="10" width="14" height="10" rx="2" />

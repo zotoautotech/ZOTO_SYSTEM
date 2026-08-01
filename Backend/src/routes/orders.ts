@@ -6,7 +6,7 @@ import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
-import { registerStageRoutes } from "./stageRoutes.js";
+import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 
 // itemFromSheet only knows ORDER_ITEMS' own columns, so reading SALE_ORDER_ITEMS through it
@@ -1701,6 +1701,15 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
     } else {
       const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
       await appendRow(env.sheets.transactions, "Dispatch Items Approval", { ...fields, [DISPATCH_APPROVAL_MAP.DISPATCH_ID]: dispatchId });
+    }
+
+    // As soon as this item is actually approved (not Extended/Short/Excess — those are holds
+    // or exceptions, not a go-ahead), create its PDI placeholder immediately — same "one stage
+    // earlier" convention as the Dispatch Items Approval placeholder itself, so the item shows
+    // up in the PDI queue right away instead of only once every sibling item on the order is
+    // also decided.
+    if (body.outcome === "Dispatch Today") {
+      await createPlaceholderPdi(order, item, req.user!.employeeId);
     }
 
     // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item

@@ -477,30 +477,52 @@ the doer typed under a mismatched key). Renamed to match — if a stage form fie
 toggle states** (`Frontend/src/modules/stage/PdiList.tsx`, replacing the generic
 `StageQueueList` only for `pdi` in `App.tsx`'s route registration — same override pattern as
 Dispatch Approval) — Timestamp/Part Name/Customer Name/Buyer GSTIN No./Quantity/Unit/PDI
-Date/PDI Attachment/PDI Remarks, matching the old CRR reference view. Backend: `GET
-/orders/pdi/items` (`stageRoutes.ts`, registered before the generic per-stage loop) —
-pending reads `ORDER_PUNCH`+`ORDER_ITEMS` directly (excluding items that already have their
-own `PDI` row — see below) and leaves the PDI-specific columns blank; Completed reads the
-`PDI` tab's own rows directly, no joins needed since every column the table wants is already
-on that row. Pending Timestamp is joined from the item's own `Dispatch Items Approval`
-decision — the moment it actually became PDI-eligible.
+Date/PDI Attachment/PDI Remarks, matching the old CRR reference view.
 
-**PDI is per-item, same shift as Dispatch Approval above** — `registerPdiSubmitRoute()`
-(`stageRoutes.ts`) is `POST /orders/:orderId/items/:itemId/pdi`, appending **one** `PDI` row
-for that item only (used to loop every item on the order and write the identical PDI result
-to all of them, same bug class already fixed for Dispatch Approval). `ORDER_PUNCH.STATUS`
-only advances to `"PRE TRANSPORT COMPLETED"` once every item has its own `PDI` row.
-`revertOrphanedPdi()` mirrors this the same way `revertOrphanedDispatchApproval()` does:
-reverts if **any** item is missing its row. Row click opens a dedicated **item-level detail
-page** (`Frontend/src/modules/stage/PdiItemDetail.tsx`, routed at
-`modules/pdi/:orderId/items/:itemId`) instead of the order-level `OrderDetail.tsx` — the
+**PDI now gets its own blank placeholder row one stage EARLIER, same convention as
+`SALE_ORDERS`/`SO_Confirmation`/`Dispatch Items Approval`** — `createPlaceholderPdi()`
+(`stageRoutes.ts`, exported, called from `orders.ts`'s `/:orderId/items/:itemId/
+dispatch-approval` handler) fires the instant a single item's Dispatch Approval outcome is
+`"Dispatch Today"` (i.e. the moment its Dispatch Items Approval row shows the readable
+`"Dispatch Approved"` label — see below), appending one blank `PDI` row for that item
+(Quantity/Unit/etc. filled in via the same `orderSnapshotToSheet`, PDI No./Date/Attachment/
+Box Quantity/Remarks blank, `Status: "PDI Pending"`) — **independent of sibling items on the
+same order**, not waiting for `ORDER_PUNCH.STATUS` to reach `"DISPATCH APPROVAL COMPLETED"`
+(which only happens once every item is decided). This is why the PDI pending queue
+(`GET /orders/pdi/items`, no `status` query) now reads pending items straight off the `PDI`
+tab's own `Status: "PDI Pending"` rows instead of joining `ORDER_PUNCH`+`ORDER_ITEMS` — an
+item shows up in PDI the moment it's individually approved, even while a sibling item is
+still sitting undecided in Dispatch Approval. A legacy fallback in the same route still joins
+`ORDER_ITEMS`+`Dispatch Items Approval` the old way for any item with no `PDI` row at all
+(pre-migration orders, or if placeholder creation ever silently fails), same "don't lose data
+to a mid-flight convention change" safety net used elsewhere. `registerPdiSubmitRoute()`
+(`POST /orders/:orderId/items/:itemId/pdi`) now **updates that placeholder row in place** by
+its own `PDI ID` (`Status: "PDI Completed"`) instead of always appending a second row — same
+bug class and same fix already applied once to Dispatch Items Approval's own submit handler,
+fixed here from the start rather than found broken in production. `ORDER_PUNCH.STATUS` still
+only advances to `"PRE TRANSPORT COMPLETED"` once **every** item's `PDI` row has
+`Status: "PDI Completed"` (not just row-existence — a lingering `"PDI Pending"` placeholder
+doesn't count). `revertOrphanedPdi()` mirrors this the same way `revertOrphanedDispatchApproval()`
+does, also keyed off `Status: "PDI Completed"` rather than row-existence. Row click opens a
+dedicated **item-level detail page** (`Frontend/src/modules/stage/PdiItemDetail.tsx`, routed
+at `modules/pdi/:orderId/items/:itemId`) instead of the order-level `OrderDetail.tsx` — the
 "Give PDI Form" quick action lives only there now (`OrderDetail.tsx`'s generic
 `currentStage`-driven action explicitly excludes `"pdi"` so it doesn't also show at the order
-level), gated on both `order.STATUS === "DISPATCH APPROVAL COMPLETED"` **and** this item not
-already having a `PDI` row (checked via `listPdiItems("COMPLETED")`, since the order can stay
-at that status while some items are already individually done). `StageForm.tsx` gained an
-optional `itemId` prop — when given, it posts to `submitPdiItemForm()` instead of the old
-order-level `submitStageForm()`.
+level), gated on just this item not already being done (checked via
+`listPdiItems("COMPLETED")`) — **not** on `order.STATUS`, since the placeholder convention
+above means an item can be individually PDI-eligible well before the order as a whole reaches
+`"DISPATCH APPROVAL COMPLETED"`. `StageForm.tsx` gained an optional `itemId` prop — when
+given, it posts to `submitPdiItemForm()` instead of the old order-level `submitStageForm()`.
+
+**Every per-item log tab's own `Status` column now shows a stable, human-readable label
+instead of the raw internal `ORDER_PUNCH`-style status string** — `Dispatch Items Approval`
+shows `"Dispatch Approved"`/`"Dispatch Date Extended"` (mapped from the form's raw
+`"Dispatch Today"`/`"Dispatch Extended"` outcome values in `orders.ts`'s dispatch-approval
+handler) and `PDI` shows `"PDI Pending"`/`"PDI Completed"` (`stageRoutes.ts`) — neither ever
+touches `ORDER_PUNCH.STATUS` itself, which keeps progressing through the full order lifecycle
+exactly as before. If a future per-item stage tab is added, give it the same readable,
+never-auto-changing-after-the-fact `Status` column rather than writing a raw stage/status
+constant into it.
 
 **The live sheet's `"Cutomer Name"` typo is gone — the user manually renamed it to the
 correctly-spelled `"Customer Name"` on every tab that had it** (`ORDER_PUNCH`, `SALE_ORDERS`,
