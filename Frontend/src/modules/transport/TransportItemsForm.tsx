@@ -65,7 +65,7 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
   }
 
   return (
-    <FormModal title="Transport Items Form" onClose={onClose} size="small" zIndex={60} sectionLabel="Load Limit Details">
+    <FormModal title="Transport Items Form" onClose={onClose} size="standard" zIndex={60} sectionLabel="Load Limit Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           <SearchableSelect label="Select Product" required value={itemId} onChange={handleSelect} options={options} placeholder="Search" />
           {selected && (

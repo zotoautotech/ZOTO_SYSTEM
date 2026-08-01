@@ -9,7 +9,10 @@ import { useIsMobile } from "../../lib/responsive";
  * itself never resizes/jumps as the doer fills it in (the bug this component fixes: a form
  * used to start short and grow once a conditional field appeared, which twice required a
  * one-off `minHeight` hack to stop a dropdown panel from being clipped by `overflow:hidden`
- * — that hack is gone now that height is never content-driven). */
+ * — that hack is gone now that height is never content-driven). "Standard" is also used for
+ * simple pickers nested inside another "standard" modal (e.g. Load Limit Details inside the
+ * Transport Form) so the nested modal doesn't visibly shrink relative to its parent — a doer
+ * complaint after "small" was tried there first. */
 export const FORM_MODAL_SIZES = {
   small: { width: 400, height: 640 },
   standard: { width: 800, height: 560 },

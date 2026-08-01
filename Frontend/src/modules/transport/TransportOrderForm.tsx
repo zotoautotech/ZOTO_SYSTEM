@@ -104,19 +104,6 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
       onClose={onClose}
       size="standard"
       zIndex={55}
-      headerActions={
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={onClose}>Cancel</button>
-          {tab === "order" ? (
-            <button className="btn btn-primary" onClick={() => setTab("logistic")} disabled={!order}>Next</button>
-          ) : (
-            <>
-              <button className="btn" onClick={() => setTab("order")}>Prev</button>
-              <button className="btn btn-primary" onClick={handleSave}>Save</button>
-            </>
-          )}
-        </div>
-      }
     >
         <div style={{ display: "flex", padding: "0 var(--space)", borderBottom: "1px solid var(--color-border)" }}>
           {(["order", "logistic"] as Tab[]).map((t) => (
@@ -224,6 +211,18 @@ export function TransportOrderForm({ eligibleOrders, onClose, onSave }: Props) {
 
               <TextField label="Selected Items Count" value={String(items.length)} disabled />
             </>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          {tab === "order" ? (
+            <button className="btn btn-primary" onClick={() => setTab("logistic")} disabled={!order}>Next</button>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={() => setTab("order")}>Prev</button>
+              <button className="btn btn-primary" onClick={handleSave}>Save</button>
+            </div>
           )}
         </div>
 
