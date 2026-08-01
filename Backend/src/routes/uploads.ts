@@ -171,35 +171,101 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
 <html>
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover" />
 <title>${name}</title>
 <style>
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #202124; font-family: -apple-system, Segoe UI, Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #2d2e30; color: #e8eaed; flex-shrink: 0; }
-  header .name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .download-btn { display: flex; align-items: center; gap: 6px; background: #8ab4f8; color: #202124; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; flex-shrink: 0; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: #202124;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 16px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    background: #2d2e30;
+    color: #e8eaed;
+    flex-shrink: 0;
+  }
+  header .name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #8ab4f8;
+    color: #202124;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    min-height: 40px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
   /* Google Drive-style contained preview by default. Zoomed images can still scroll in
      either direction inside this pane. */
-  main { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  main {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    padding-bottom: calc(24px + 60px + env(safe-area-inset-bottom));
+  }
   main::-webkit-scrollbar { width: 14px; height: 14px; }
   main::-webkit-scrollbar-track { background: #202124; }
   main::-webkit-scrollbar-thumb { background: #777; border: 3px solid #202124; border-radius: 999px; }
   main::-webkit-scrollbar-thumb:hover { background: #999; }
-  img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+  img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); touch-action: pan-x pan-y pinch-zoom; }
   embed { width: 100%; height: 100%; border: none; }
-  .zoom-controls { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; overflow: hidden; border: 1px solid #5f6368; border-radius: 8px; background: #303134; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
-  .zoom-controls button { min-width: 42px; height: 34px; border: 0; border-right: 1px solid #5f6368; background: transparent; color: #e8eaed; font-size: 18px; cursor: pointer; }
-  .zoom-controls button#zoom-reset { min-width: 52px; font-size: 13px; }
+  .zoom-controls {
+    position: fixed;
+    left: 50%;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    overflow: hidden;
+    border: 1px solid #5f6368;
+    border-radius: 10px;
+    background: #303134;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
+  .zoom-controls button { min-width: 48px; height: 44px; border: 0; border-right: 1px solid #5f6368; background: transparent; color: #e8eaed; font-size: 20px; cursor: pointer; }
+  .zoom-controls button#zoom-reset { min-width: 56px; font-size: 13px; }
   .zoom-controls button:last-child { border-right: 0; }
-  .zoom-controls button:hover { background: #3c4043; }
+  .zoom-controls button:hover, .zoom-controls button:active { background: #3c4043; }
+  @media (max-width: 480px) {
+    header { padding-left: 12px; padding-right: 12px; }
+    header .name { font-size: 13px; }
+    .download-btn .label { display: none; }
+    .download-btn { padding: 10px; min-width: 40px; }
+    main { padding: 12px; padding-bottom: calc(12px + 60px + env(safe-area-inset-bottom)); }
+  }
 </style>
 </head>
 <body>
   <header>
     <span class="name">${name}</span>
-    <a class="download-btn" href="${downloadUrl}" download>
+    <a class="download-btn" href="${downloadUrl}" download aria-label="Download">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
-      Download
+      <span class="label">Download</span>
     </a>
   </header>
   <main id="viewer-content">${content}</main>
