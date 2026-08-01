@@ -5,7 +5,7 @@ import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
-import { dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
+import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 
@@ -1635,45 +1635,57 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       : body.outcome === "Excess Quantity" ? { EXCESS_QTY: body.excessQty }
       : {};
 
-    const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
-    await appendRow(
-      env.sheets.transactions,
-      "Dispatch Items Approval",
-      dispatchApprovalToSheet({
-        CREATED_AT: now,
-        CREATED_BY: req.user!.employeeId,
-        ORDER_ID: req.params.orderId,
-        ITEM_ID: item.ITEM_ID,
-        DISPATCH_ID: dispatchId,
-        CUST_ID: order.CUST_ID,
-        CUSTOMER_NAME: order.CUSTOMER_NAME,
-        BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,
-        TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER,
-        SALE_TYPE: order.SALE_TYPE,
-        BUYER_GSTIN: order.BUYER_GSTIN,
-        SEGMENT: item.SEGMENT ?? "",
-        CATEGORY: item.CATEGORY ?? "",
-        PART_NAME: item.PART_NAME ?? "",
-        PART_NO: item.PART_NO ?? "",
-        SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
-        PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
-        NOTES: item.NOTES ?? "",
-        ORDER_QTY: item.QTY ?? "",
-        // Manually typed on the form for now (no Inventory Management System connected
-        // yet) — falls back to the item's own Unit if the doer left it blank.
-        UOM: body.unit || item.UOM || "NOS",
-        DISPATCH_APPROVAL: body.outcome,
-        ...(Object.fromEntries(
-          Object.entries(qtyField)
-            .filter(([, v]) => v !== undefined)
-            .map(([k, v]) => [k, money(v as number)])
-        ) as SheetRow),
-        BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
-        NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
-        DISPATCH_REMARKS: body.remarks,
-        STATUS: body.outcome,
-      })
-    );
+    const fields = dispatchApprovalToSheet({
+      CREATED_AT: now,
+      CREATED_BY: req.user!.employeeId,
+      ORDER_ID: req.params.orderId,
+      ITEM_ID: item.ITEM_ID,
+      CUST_ID: order.CUST_ID,
+      CUSTOMER_NAME: order.CUSTOMER_NAME,
+      BUSINESS_SEGMENT: order.BUSINESS_SEGMENT,
+      TYPE_OF_CUSTOMER: order.TYPE_OF_CUSTOMER,
+      SALE_TYPE: order.SALE_TYPE,
+      BUYER_GSTIN: order.BUYER_GSTIN,
+      SEGMENT: item.SEGMENT ?? "",
+      CATEGORY: item.CATEGORY ?? "",
+      PART_NAME: item.PART_NAME ?? "",
+      PART_NO: item.PART_NO ?? "",
+      SPECIAL_INSTRUCTIONS: item.SPECIAL_INSTRUCTIONS ?? "",
+      PACKING_REQUIREMENTS: item.PACKING_REQUIREMENTS ?? "",
+      NOTES: item.NOTES ?? "",
+      ORDER_QTY: item.QTY ?? "",
+      // Manually typed on the form for now (no Inventory Management System connected
+      // yet) — falls back to the item's own Unit if the doer left it blank.
+      UOM: body.unit || item.UOM || "NOS",
+      DISPATCH_APPROVAL: body.outcome,
+      ...(Object.fromEntries(
+        Object.entries(qtyField)
+          .filter(([, v]) => v !== undefined)
+          .map(([k, v]) => [k, money(v as number)])
+      ) as SheetRow),
+      BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
+      NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
+      DISPATCH_REMARKS: body.remarks,
+      STATUS: body.outcome,
+    });
+
+    // Fills in the placeholder row createPlaceholderDispatchItemsApproval() already created
+    // for this item at SO Confirmation time (blank Dispatch Approval, Status "Dispatch
+    // Approval Pending") — updates it in place by its own Disp Conf Item ID, same convention
+    // as SO_Confirmation's own logSoConfirmation(), rather than appending a second row (which
+    // used to leave the original placeholder sitting there forever with SALE_ORDER_ID/Conf_ID/
+    // Conf Item ID/Buyer Details all still blank, while the real decision landed in an
+    // unlinked new row missing those same reference fields). Falls back to appending fresh if
+    // somehow no placeholder exists yet (e.g. an order confirmed before this convention
+    // existed). A doer can still submit more than one decision over time (e.g. Extended, then
+    // later a real outcome) — every resubmission just updates this same row further.
+    const existingRow = existingDispatchRows.find((r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId);
+    if (existingRow) {
+      await updateRow(env.sheets.transactions, "Dispatch Items Approval", "Disp Conf Item ID", existingRow["Disp Conf Item ID"], fields);
+    } else {
+      const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
+      await appendRow(env.sheets.transactions, "Dispatch Items Approval", { ...fields, [DISPATCH_APPROVAL_MAP.DISPATCH_ID]: dispatchId });
+    }
 
     // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item
     // decided" (see latestDispatchDecisionByItemId). existingDispatchRows was read before
