@@ -1675,7 +1675,14 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
       NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
       DISPATCH_REMARKS: body.remarks,
-      STATUS: body.outcome,
+      // This "Status" column is this tab's own display label, separate from
+      // ORDER_PUNCH.STATUS (never touched here) — "Dispatch Today"/"Dispatch Extended" are
+      // the raw outcome values the form submits, but the doer wants a human-readable status
+      // word instead of the outcome repeated verbatim.
+      STATUS:
+        body.outcome === "Dispatch Today" ? "Dispatch Approved"
+        : body.outcome === "Dispatch Extended" ? "Dispatch Date Extended"
+        : body.outcome,
     });
 
     // Fills in the placeholder row createPlaceholderDispatchItemsApproval() already created

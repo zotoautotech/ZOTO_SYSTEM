@@ -63,6 +63,17 @@ select {
   font-family: inherit;
 }
 
+/* Hide the native up/down spinner on number inputs across every form — a doer complaint
+   that the stepper arrows were confusing/unwanted on quantity-style fields. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 input,
 select,
 textarea {
