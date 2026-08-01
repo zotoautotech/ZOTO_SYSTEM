@@ -237,38 +237,9 @@ export function DispatchApprovalItemDetail() {
             <Field label="Unit" value={item.UOM} />
           </Section>
 
-          <Section title="Dispatch Approval Follow-ups">
-            {log.length === 0 ? (
-              <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>No follow-ups yet.</p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
-                      <th style={{ padding: "6px 8px" }}>Timestamp</th>
-                      <th style={{ padding: "6px 8px" }}>Part No.</th>
-                      <th style={{ padding: "6px 8px" }}>Part Name</th>
-                      <th style={{ padding: "6px 8px" }}>Dispatch Approval</th>
-                      <th style={{ padding: "6px 8px" }}>Next Extended Date</th>
-                      <th style={{ padding: "6px 8px" }}>Dispatch Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {log.map((row, i) => (
-                      <tr key={i} style={{ borderTop: "1px solid var(--color-border)" }}>
-                        <td style={{ padding: "6px 8px" }}>{formatTimestamp(row.CREATED_AT)}</td>
-                        <td style={{ padding: "6px 8px" }}>{row.PART_NO}</td>
-                        <td style={{ padding: "6px 8px" }}>{row.PART_NAME}</td>
-                        <td style={{ padding: "6px 8px" }}>{row.DISPATCH_APPROVAL}</td>
-                        <td style={{ padding: "6px 8px" }}>{row.NEXT_EXTENDED_DATE || "—"}</td>
-                        <td style={{ padding: "6px 8px" }}>{row.DISPATCH_REMARKS || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Section>
+          {/* Follow-ups history table removed — it duplicated the same Dispatch Approval/
+              Next Extended Date/Dispatch Remarks fields already shown in "Dispatch Details"
+              above for the common single-decision case. */}
         </div>
       </div>
 
