@@ -41,6 +41,7 @@ export async function getTrip(transportId: string) {
     items: TripItemDispatchRow[];
     stockReleaseDone: boolean;
     taxInvoiceDone: boolean;
+    gatePassFileId?: string;
   }>(`/transport-trips/${transportId}`);
   return res.data;
 }

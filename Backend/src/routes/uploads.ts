@@ -1,9 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 import jwt from "jsonwebtoken";
-import { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { getDriveClient } from "../services/googleAuth.js";
+import { uploadBufferToDrive } from "../services/drive.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const uploadsRouter = Router();
@@ -47,33 +47,9 @@ uploadsRouter.post("/", requireAuth, upload.single("file"), async (req, res, nex
 
     const context = typeof req.body?.context === "string" ? req.body.context : undefined;
     const drive = await getDriveClient();
-    const response = await drive.files.create({
-      requestBody: {
-        name: buildFilename(req.file.originalname, context),
-        parents: [env.driveFolderId],
-      },
-      media: {
-        mimeType: req.file.mimetype,
-        body: Readable.from(req.file.buffer),
-      },
-      fields: "id",
-      supportsAllDrives: true,
-    });
+    const fileId = await uploadBufferToDrive(drive, req.file.buffer, buildFilename(req.file.originalname, context), req.file.mimetype);
 
-    // Explicitly strip any "anyone" access this file might inherit from the folder (the
-    // folder has at times been set to "Anyone with the link: Editor" — .update() is what
-    // actually overrides an inherited grant; plain .create() is a silent no-op against it).
-    try {
-      await drive.permissions.delete({
-        fileId: response.data.id!,
-        permissionId: "anyoneWithLink",
-        supportsAllDrives: true,
-      });
-    } catch {
-      // No inherited "anyone" permission to remove — already private, nothing to do.
-    }
-
-    res.status(201).json({ fileId: response.data.id });
+    res.status(201).json({ fileId });
   } catch (err) {
     next(err);
   }

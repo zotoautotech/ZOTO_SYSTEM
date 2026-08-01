@@ -4,6 +4,13 @@ import { env } from "../config/env.js";
 
 const SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"];
+// Deliberately a SEPARATE JWT client/scope set from DRIVE_SCOPES above, not just DRIVE_SCOPES
+// with "documents" appended — domain-wide delegation authorizes a Client ID for one exact
+// scope set at a time, so adding a scope to the already-working Drive client would require
+// every existing Drive caller (e.g. the attachment upload feature) to wait on a Workspace
+// admin re-authorizing the combined set too. Keeping Docs on its own client means only the
+// gate pass feature is blocked until DOCS_SCOPES is authorized — uploads keep working today.
+const DOCS_SCOPES = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/documents"];
 
 function loadCredentials(): { client_email: string; private_key: string } {
   if (env.googleServiceAccountKeyJson) return JSON.parse(env.googleServiceAccountKeyJson);
@@ -60,5 +67,42 @@ export async function listSheetTabs(spreadsheetId: string): Promise<string[]> {
 
 export async function getDriveClient() {
   const auth = getDriveAuth();
+  return google.drive({ version: "v3", auth: auth as any });
+}
+
+let docsAuth: InstanceType<typeof google.auth.JWT> | null = null;
+
+/**
+ * Docs API access, for filling in the Dispatch Gate Pass template — impersonates the same
+ * Workspace user as Drive (so generated Docs use their quota), but via its OWN JWT client
+ * with DOCS_SCOPES (drive + documents), see that constant's comment above for why this is
+ * kept separate from getDriveAuth() rather than just adding "documents" to DRIVE_SCOPES.
+ * Requires a Workspace admin to additionally authorize this Client ID for DOCS_SCOPES in
+ * Admin Console > Security > API Controls > Domain-wide Delegation — a NEW authorization
+ * entry (or an edit to add the documents scope), separate from the existing Drive-only one.
+ */
+function getDocsAuth() {
+  if (docsAuth) return docsAuth;
+  const credentials = loadCredentials();
+  docsAuth = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: DOCS_SCOPES,
+    subject: env.driveImpersonateUser || undefined,
+  });
+  return docsAuth;
+}
+
+export async function getDocsClient() {
+  const auth = getDocsAuth();
+  return google.docs({ version: "v1", auth: auth as any });
+}
+
+/** The gate pass pipeline also needs Drive calls (copy the template, export to PDF, delete
+ * the intermediate Doc) alongside Docs calls — uses the SAME (documents-scoped) client as
+ * getDocsClient() rather than the plain getDriveClient(), so every call in that one pipeline
+ * shares a single token/scope set instead of juggling two clients for one feature. */
+export async function getDriveClientForDocs() {
+  const auth = getDocsAuth();
   return google.drive({ version: "v3", auth: auth as any });
 }

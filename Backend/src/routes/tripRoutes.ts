@@ -7,6 +7,7 @@ import { requireAuth, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 import { itemFromSheet } from "./itemMap.js";
 import { ORDER_SNAPSHOT_MAP, orderSnapshotToSheet, vehicleSnapshotToSheet } from "./tripMap.js";
+import { ensureDispatchGatePass } from "../services/gatePass.js";
 
 // "Transport_SO" turned out to be a pre-built live tab that never actually got a header row
 // set (readTable tolerates a missing TAB, but appendRow throws on a tab that exists with a
@@ -193,11 +194,16 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
-    const [attached, productRows, stockReleaseIds, taxInvoiceRows] = await Promise.all([
+    // Self-healing retry: the only way the app learns a gate pass generation attempt
+    // failed (e.g. right after attachOrders) is by seeing the column still blank when the
+    // trip is read again — same revert-on-read reasoning used throughout this app.
+    // ensureDispatchGatePass no-ops instantly if a value already exists.
+    const [attached, productRows, stockReleaseIds, taxInvoiceRows, gatePassFileId] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
       getTransportIdsWithStockRelease(),
       readTable(env.sheets.transactions, "TAX_INVOICE"),
+      ensureDispatchGatePass(req.params.transportId),
     ]);
     // Stock Release / Tax Invoice run in parallel (see TRIP_STAGES' completionTab comment in
     // tripStages.ts) — TripDetail needs to know per-branch completion directly since
@@ -223,7 +229,7 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
         unit: r["Unit"] || "",
         loadBoxes: r["Load Boxes"] || "",
       }));
-    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items, stockReleaseDone, taxInvoiceDone });
+    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId });
   } catch (err) {
     next(err);
   }
@@ -392,7 +398,10 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
     }
 
     await cascadeStatus(orderIds, "TRANSPORT ASSIGNED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, attached: orderIds.length });
+    // "Instant, on Save" gate pass generation — never blocks/fails this response either way
+    // (ensureDispatchGatePass never throws); GET /:transportId retries if this didn't work.
+    const gatePassFileId = await ensureDispatchGatePass(req.params.transportId);
+    res.json({ transportId: req.params.transportId, attached: orderIds.length, gatePassFileId });
   } catch (err) {
     next(err);
   }

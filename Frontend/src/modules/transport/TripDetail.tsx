@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTrip } from "../../lib/tripsApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
 import { getTripStage } from "../../lib/tripStages";
+import { openAttachment } from "../../lib/attachments";
 import { AttachOrdersModal } from "./AttachOrdersModal";
 import { ReachedForm } from "./forms/ReachedForm";
 import { StockReleaseForm } from "./forms/StockReleaseForm";
@@ -127,6 +128,33 @@ function Field({ label, value }: { label: string; value?: string }) {
   );
 }
 
+/** Same "View attachment" link pattern as OrderDetail.tsx's own FieldFile — reused here
+ * unchanged for the auto-generated Dispatch Gate Pass PDF, which is stored as a normal
+ * private Drive file by the time this renders (see Backend/src/services/gatePass.ts). */
+function FieldFile({ label, fileId }: { label: string; fileId?: string }) {
+  if (!fileId) return null;
+  return (
+    <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: "0 0 160px" }}>
+        {label}
+      </div>
+      <div style={{ flex: 1 }}>
+        <button
+          type="button"
+          onClick={() => openAttachment(fileId)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+        >
+          View Gate Pass
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function QuickAction({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
@@ -175,7 +203,7 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders, dispatches, items, stockReleaseDone, taxInvoiceDone } = data;
+  const { transport, orders, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
   const stage = getTripStage(moduleKey);
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
   // Stock Release / Tax Invoice run in parallel off the same REACHED status — Status alone
@@ -219,6 +247,7 @@ export function TripDetail() {
             <Field label="Driver Contact No." value={transport["Driver Contact No."]} />
             <Field label="Freight Applicable" value={transport["Freight Applicable On Invoice?"]} />
             <Field label="Freight Charge" value={formatCurrency(transport["Freight Charge"])} />
+            <FieldFile label="Dispatch Gate Pass" fileId={gatePassFileId} />
           </Section>
         </div>
 

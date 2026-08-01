@@ -29,6 +29,10 @@ export const env = {
   },
 
   driveFolderId: process.env.DRIVE_FOLDER_ID ?? "",
+  // The "Sales-CRR Gate Pass Template" Google Doc, copied + filled in per trip (see
+  // Backend/src/services/gatePass.ts). Must be shared (at least Viewer) with
+  // DRIVE_IMPERSONATE_USER below so drive.files.copy() can read it.
+  dispatchGatePassTemplateDocId: process.env.DISPATCH_GATE_PASS_TEMPLATE_DOC_ID ?? "",
   // Domain-wide delegation: the service account impersonates this Workspace user for Drive
   // uploads, so files are owned by them (using their quota) rather than the service account
   // itself, which has none. Requires this Client ID authorized in Workspace Admin Console
