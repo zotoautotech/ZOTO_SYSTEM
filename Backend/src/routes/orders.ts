@@ -486,16 +486,14 @@ ordersRouter.get("/", async (req, res, next) => {
  * in here as `ORDER_PUNCH_STATUS` for the list view's Status column/row styling. */
 ordersRouter.get("/sale-orders", async (_req, res, next) => {
   try {
-    // Revert-on-delete needs a fresh ORDER_PUNCH read, and runs as a side effect (its return
-    // value isn't what this endpoint responds with — SALE_ORDERS is read fresh afterward so
-    // the response reflects whatever it just reverted).
-    await revertOrphanedSoConfirmation((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
-
-    const [saleOrderRows, punchRows] = await Promise.all([
+    // Revert-on-delete needs a fresh ORDER_PUNCH read — reused below instead of reading
+    // ORDER_PUNCH a second time, since revertOrphanedSoConfirmation already returns the
+    // corrected (reverted, if anything was) rows in the same shape.
+    const [punchRowsAfterRevert, saleOrderRows] = await Promise.all([
+      revertOrphanedSoConfirmation((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet)),
       readTable(env.sheets.transactions, "SALE_ORDERS", { refresh: true }),
-      readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
     ]);
-    const punchStatusByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, punchFromSheet(r).STATUS]));
+    const punchStatusByOrderId = new Map(punchRowsAfterRevert.map((r) => [r.ORDER_ID, r.STATUS]));
     const rows = saleOrderRows
       .map(saleOrderFromSheet)
       .filter((row) => row.STATUS !== "PENDING SALE ORDER")
@@ -521,16 +519,15 @@ const BEFORE_DISPATCH_APPROVAL_COMPLETED = new Set(["", "PENDING", "PENDING SALE
 ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };
+    let punchRows = (await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet);
     if (status !== "COMPLETED") {
-      await revertOrphanedDispatchApproval((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
+      punchRows = await revertOrphanedDispatchApproval(punchRows);
     }
-    const rows = (await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }))
-      .map(punchFromSheet)
-      .filter((row) =>
-        status === "COMPLETED"
-          ? !BEFORE_DISPATCH_APPROVAL_COMPLETED.has(row.STATUS ?? "")
-          : row.STATUS === "DISPATCH APPROVAL"
-      );
+    const rows = punchRows.filter((row) =>
+      status === "COMPLETED"
+        ? !BEFORE_DISPATCH_APPROVAL_COMPLETED.has(row.STATUS ?? "")
+        : row.STATUS === "DISPATCH APPROVAL"
+    );
     res.json(rows);
   } catch (err) {
     next(err);
@@ -543,14 +540,13 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
  * they're only decided when the doer actually submits the approval, not before. */
 ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
   try {
-    await revertOrphanedDispatchApproval((await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet));
-
-    const [punchRows, itemRows, dispatchRows] = await Promise.all([
+    const [punchRowsRaw, itemRows, dispatchRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
       readTable(env.sheets.transactions, "Dispatch Items Approval"),
     ]);
-    const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "DISPATCH APPROVAL");
+    const punchRows = await revertOrphanedDispatchApproval(punchRowsRaw.map(punchFromSheet));
+    const orders = punchRows.filter((o) => o.STATUS === "DISPATCH APPROVAL");
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
     // Dispatch Approval is per-item — an order can sit at STATUS "DISPATCH APPROVAL" with
     // some of its items already individually decided (order only flips to COMPLETED once
