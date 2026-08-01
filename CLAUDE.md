@@ -486,8 +486,11 @@ dispatch-approval` handler) fires the instant a single item's Dispatch Approval 
 `"Dispatch Today"` (i.e. the moment its Dispatch Items Approval row shows the readable
 `"Dispatch Approved"` label — see below), appending one blank `PDI` row for that item
 (Quantity/Unit/etc. filled in via the same `orderSnapshotToSheet`, PDI No./Date/Attachment/
-Box Quantity/Remarks blank, `Status: "PDI Pending"`) — **independent of sibling items on the
-same order**, not waiting for `ORDER_PUNCH.STATUS` to reach `"DISPATCH APPROVAL COMPLETED"`
+Box Quantity/Remarks blank, `Status: "PDI Pending"`, plus the triggering Dispatch Items
+Approval row's own `Disp Conf Item ID` carried onto the placeholder's identically-named
+column — the live `PDI` tab has its own `Disp Conf Item ID` column right after `ITEM_ID`,
+confirmed by dumping live headers directly, not assumed) — **independent of sibling items on
+the same order**, not waiting for `ORDER_PUNCH.STATUS` to reach `"DISPATCH APPROVAL COMPLETED"`
 (which only happens once every item is decided). This is why the PDI pending queue
 (`GET /orders/pdi/items`, no `status` query) now reads pending items straight off the `PDI`
 tab's own `Status: "PDI Pending"` rows instead of joining `ORDER_PUNCH`+`ORDER_ITEMS` — an

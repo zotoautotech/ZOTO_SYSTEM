@@ -1696,10 +1696,13 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
     // existed). A doer can still submit more than one decision over time (e.g. Extended, then
     // later a real outcome) — every resubmission just updates this same row further.
     const existingRow = existingDispatchRows.find((r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId);
+    let dispConfItemId: string;
     if (existingRow) {
-      await updateRow(env.sheets.transactions, "Dispatch Items Approval", "Disp Conf Item ID", existingRow["Disp Conf Item ID"], fields);
+      dispConfItemId = existingRow["Disp Conf Item ID"];
+      await updateRow(env.sheets.transactions, "Dispatch Items Approval", "Disp Conf Item ID", dispConfItemId, fields);
     } else {
       const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
+      dispConfItemId = dispatchId;
       await appendRow(env.sheets.transactions, "Dispatch Items Approval", { ...fields, [DISPATCH_APPROVAL_MAP.DISPATCH_ID]: dispatchId });
     }
 
@@ -1707,9 +1710,10 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
     // or exceptions, not a go-ahead), create its PDI placeholder immediately — same "one stage
     // earlier" convention as the Dispatch Items Approval placeholder itself, so the item shows
     // up in the PDI queue right away instead of only once every sibling item on the order is
-    // also decided.
+    // also decided. Carries this item's own Disp Conf Item ID onto the placeholder, matching
+    // the live PDI tab's own linking column.
     if (body.outcome === "Dispatch Today") {
-      await createPlaceholderPdi(order, item, req.user!.employeeId);
+      await createPlaceholderPdi(order, item, req.user!.employeeId, dispConfItemId);
     }
 
     // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item

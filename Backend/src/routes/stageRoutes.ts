@@ -19,7 +19,7 @@ const PDI_STATUS_PENDING = "PDI Pending";
 const PDI_STATUS_COMPLETED = "PDI Completed";
 
 const PDI_TAB_HEADERS = [
-  "Timestamp", "Useremail", "ORDER_ID", "ITEM_ID", "PDI ID",
+  "Timestamp", "Useremail", "ORDER_ID", "ITEM_ID", "Disp Conf Item ID", "PDI ID",
   "CUST ID", "Customer Name", "Business Segment", "Type of Customer", "Sale Type", "Buyer GSTIN No.",
   "Segment", "Category", "Part Name", "Part No.", "Quantity", "Unit",
   "Special Instructions", "Packing Requirements", "Additional Notes",
@@ -35,9 +35,13 @@ const PDI_TAB_HEADERS = [
  * instead of only once every sibling item on the order is also approved. No-ops if a row for
  * this item already exists (a doer can resubmit a dispatch approval decision more than once).
  * `item` accepts either an ORDER_ITEMS or SALE_ORDER_ITEMS-shaped row — only the fields
- * common to both (SEGMENT/CATEGORY/PART_NAME/PART_NO/QTY/UOM/…) are read.
+ * common to both (SEGMENT/CATEGORY/PART_NAME/PART_NO/QTY/UOM/…) are read. `dispConfItemId` is
+ * the item's own "Disp Conf Item ID" from the Dispatch Items Approval row that triggered this
+ * placeholder — carries the same star-schema linking convention as Conf_ID/Conf Item ID
+ * elsewhere (live PDI tab has its own "Disp Conf Item ID" column right after ITEM_ID, dumped
+ * directly off the live sheet rather than assumed, matching this project's usual discipline).
  */
-export async function createPlaceholderPdi(order: SheetRow, item: SheetRow, employeeId: string) {
+export async function createPlaceholderPdi(order: SheetRow, item: SheetRow, employeeId: string, dispConfItemId: string) {
   await ensureSheetTab(env.sheets.transactions, "PDI", PDI_TAB_HEADERS);
   const existing = (await readTable(env.sheets.transactions, "PDI")).find(
     (r) => r.ORDER_ID === order.ORDER_ID && r.ITEM_ID === item.ITEM_ID
@@ -50,6 +54,7 @@ export async function createPlaceholderPdi(order: SheetRow, item: SheetRow, empl
     Useremail: employeeId,
     ORDER_ID: order.ORDER_ID,
     ITEM_ID: item.ITEM_ID,
+    "Disp Conf Item ID": dispConfItemId,
     "PDI ID": pdiId,
     ...orderSnapshotToSheet(order),
     Segment: item.SEGMENT ?? "",
