@@ -619,6 +619,18 @@ Pending"`); Completed reads `Transport_Products` directly instead of a live stat
 above): a live-status equality check would make an order that's since progressed even
 further (Transport Reached, etc.) silently vanish from this Completed view too.
 
+**Transport also has its own revert-on-delete**, same convention as every earlier stage —
+`revertOrphanedTransportAssigned()` (`tripRoutes.ts`, called from `GET /eligible-orders` and
+the pending branch of `GET /eligible-items`) detects an order stuck at `STATUS ===
+"TRANSPORT ASSIGNED"` (the status `attachOrders` cascades to) with no matching `Transport_SO`
+row left, and reverts it back to `"PRE TRANSPORT COMPLETED"` so hand-deleting a trip's
+`Transport_SO`/`Transport_Products` rows directly in the sheet makes the order reappear in
+the Transport pending queue instead of vanishing from every queue (the exact gap a doer hit
+in production — deleting `Transport_Products` rows left the order stuck invisible). Unlike
+PDI's two-directional revert, this one is single-direction only — `attachOrders` writes every
+row and cascades `STATUS` synchronously in one handler, so there's no placeholder-then-fill
+race that could leave an order at `prevStatus` with the rows already genuinely present.
+
 **`SO_Confirmation` / `SO_Confirmation_Items` / `Dispatch Items Approval`** are separate,
 pre-built snapshot/audit-log tabs (human-readable headers, mapped in
 `Backend/src/routes/soConfirmationMap.ts`) — **not** the live source of truth, which stays

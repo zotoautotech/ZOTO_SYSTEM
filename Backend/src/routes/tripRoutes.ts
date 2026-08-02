@@ -56,6 +56,33 @@ async function cascadeStatus(orderIds: string[], status: string, employeeId: str
   }
 }
 
+/** Mirrors the revertOrphanedX() convention already used at every earlier stage (see e.g.
+ * revertOrphanedDispatchApproval in orders.ts, revertOrphanedPdi in stageRoutes.ts) — a doer
+ * deleting an order's row(s) directly from Transport_SO leaves ORDER_PUNCH.STATUS stuck at
+ * "TRANSPORT ASSIGNED" forever, vanishing from every queue (pending needs "PRE TRANSPORT
+ * COMPLETED", Completed needs a live Transport_Products row). Detects that and reverts
+ * STATUS back to "PRE TRANSPORT COMPLETED" so the order reappears in the Transport pending
+ * queue instead. Single-direction only (unlike PDI's two-way revert) — attachOrders writes
+ * Transport_SO/Transport_Products and cascades STATUS synchronously in one handler, so there's
+ * no placeholder-then-fill-in race that could leave an order at prevStatus with the rows
+ * already actually present. Runs from a GET, same as every other revert here, since the only
+ * way the app learns about a hand-edit made directly in Sheets is by reading it. */
+async function revertOrphanedTransportAssigned(rows: SheetRow[]): Promise<SheetRow[]> {
+  if (!rows.some((r) => r.STATUS === "TRANSPORT ASSIGNED")) return rows;
+
+  const soRows = await readTable(env.sheets.transactions, "Transport_SO", { refresh: true });
+  const orderIdsWithSo = new Set(soRows.map((r) => r.ORDER_ID));
+
+  const revertedById = new Map<string, SheetRow>();
+  for (const order of rows) {
+    if (order.STATUS !== "TRANSPORT ASSIGNED" || orderIdsWithSo.has(order.ORDER_ID)) continue;
+    await updateRow(env.sheets.transactions, ORDER_TAB, "ORDER_ID", order.ORDER_ID, punchToSheet({ STATUS: "PRE TRANSPORT COMPLETED" }));
+    revertedById.set(order.ORDER_ID, { ...order, STATUS: "PRE TRANSPORT COMPLETED" });
+  }
+  if (revertedById.size === 0) return rows;
+  return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
+}
+
 /** STOCK_RELEASE has no Transport_ID column of its own on the live sheet — only
  * Transport_Pd_ID, which references Transport_Products' own Transport_Pd_ID (that tab DOES
  * carry Transport_ID). So "does this trip have a Stock Release row yet" has to join through
@@ -84,8 +111,8 @@ async function getTransportRow(transportId: string) {
 /** Orders ready to be attached to a trip. */
 tripsRouter.get("/eligible-orders", async (_req, res, next) => {
   try {
-    const rows = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet).filter((r) => r.STATUS === "PRE TRANSPORT COMPLETED");
-    res.json(rows);
+    const punchRows = await revertOrphanedTransportAssigned((await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet));
+    res.json(punchRows.filter((r) => r.STATUS === "PRE TRANSPORT COMPLETED"));
   } catch (err) {
     next(err);
   }
@@ -125,11 +152,12 @@ tripsRouter.get("/eligible-items", async (req, res, next) => {
       return;
     }
 
-    const [punchRows, itemRows] = await Promise.all([
+    const [punchRowsRaw, itemRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
       readTable(env.sheets.transactions, "ORDER_ITEMS"),
     ]);
-    const orders = punchRows.map(punchFromSheet).filter((o) => o.STATUS === "PRE TRANSPORT COMPLETED");
+    const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw.map(punchFromSheet));
+    const orders = punchRows.filter((o) => o.STATUS === "PRE TRANSPORT COMPLETED");
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
     const rows = itemRows
       .filter((i) => orderById.has(i.ORDER_ID))
