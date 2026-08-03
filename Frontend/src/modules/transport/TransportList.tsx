@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
@@ -28,6 +28,7 @@ const TRIP_COLUMNS: Column<TripRecord>[] = [
  * a row opens that trip's detail page (TripDetail.tsx). */
 export function TransportList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { query } = useSearch();
   const isMobile = useIsMobile();
   const [activeCustomer, setActiveCustomer] = useState<string | null>(null);
@@ -213,12 +214,15 @@ export function TransportList() {
       {showCreate && (
         <CreateTripModal
           onClose={() => setShowCreate(false)}
-          onCreated={(transportId) => {
+          onCreated={() => {
             setShowCreate(false);
-            // Orders are already attached at creation, so the real next step is Transport
-            // Reached, not the generic /modules/transport detail page (which doesn't know
-            // about that stage and used to wrongly offer "Attach Orders" instead).
-            navigate(`/modules/transport-reached/${transportId}`);
+            // Stay on this (Transport Pending) view rather than jumping into the trip's
+            // Transport Reached screen — the doer just arranged the vehicle, they haven't
+            // reached anywhere yet, and navigating there prematurely was confusing (a real
+            // doer report). The just-arranged items naturally drop off this Pending list
+            // (their order STATUS has moved past "PRE TRANSPORT COMPLETED") once refetched.
+            queryClient.invalidateQueries({ queryKey: ["transportEligibleItems"] });
+            queryClient.invalidateQueries({ queryKey: ["trips"] });
           }}
         />
       )}
