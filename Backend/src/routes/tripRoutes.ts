@@ -5,7 +5,7 @@ import { appendRow, appendRows, ensureSheetTab, readTable, updateRow, type Sheet
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
-import { itemFromSheet } from "./itemMap.js";
+import { itemFromSheet, itemToSheet } from "./itemMap.js";
 import { ORDER_SNAPSHOT_MAP, orderSnapshotToSheet, vehicleSnapshotToSheet } from "./tripMap.js";
 import { ensureDispatchGatePass } from "../services/gatePass.js";
 
@@ -562,6 +562,9 @@ async function createPlaceholderTaxInvoice(transportId: string, transport: Sheet
   const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS");
   const soIds = await nextIds("INVCSO", "Tax_Invoice_SO", "Invoice_SO_ID", attached.length);
   const allProductRows = await readTable(env.sheets.transactions, "Transport_Products");
+  // Transport_Products only carries Part/Segment/Category/Quantity/Unit — the item's own
+  // Price/Discount/Basic Amount/Total Amount only live on ORDER_ITEMS, keyed by ITEM_ID.
+  const itemById = new Map((await readTable(env.sheets.transactions, "ORDER_ITEMS")).map((r) => [r.ITEM_ID, itemFromSheet(r)]));
 
   for (const [i, a] of attached.entries()) {
     const invoiceSoId = soIds[i];
@@ -599,6 +602,7 @@ async function createPlaceholderTaxInvoice(transportId: string, transport: Sheet
         Invoice_ID: invoiceId,
         Invoice_SO_ID: invoiceSoId,
         Invoice_Pd_ID: pdIds[j],
+        ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
         Segment: p.Segment ?? "",
         Category: p.Category ?? "",
         "Part Name": p["Part Name"] ?? "",
@@ -856,6 +860,9 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
     const existingProductRows = await readTable(env.sheets.transactions, "Tax_Invoice_Products");
     const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS");
     const allProductRows = await readTable(env.sheets.transactions, "Transport_Products");
+    // Transport_Products only carries Part/Segment/Category/Quantity/Unit — the item's own
+    // Price/Discount/Basic Amount/Total Amount only live on ORDER_ITEMS, keyed by ITEM_ID.
+    const itemById = new Map((await readTable(env.sheets.transactions, "ORDER_ITEMS")).map((r) => [r.ITEM_ID, itemFromSheet(r)]));
 
     for (const a of attached) {
       const existingSo = existingSoRows.find((r) => r.Transport_ID === req.params.transportId && r.ORDER_ID === a.orderId);
@@ -894,6 +901,7 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
           continue;
         }
         await updateRow(env.sheets.transactions, "Tax_Invoice_Products", "Invoice_Pd_ID", existingPd.Invoice_Pd_ID, {
+          ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
           Invoice_ID: invoiceId,
           Invoice_SO_ID: invoiceSoId,
           Quantity: p.Quantity ?? "",
@@ -917,6 +925,7 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
             Invoice_ID: invoiceId,
             Invoice_SO_ID: invoiceSoId,
             Invoice_Pd_ID: pdIds[j],
+            ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
             Segment: p.Segment ?? "",
             Category: p.Category ?? "",
             "Part Name": p["Part Name"] ?? "",

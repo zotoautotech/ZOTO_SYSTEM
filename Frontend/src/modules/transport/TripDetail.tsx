@@ -229,6 +229,26 @@ export function TripDetail() {
           <span className="text-muted" style={{ fontSize: 13 }}>
             {formatTimestamp(transport.Timestamp)}
           </span>
+          {/* Stock Release / Tax Invoice run in parallel off the same REACHED status, so
+              transport.Status alone can't show which of the two is actually done — this
+              badge surfaces that branch's own Pending/Completed state directly. */}
+          {(stage?.key === "stock-release" || stage?.key === "tax-invoice") && (
+            <div style={{ marginTop: 10 }}>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: thisBranchDone ? "#e6f4ea" : "#fff4e5",
+                  color: thisBranchDone ? "#1e7e34" : "#b26a00",
+                }}
+              >
+                {stage!.label} {thisBranchDone ? "Completed" : "Pending"}
+              </span>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 16, marginTop: 18, flexWrap: "wrap" }}>
             {canAttachOrders && <QuickAction label="Attach Orders" onClick={() => setShowAttach(true)} />}
             {canGiveStageForm && <QuickAction label={`Give ${stage!.label} Form`} onClick={() => setShowStageForm(true)} />}
