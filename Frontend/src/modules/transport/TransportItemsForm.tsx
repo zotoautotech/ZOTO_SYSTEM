@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { FormModal } from "../../components/form/FormModal";
-import type { OrderItemRecord } from "../../lib/ordersApi";
+import { listPdiItems, type OrderItemRecord } from "../../lib/ordersApi";
 
 export interface PickedItem {
   itemId: string;
@@ -29,6 +30,14 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
   const [loadQty, setLoadQty] = useState("");
   const [loadBoxes, setLoadBoxes] = useState("");
 
+  // PDI already records a Box Quantity per item — auto-fill Load Boxes from it below so the
+  // doer doesn't have to retype the same number arranging the vehicle (still editable, in
+  // case the actual load ends up split differently).
+  const { data: completedPdiItems = [] } = useQuery({
+    queryKey: ["pdiItems", "COMPLETED"],
+    queryFn: () => listPdiItems("COMPLETED"),
+  });
+
   const pickedIds = new Set(alreadyPicked.map((p) => p.itemId));
   const options = items
     .filter((it) => !pickedIds.has(it.ITEM_ID))
@@ -46,7 +55,8 @@ export function TransportItemsForm({ items, alreadyPicked, onClose, onAdd }: Pro
   function handleSelect(id: string) {
     setItemId(id);
     setLoadQty("");
-    setLoadBoxes("");
+    const pdi = completedPdiItems.find((r) => r.ITEM_ID === id);
+    setLoadBoxes(pdi?.BOX_QUANTITY || "");
   }
 
   function canSave() {
