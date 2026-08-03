@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
+import { appendRow, appendRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireModule } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
@@ -83,6 +83,18 @@ async function revertOrphanedTransportAssigned(rows: SheetRow[]): Promise<SheetR
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
+// Both STOCK_RELEASE and TAX_INVOICE now get a blank placeholder row the instant Transport
+// Reached is submitted (see the /reached handler below) — same "row exists one stage earlier
+// than the form that fills it in" convention already used for SALE_ORDERS/SO_Confirmation/PDI
+// (see CLAUDE.md). That means row *existence* no longer signals "done" — only these specific
+// fields, left blank on the placeholder and filled in by the doer's own form, do.
+function isStockReleaseRowDone(r: SheetRow): boolean {
+  return !!(r["Release Quantity"] ?? "").toString().trim();
+}
+function isTaxInvoiceRowDone(r: SheetRow): boolean {
+  return !!(r["Tax Invoice No."] ?? "").toString().trim();
+}
+
 /** STOCK_RELEASE has no Transport_ID column of its own on the live sheet — only
  * Transport_Pd_ID, which references Transport_Products' own Transport_Pd_ID (that tab DOES
  * carry Transport_ID). So "does this trip have a Stock Release row yet" has to join through
@@ -97,10 +109,16 @@ async function getTransportIdsWithStockRelease(): Promise<Set<string>> {
   const transportIdByPdId = new Map(productRows.map((p) => [p.Transport_Pd_ID, p.Transport_ID]));
   const ids = new Set<string>();
   for (const r of stockRows) {
+    if (!isStockReleaseRowDone(r)) continue;
     const tid = transportIdByPdId.get(r.Transport_Pd_ID);
     if (tid) ids.add(tid);
   }
   return ids;
+}
+
+async function getTransportIdsWithTaxInvoice(): Promise<Set<string>> {
+  const rows = await readTable(env.sheets.transactions, "TAX_INVOICE");
+  return new Set(rows.filter(isTaxInvoiceRowDone).map((r) => r.Transport_ID));
 }
 
 async function getTransportRow(transportId: string) {
@@ -203,12 +221,17 @@ tripsRouter.get("/", async (req, res, next) => {
     // the trip's overall Status hasn't advanced yet, since the other branch may still be
     // pending); includeIfInTab powers that same stage's own Completed toggle by checking the
     // tab directly instead of relying on Status, which may have already moved past REACHED.
+    async function doneIdsForTab(tab: string): Promise<Set<string>> {
+      if (tab === "STOCK_RELEASE") return getTransportIdsWithStockRelease();
+      if (tab === "TAX_INVOICE") return getTransportIdsWithTaxInvoice();
+      return new Set((await readTable(env.sheets.transactions, tab)).map((r) => r.Transport_ID));
+    }
     if (excludeIfInTab) {
-      const doneIds = excludeIfInTab === "STOCK_RELEASE" ? await getTransportIdsWithStockRelease() : new Set((await readTable(env.sheets.transactions, excludeIfInTab)).map((r) => r.Transport_ID));
+      const doneIds = await doneIdsForTab(excludeIfInTab);
       filtered = filtered.filter((r) => !doneIds.has(r.Transport_ID));
     }
     if (includeIfInTab) {
-      const doneIds = includeIfInTab === "STOCK_RELEASE" ? await getTransportIdsWithStockRelease() : new Set((await readTable(env.sheets.transactions, includeIfInTab)).map((r) => r.Transport_ID));
+      const doneIds = await doneIdsForTab(includeIfInTab);
       filtered = filtered.filter((r) => doneIds.has(r.Transport_ID));
     }
 
@@ -226,11 +249,11 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
     // failed (e.g. right after attachOrders) is by seeing the column still blank when the
     // trip is read again — same revert-on-read reasoning used throughout this app.
     // ensureDispatchGatePass no-ops instantly if a value already exists.
-    const [attached, productRows, stockReleaseIds, taxInvoiceRows, gatePassFileId] = await Promise.all([
+    const [attached, productRows, stockReleaseIds, taxInvoiceIds, gatePassFileId] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
       getTransportIdsWithStockRelease(),
-      readTable(env.sheets.transactions, "TAX_INVOICE"),
+      getTransportIdsWithTaxInvoice(),
       ensureDispatchGatePass(req.params.transportId),
     ]);
     // Stock Release / Tax Invoice run in parallel (see TRIP_STAGES' completionTab comment in
@@ -238,7 +261,7 @@ tripsRouter.get("/:transportId", async (req, res, next) => {
     // transport.Status alone can't distinguish "still pending this branch" from "done this
     // branch, other one still pending" while both sit at REACHED.
     const stockReleaseDone = stockReleaseIds.has(req.params.transportId);
-    const taxInvoiceDone = taxInvoiceRows.some((r) => r.Transport_ID === req.params.transportId);
+    const taxInvoiceDone = taxInvoiceIds.has(req.params.transportId);
     // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
     // matches the old CRR reference's trip detail layout exactly.
     const dispatches = attached.map((a) => ({
@@ -440,6 +463,154 @@ tripsRouter.post("/:transportId/orders", async (req, res, next) => {
 // backend doesn't force a field the real UX doesn't always show.
 const remarksSchema = z.object({ remarks: z.string().optional().default("") });
 
+/** Creates a blank STOCK_RELEASE placeholder row per attached item the instant Transport
+ * Reached is submitted — same "row exists one stage earlier than the form that fills it in"
+ * convention as SALE_ORDERS/SO_Confirmation/PDI (see CLAUDE.md). Every column that's already
+ * known (part/segment/category, vehicle/driver, quantity/unit) is filled in immediately;
+ * "Type" defaults to "OUT" (the doer's actual choice on the old CRR form was always this in
+ * practice); From/Release Quantity/Description/Signature stay blank since the physical stock
+ * release hasn't actually happened yet — those are what the Stock Release Form now fills in,
+ * updating this same row in place rather than appending a second one. No-ops per item if a
+ * row already exists (defensive — /reached is a one-time action per trip in normal use).
+ */
+async function createPlaceholderStockRelease(transportId: string, transport: SheetRow, employeeId: string) {
+  const [productRows, existingRows] = await Promise.all([
+    readTable(env.sheets.transactions, "Transport_Products"),
+    readTable(env.sheets.transactions, "STOCK_RELEASE"),
+  ]);
+  const items = productRows.filter((p) => p.Transport_ID === transportId);
+  const existingPdIds = new Set(existingRows.map((r) => r.Transport_Pd_ID));
+  const pending = items.filter((p) => !existingPdIds.has(p.Transport_Pd_ID));
+  if (pending.length === 0) return;
+
+  const now = new Date().toISOString();
+  const stockIds = await nextIds("STKPD", "STOCK_RELEASE", "Stock_Pd_ID", pending.length);
+  await appendRows(
+    env.sheets.transactions,
+    "STOCK_RELEASE",
+    pending.map((p, i) => ({
+      Timestamp: now,
+      Useremail: employeeId,
+      ORDER_ID: p.ORDER_ID,
+      ITEM_ID: p.ITEM_ID,
+      Transport_Pd_ID: p.Transport_Pd_ID,
+      Stock_Pd_ID: stockIds[i],
+      Segment: p.Segment ?? "",
+      Category: p.Category ?? "",
+      "Part Name": p["Part Name"] ?? "",
+      "Part No.": p["Part No."] ?? "",
+      "Vehicle type": transport["Vehicle type"] ?? "",
+      "Vehicle No.": transport["Vehicle No."] ?? "",
+      "Vehicle Size (Ft)": transport["Vehicle Size (Ft)"] ?? "",
+      "Driver Name": transport["Driver Name"] ?? "",
+      "Driver Contact No.": transport["Driver Contact No."] ?? "",
+      Quantity: p.Quantity ?? "",
+      Unit: p.Unit ?? "NOS",
+      Type: "OUT",
+      From: "",
+      "Release Quantity": "",
+      Description: "",
+      Status: "Stock Release Pending",
+    }))
+  );
+}
+
+/** Same placeholder-one-stage-earlier convention for TAX_INVOICE/Tax_Invoice_SO/
+ * Tax_Invoice_Products — every denormalized field (seller, buyer/billing snapshot, sale
+ * order no./date/attachment, vehicle, item lines) is filled in immediately; only the fields
+ * the doer actually has to type on the Tax Invoice form (invoice no./date/attachment/
+ * remarks, e-way bill fields) stay blank until that form updates this same row in place. */
+async function createPlaceholderTaxInvoice(transportId: string, transport: SheetRow, employeeId: string) {
+  const existing = (await readTable(env.sheets.transactions, "TAX_INVOICE")).find((r) => r.Transport_ID === transportId);
+  if (existing) return;
+
+  const attached = await getAttachedOrders(transportId);
+  if (attached.length === 0) return;
+
+  const now = new Date().toISOString();
+  const invoiceId = await nextId("INVC", "TAX_INVOICE", "Invoice_ID");
+  const seller = await getSellerFields();
+
+  await appendRow(env.sheets.transactions, "TAX_INVOICE", {
+    Timestamp: now,
+    Useremail: employeeId,
+    Transport_ID: transportId,
+    Invoice_ID: invoiceId,
+    "Branch ID": seller.BRANCH_ID ?? "",
+    "Branch Name": seller.BRANCH_NAME ?? "",
+    "Seller GSTIN No.": seller.SELLER_GSTIN ?? "",
+    "Seller Email ID": seller.SELLER_EMAIL ?? "",
+    "Seller Contact No.": seller.SELLER_CONTACT ?? "",
+    "Seller Address Line 1": seller.SELLER_ADDRESS_1 ?? "",
+    "Seller Address Line 2": seller.SELLER_ADDRESS_2 ?? "",
+    "Seller State": seller.SELLER_STATE ?? "",
+    "Seller Pin code": seller.SELLER_PINCODE ?? "",
+    "Seller Country": seller.SELLER_COUNTRY ?? "",
+    ...orderSnapshotToSheet(attached[0].order),
+    ...vehicleSnapshotToSheet(transport),
+    "Tax Invoice No.": "",
+    "Tax Invoice Date": "",
+    "Tax Invoice Attachment": "",
+    "Tax Invoice Remarks": "",
+    "E-Way Bill Applicable": "",
+    "E-Way Bill No.": "",
+    "E-Way Bill Date": "",
+    "E-Way Bill Attachment": "",
+    Status: "Tax Invoice Pending",
+  });
+
+  const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS");
+  const soIds = await nextIds("INVCSO", "Tax_Invoice_SO", "Invoice_SO_ID", attached.length);
+  const allProductRows = await readTable(env.sheets.transactions, "Transport_Products");
+
+  for (const [i, a] of attached.entries()) {
+    const invoiceSoId = soIds[i];
+    const saleOrder = saleOrders.find((s) => s.ORDER_ID === a.orderId);
+    await appendRow(env.sheets.transactions, "Tax_Invoice_SO", {
+      Timestamp: now,
+      Useremail: employeeId,
+      ORDER_ID: a.orderId,
+      Transport_ID: transportId,
+      Transport_SO_ID: a.transportSoId,
+      Invoice_ID: invoiceId,
+      Invoice_SO_ID: invoiceSoId,
+      "Sale Order No.": saleOrder?.["Sale Order No."] ?? "",
+      "Sale Order Date": saleOrder?.["Sale Order Date"] ?? "",
+      "Sale Order Attachment": saleOrder?.["Sale Order Attachment"] ?? "",
+      "Order Type": a.order.ORDER_TYPE ?? "",
+      "Payment Type": a.order.PAYMENT_TYPE ?? "",
+      ...orderSnapshotToSheet(a.order),
+      Status: "Tax Invoice Pending",
+    });
+
+    const productRows = allProductRows.filter((p) => p.Transport_ID === transportId && p.ORDER_ID === a.orderId);
+    const pdIds = await nextIds("INVCPD", "Tax_Invoice_Products", "Invoice_Pd_ID", Math.max(productRows.length, 1));
+    await appendRows(
+      env.sheets.transactions,
+      "Tax_Invoice_Products",
+      productRows.map((p, j) => ({
+        Timestamp: now,
+        Useremail: employeeId,
+        ORDER_ID: a.orderId,
+        ITEM_ID: p.ITEM_ID,
+        Transport_ID: transportId,
+        Transport_SO_ID: a.transportSoId,
+        Transport_Pd_ID: p.Transport_Pd_ID,
+        Invoice_ID: invoiceId,
+        Invoice_SO_ID: invoiceSoId,
+        Invoice_Pd_ID: pdIds[j],
+        Segment: p.Segment ?? "",
+        Category: p.Category ?? "",
+        "Part Name": p["Part Name"] ?? "",
+        "Part No.": p["Part No."] ?? "",
+        Quantity: p.Quantity ?? "",
+        Unit: p.Unit ?? "NOS",
+        Status: "Tax Invoice Pending",
+      }))
+    );
+  }
+}
+
 tripsRouter.post("/:transportId/reached", async (req, res, next) => {
   try {
     const schema = z.object({
@@ -510,6 +681,18 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
     }
 
     await cascadeStatus(attached.map((a) => a.orderId), "TRANSPORT REACHED", req.user!.employeeId);
+
+    // Stock Release and Tax Invoice both pick up a trip the instant it's Reached (matches the
+    // old CRR reference — both queues show it at once, neither gates the other) — auto-create
+    // both placeholders now instead of waiting for a separate manual step, with every already-
+    // known column filled in. The two forms further down this file just fill in the handful of
+    // fields that genuinely aren't known yet, updating these same rows in place.
+    const freshTransport = (await getTransportRow(req.params.transportId))!;
+    await Promise.all([
+      createPlaceholderStockRelease(req.params.transportId, freshTransport, req.user!.employeeId),
+      createPlaceholderTaxInvoice(req.params.transportId, freshTransport, req.user!.employeeId),
+    ]);
+
     res.json({ transportId: req.params.transportId, status: "TRANSPORT REACHED", gatePassFileId });
   } catch (err) {
     next(err);
@@ -518,34 +701,34 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
 
 tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
   try {
-    const schema = z.object({ releaseType: z.string().min(1), releaseFrom: z.string().optional().default("") }).merge(remarksSchema);
+    const schema = z.object({ releaseType: z.string().optional().default("OUT"), releaseFrom: z.string().optional().default("") }).merge(remarksSchema);
     const body = schema.parse(req.body);
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
 
     const productRows = (await readTable(env.sheets.transactions, "Transport_Products")).filter((r) => r.Transport_ID === req.params.transportId);
+    const existingRows = await readTable(env.sheets.transactions, "STOCK_RELEASE");
+    const existingByPdId = new Map(existingRows.map((r) => [r.Transport_Pd_ID, r]));
     const now = new Date().toISOString();
-    const stockIds = await nextIds("STKPD", "STOCK_RELEASE", "Stock_Pd_ID", Math.max(productRows.length, 1));
 
-    for (const [i, p] of productRows.entries()) {
-      await appendRow(env.sheets.transactions, "STOCK_RELEASE", {
-        Timestamp: now,
-        Useremail: req.user!.employeeId,
-        ORDER_ID: p.ORDER_ID,
-        ITEM_ID: p.ITEM_ID,
-        Transport_Pd_ID: p.Transport_Pd_ID,
-        Stock_Pd_ID: stockIds[i],
-        Segment: p.Segment ?? "",
-        Category: p.Category ?? "",
-        "Part Name": p["Part Name"] ?? "",
-        "Part No.": p["Part No."] ?? "",
+    // Fills in the placeholder row createPlaceholderStockRelease() already created for every
+    // item at Transport Reached time — updates it in place by its own Stock_Pd_ID, same
+    // convention as PDI/Dispatch Items Approval's own submit handlers, rather than appending a
+    // second row. Falls back to appending fresh for any item that somehow has no placeholder
+    // yet (e.g. approved before this convention existed).
+    const toCreate: typeof productRows = [];
+    for (const p of productRows) {
+      const existing = existingByPdId.get(p.Transport_Pd_ID);
+      if (!existing) {
+        toCreate.push(p);
+        continue;
+      }
+      await updateRow(env.sheets.transactions, "STOCK_RELEASE", "Stock_Pd_ID", existing.Stock_Pd_ID, {
         "Vehicle type": transport["Vehicle type"] ?? "",
         "Vehicle No.": transport["Vehicle No."] ?? "",
         "Vehicle Size (Ft)": transport["Vehicle Size (Ft)"] ?? "",
         "Driver Name": transport["Driver Name"] ?? "",
         "Driver Contact No.": transport["Driver Contact No."] ?? "",
-        Quantity: p.Quantity ?? "",
-        Unit: p.Unit ?? "NOS",
         Type: body.releaseType,
         From: body.releaseFrom,
         "Release Quantity": p.Quantity ?? "",
@@ -553,18 +736,47 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
         Status: "RELEASED",
       });
     }
+    if (toCreate.length > 0) {
+      const stockIds = await nextIds("STKPD", "STOCK_RELEASE", "Stock_Pd_ID", toCreate.length);
+      await appendRows(
+        env.sheets.transactions,
+        "STOCK_RELEASE",
+        toCreate.map((p, i) => ({
+          Timestamp: now,
+          Useremail: req.user!.employeeId,
+          ORDER_ID: p.ORDER_ID,
+          ITEM_ID: p.ITEM_ID,
+          Transport_Pd_ID: p.Transport_Pd_ID,
+          Stock_Pd_ID: stockIds[i],
+          Segment: p.Segment ?? "",
+          Category: p.Category ?? "",
+          "Part Name": p["Part Name"] ?? "",
+          "Part No.": p["Part No."] ?? "",
+          "Vehicle type": transport["Vehicle type"] ?? "",
+          "Vehicle No.": transport["Vehicle No."] ?? "",
+          "Vehicle Size (Ft)": transport["Vehicle Size (Ft)"] ?? "",
+          "Driver Name": transport["Driver Name"] ?? "",
+          "Driver Contact No.": transport["Driver Contact No."] ?? "",
+          Quantity: p.Quantity ?? "",
+          Unit: p.Unit ?? "NOS",
+          Type: body.releaseType,
+          From: body.releaseFrom,
+          "Release Quantity": p.Quantity ?? "",
+          Description: body.remarks,
+          Status: "RELEASED",
+        }))
+      );
+    }
 
     const orderIds = [...new Set(productRows.map((p) => p.ORDER_ID))];
     // Stock Release and Tax Invoice run in parallel off the same REACHED status (the old
     // CRR reference shows both queues picking up a trip at once, not one gating the other) —
     // the trip's own Status only advances to TAX INVOICE COMPLETED (Dispatch's own
-    // prevStatus) once BOTH branches are done, checked here by whether a TAX_INVOICE row
-    // already exists for this trip. Until then Status stays REACHED so this trip keeps
-    // showing in whichever of the two queues hasn't done its part yet (see GET / and its
+    // prevStatus) once BOTH branches are actually done (not just placeholder-created — see
+    // isTaxInvoiceRowDone). Until then Status stays REACHED so this trip keeps showing in
+    // whichever of the two queues hasn't done its part yet (see GET / and its
     // excludeIfInTab/includeIfInTab params, used by both stages' pending/Completed toggles).
-    const taxInvoiceDone = (await readTable(env.sheets.transactions, "TAX_INVOICE")).some(
-      (r) => r.Transport_ID === req.params.transportId
-    );
+    const taxInvoiceDone = (await getTransportIdsWithTaxInvoice()).has(req.params.transportId);
     if (taxInvoiceDone) {
       await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "TAX INVOICE COMPLETED" });
     }
@@ -593,14 +805,19 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
     if (attached.length === 0) return res.status(400).json({ error: { code: "BAD_REQUEST", message: "No orders on this trip" } });
 
     const now = new Date().toISOString();
-    const invoiceId = await nextId("INVC", "TAX_INVOICE", "Invoice_ID");
     const seller = await getSellerFields();
 
-    await appendRow(env.sheets.transactions, "TAX_INVOICE", {
-      Timestamp: now,
-      Useremail: req.user!.employeeId,
-      Transport_ID: req.params.transportId,
-      Invoice_ID: invoiceId,
+    // Fills in the placeholder TAX_INVOICE/Tax_Invoice_SO/Tax_Invoice_Products rows
+    // createPlaceholderTaxInvoice() already created at Transport Reached time — updates them
+    // in place by their own IDs rather than appending a second set. Falls back to creating
+    // fresh if somehow no placeholder exists yet (e.g. a trip Reached before this convention
+    // existed).
+    const existingInvoice = (await readTable(env.sheets.transactions, "TAX_INVOICE")).find(
+      (r) => r.Transport_ID === req.params.transportId
+    );
+    const invoiceId = existingInvoice?.Invoice_ID ?? (await nextId("INVC", "TAX_INVOICE", "Invoice_ID"));
+
+    const invoiceFields = {
       "Branch ID": seller.BRANCH_ID ?? "",
       "Branch Name": seller.BRANCH_NAME ?? "",
       "Seller GSTIN No.": seller.SELLER_GSTIN ?? "",
@@ -622,21 +839,30 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
       "E-Way Bill Date": body.eWayBillDate,
       "E-Way Bill Attachment": body.eWayBillAttachmentUrl,
       Status: "COMPLETED",
-    });
-
-    const soIds = await nextIds("INVCSO", "Tax_Invoice_SO", "Invoice_SO_ID", attached.length);
-    for (const [i, a] of attached.entries()) {
-      const invoiceSoId = soIds[i];
-      const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS");
-      const saleOrder = saleOrders.find((s) => s.ORDER_ID === a.orderId);
-      await appendRow(env.sheets.transactions, "Tax_Invoice_SO", {
+    };
+    if (existingInvoice) {
+      await updateRow(env.sheets.transactions, "TAX_INVOICE", "Invoice_ID", invoiceId, invoiceFields);
+    } else {
+      await appendRow(env.sheets.transactions, "TAX_INVOICE", {
         Timestamp: now,
         Useremail: req.user!.employeeId,
-        ORDER_ID: a.orderId,
         Transport_ID: req.params.transportId,
-        Transport_SO_ID: a.transportSoId,
         Invoice_ID: invoiceId,
-        Invoice_SO_ID: invoiceSoId,
+        ...invoiceFields,
+      });
+    }
+
+    const existingSoRows = await readTable(env.sheets.transactions, "Tax_Invoice_SO");
+    const existingProductRows = await readTable(env.sheets.transactions, "Tax_Invoice_Products");
+    const saleOrders = await readTable(env.sheets.transactions, "SALE_ORDERS");
+    const allProductRows = await readTable(env.sheets.transactions, "Transport_Products");
+
+    for (const a of attached) {
+      const existingSo = existingSoRows.find((r) => r.Transport_ID === req.params.transportId && r.ORDER_ID === a.orderId);
+      const invoiceSoId = existingSo?.Invoice_SO_ID ?? (await nextId("INVCSO", "Tax_Invoice_SO", "Invoice_SO_ID"));
+      const saleOrder = saleOrders.find((s) => s.ORDER_ID === a.orderId);
+      const soFields = {
+        Invoice_ID: invoiceId,
         "Sale Order No.": saleOrder?.["Sale Order No."] ?? "",
         "Sale Order Date": saleOrder?.["Sale Order Date"] ?? "",
         "Sale Order Attachment": saleOrder?.["Sale Order Attachment"] ?? "",
@@ -644,32 +870,62 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
         "Payment Type": a.order.PAYMENT_TYPE ?? "",
         ...orderSnapshotToSheet(a.order),
         Status: "COMPLETED",
-      });
-
-      const productRows = (await readTable(env.sheets.transactions, "Transport_Products")).filter(
-        (p) => p.Transport_ID === req.params.transportId && p.ORDER_ID === a.orderId
-      );
-      const pdIds = await nextIds("INVCPD", "Tax_Invoice_Products", "Invoice_Pd_ID", Math.max(productRows.length, 1));
-      for (const [j, p] of productRows.entries()) {
-        await appendRow(env.sheets.transactions, "Tax_Invoice_Products", {
+      };
+      if (existingSo) {
+        await updateRow(env.sheets.transactions, "Tax_Invoice_SO", "Invoice_SO_ID", invoiceSoId, soFields);
+      } else {
+        await appendRow(env.sheets.transactions, "Tax_Invoice_SO", {
           Timestamp: now,
           Useremail: req.user!.employeeId,
           ORDER_ID: a.orderId,
-          ITEM_ID: p.ITEM_ID,
           Transport_ID: req.params.transportId,
           Transport_SO_ID: a.transportSoId,
-          Transport_Pd_ID: p.Transport_Pd_ID,
+          Invoice_SO_ID: invoiceSoId,
+          ...soFields,
+        });
+      }
+
+      const productRows = allProductRows.filter((p) => p.Transport_ID === req.params.transportId && p.ORDER_ID === a.orderId);
+      const toCreate: typeof productRows = [];
+      for (const p of productRows) {
+        const existingPd = existingProductRows.find((r) => r.Transport_Pd_ID === p.Transport_Pd_ID);
+        if (!existingPd) {
+          toCreate.push(p);
+          continue;
+        }
+        await updateRow(env.sheets.transactions, "Tax_Invoice_Products", "Invoice_Pd_ID", existingPd.Invoice_Pd_ID, {
           Invoice_ID: invoiceId,
           Invoice_SO_ID: invoiceSoId,
-          Invoice_Pd_ID: pdIds[j],
-          Segment: p.Segment ?? "",
-          Category: p.Category ?? "",
-          "Part Name": p["Part Name"] ?? "",
-          "Part No.": p["Part No."] ?? "",
           Quantity: p.Quantity ?? "",
           Unit: p.Unit ?? "NOS",
           Status: "COMPLETED",
         });
+      }
+      if (toCreate.length > 0) {
+        const pdIds = await nextIds("INVCPD", "Tax_Invoice_Products", "Invoice_Pd_ID", toCreate.length);
+        await appendRows(
+          env.sheets.transactions,
+          "Tax_Invoice_Products",
+          toCreate.map((p, j) => ({
+            Timestamp: now,
+            Useremail: req.user!.employeeId,
+            ORDER_ID: a.orderId,
+            ITEM_ID: p.ITEM_ID,
+            Transport_ID: req.params.transportId,
+            Transport_SO_ID: a.transportSoId,
+            Transport_Pd_ID: p.Transport_Pd_ID,
+            Invoice_ID: invoiceId,
+            Invoice_SO_ID: invoiceSoId,
+            Invoice_Pd_ID: pdIds[j],
+            Segment: p.Segment ?? "",
+            Category: p.Category ?? "",
+            "Part Name": p["Part Name"] ?? "",
+            "Part No.": p["Part No."] ?? "",
+            Quantity: p.Quantity ?? "",
+            Unit: p.Unit ?? "NOS",
+            Status: "COMPLETED",
+          }))
+        );
       }
     }
 
