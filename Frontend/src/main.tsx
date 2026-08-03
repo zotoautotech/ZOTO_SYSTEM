@@ -10,6 +10,21 @@ import { SyncProvider } from "./lib/sync";
 import { HeaderActionsProvider } from "./lib/headerActions";
 import "./theme/tokens.css";
 
+// Scrolling the mouse wheel while a number input (Quantity, Price, Box Quantity, …) happens to
+// be focused silently increments/decrements its value — native browser behavior that's caused
+// real doer mistakes (scrolling the page, not meaning to touch the field at all). Blurring the
+// input on wheel lets the page scroll normally instead of changing the value.
+document.addEventListener(
+  "wheel",
+  () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement && active.type === "number") {
+      active.blur();
+    }
+  },
+  { passive: true }
+);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
