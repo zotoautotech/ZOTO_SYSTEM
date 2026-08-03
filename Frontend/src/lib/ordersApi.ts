@@ -329,8 +329,15 @@ export interface PdiItemRow {
   BUYER_GSTIN: string;
   QTY: string;
   UOM: string;
+  PDI_NO: string;
+  PDI_UPDATE_TIME: string;
   PDI_DATE: string;
   PDI_ATTACHMENT_URL: string;
+  BOX_QUANTITY: string;
+  PRODUCT_WEIGHT: string;
+  SAMPLE_SIZE: string;
+  LOAD_DEFLECTION_ATTACHMENT_URL: string;
+  BOX_MARKING_ATTACHMENT_URL: string;
   PDI_REMARKS: string;
 }
 

@@ -23,7 +23,8 @@ const PDI_TAB_HEADERS = [
   "CUST ID", "Customer Name", "Business Segment", "Type of Customer", "Sale Type", "Buyer GSTIN No.",
   "Segment", "Category", "Part Name", "Part No.", "Quantity", "Unit",
   "Special Instructions", "Packing Requirements", "Additional Notes",
-  "PDI No.", "PDI Date", "PDI Attachment", "Box Quantity", "PDI Remarks",
+  "Product Weight (g/pcs)", "Sample size", "Box Quantity", "PDI No.", "PDI UPDATE TIME",
+  "PDI Date", "PDI Attachment", "Load vs Deflection Attachment", "Attachement Box Marking", "PDI Remarks",
   "Status",
 ];
 
@@ -204,8 +205,15 @@ function registerPdiItemsRoute(router: Router) {
             BUYER_GSTIN: r["Buyer GSTIN No."] || "",
             QTY: r["Quantity"] || "",
             UOM: r["Unit"] || "",
+            PDI_NO: r["PDI No."] || "",
+            PDI_UPDATE_TIME: r["PDI UPDATE TIME"] || "",
             PDI_DATE: r["PDI Date"] || "",
             PDI_ATTACHMENT_URL: r["PDI Attachment"] || "",
+            BOX_QUANTITY: r["Box Quantity"] || "",
+            PRODUCT_WEIGHT: r["Product Weight (g/pcs)"] || "",
+            SAMPLE_SIZE: r["Sample size"] || "",
+            LOAD_DEFLECTION_ATTACHMENT_URL: r["Load vs Deflection Attachment"] || "",
+            BOX_MARKING_ATTACHMENT_URL: r["Attachement Box Marking"] || "",
             PDI_REMARKS: r["PDI Remarks"] || "",
           }));
         res.json(rows);
@@ -326,6 +334,9 @@ function registerPdiSubmitRoute(router: Router) {
         "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
         "Additional Notes": item.NOTES ?? "",
         ...fieldValues,
+        // The live sheet has its own dedicated "PDI UPDATE TIME" column, separate from the
+        // generic "Timestamp" every tab carries — this is the one the detail view surfaces.
+        "PDI UPDATE TIME": now,
         Status: PDI_STATUS_COMPLETED,
       };
 

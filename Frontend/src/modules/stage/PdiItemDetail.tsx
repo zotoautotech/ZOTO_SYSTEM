@@ -177,8 +177,12 @@ export function PdiItemDetail() {
               <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Not done yet for this item.</p>
             ) : (
               <>
+                <Field label="Product Weight (g/pcs)" value={done.PRODUCT_WEIGHT} />
+                <Field label="Sample size" value={done.SAMPLE_SIZE} />
+                <Field label="Box Quantity" value={done.BOX_QUANTITY} />
+                <Field label="PDI No." value={done.PDI_NO} />
+                <Field label="PDI Update Time" value={formatTimestamp(done.PDI_UPDATE_TIME)} />
                 <Field label="PDI Date" value={done.PDI_DATE} />
-                <Field label="PDI Remarks" value={done.PDI_REMARKS} />
                 {done.PDI_ATTACHMENT_URL && (
                   <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
                     <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
@@ -189,6 +193,27 @@ export function PdiItemDetail() {
                     </a>
                   </div>
                 )}
+                {done.LOAD_DEFLECTION_ATTACHMENT_URL && (
+                  <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                    <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
+                      Load vs Deflection Attachment
+                    </div>
+                    <a href={done.LOAD_DEFLECTION_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
+                      View attachment
+                    </a>
+                  </div>
+                )}
+                {done.BOX_MARKING_ATTACHMENT_URL && (
+                  <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                    <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
+                      Attachement Box Marking
+                    </div>
+                    <a href={done.BOX_MARKING_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
+                      View attachment
+                    </a>
+                  </div>
+                )}
+                <Field label="PDI Remarks" value={done.PDI_REMARKS} />
               </>
             )}
           </Section>

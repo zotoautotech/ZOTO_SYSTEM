@@ -40,6 +40,10 @@ export const STAGES: StageDef[] = [
       { key: "pdiDate", label: "PDI Date", type: "date", required: true },
       { key: "pdiAttachmentUrl", label: "PDI Attachment", type: "file", required: true },
       { key: "boxQuantity", label: "Box Quantity", type: "number", required: true },
+      { key: "productWeight", label: "Product Weight (g/pcs)", type: "number" },
+      { key: "sampleSize", label: "Sample size", type: "number" },
+      { key: "loadDeflectionAttachmentUrl", label: "Load vs Deflection Attachment", type: "file" },
+      { key: "boxMarkingAttachmentUrl", label: "Attachement Box Marking", type: "file" },
       // Was "remarks" here, which never matched Backend/src/routes/stageConfig.ts's
       // "pdiRemarks" key — since StageForm posts the payload keyed by field.key directly
       // (see stageRoutes.ts's buildBodySchema, which builds its zod shape off the SAME

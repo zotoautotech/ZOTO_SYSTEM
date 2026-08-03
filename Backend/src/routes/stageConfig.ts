@@ -53,6 +53,13 @@ export const STAGES: StageConfig[] = [
       { key: "pdiDate", header: "PDI Date", required: true },
       { key: "pdiAttachmentUrl", header: "PDI Attachment", required: true },
       { key: "boxQuantity", header: "Box Quantity", required: true },
+      // Header spellings below match the live sheet's own columns exactly (readTable/
+      // appendRow key off literal header text) — "Sample size" lowercase s, "Attachement Box
+      // Marking" is the sheet's own typo, not ours.
+      { key: "productWeight", header: "Product Weight (g/pcs)" },
+      { key: "sampleSize", header: "Sample size" },
+      { key: "loadDeflectionAttachmentUrl", header: "Load vs Deflection Attachment" },
+      { key: "boxMarkingAttachmentUrl", header: "Attachement Box Marking" },
       { key: "pdiRemarks", header: "PDI Remarks", required: true },
     ],
   },
