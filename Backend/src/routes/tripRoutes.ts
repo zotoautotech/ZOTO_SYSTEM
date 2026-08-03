@@ -463,11 +463,30 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
 
     // Same Vehicle = No means the doer picked a new vehicle on this form — use that instead
     // of the trip's original vehicle, both for this log row and for the trip going forward.
-    const vehicleType = body.sameVehicle === "No" && body.vehicleType ? body.vehicleType : transport["Vehicle type"] ?? "";
-    const vehicleNo = body.sameVehicle === "No" && body.vehicleNo ? body.vehicleNo : transport["Vehicle No."] ?? "";
-    const vehicleSize = body.sameVehicle === "No" && body.vehicleSize ? body.vehicleSize : transport["Vehicle Size (Ft)"] ?? "";
-    const driverName = body.sameVehicle === "No" && body.driverName ? body.driverName : transport["Driver Name"] ?? "";
-    const driverContactNo = body.sameVehicle === "No" && body.driverContactNo ? body.driverContactNo : transport["Driver Contact No."] ?? "";
+    const vehicleChanged = body.sameVehicle === "No";
+    const vehicleType = vehicleChanged && body.vehicleType ? body.vehicleType : transport["Vehicle type"] ?? "";
+    const vehicleNo = vehicleChanged && body.vehicleNo ? body.vehicleNo : transport["Vehicle No."] ?? "";
+    const vehicleSize = vehicleChanged && body.vehicleSize ? body.vehicleSize : transport["Vehicle Size (Ft)"] ?? "";
+    const driverName = vehicleChanged && body.driverName ? body.driverName : transport["Driver Name"] ?? "";
+    const driverContactNo = vehicleChanged && body.driverContactNo ? body.driverContactNo : transport["Driver Contact No."] ?? "";
+
+    // Update TRANSPORT's own vehicle fields *before* touching the Gate Pass, so a
+    // regeneration (below) fills in the new vehicle/driver, not the stale one.
+    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, {
+      Status: "REACHED",
+      "Vehicle type": vehicleType,
+      "Vehicle No.": vehicleNo,
+      "Vehicle Size (Ft)": vehicleSize,
+      "Driver Name": driverName,
+      "Driver Contact No.": driverContactNo,
+    });
+
+    // The vehicle/driver that reaches isn't necessarily the one the trip was created with
+    // (Same Vehicle = No) — the Gate Pass PDF was generated at attach-orders time with
+    // whatever vehicle existed then, so it needs regenerating here with the new details.
+    // Same vehicle: just fetch the existing one (no-op regenerate) so every Transport_Reached
+    // row still carries the same gate pass link, consistent with Transport_SO's own copy.
+    const gatePassFileId = await ensureDispatchGatePass(req.params.transportId, { force: vehicleChanged });
 
     for (const [i, a] of attached.entries()) {
       await appendRow(env.sheets.transactions, "Transport_Reached", {
@@ -485,20 +504,13 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
         "Same Vehicle": body.sameVehicle,
         "Expected DateTime": body.expectedDateTime,
         Reason: body.reason,
+        "Dispatch Gate Pass": gatePassFileId ?? "",
         Status: "REACHED",
       });
     }
 
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, {
-      Status: "REACHED",
-      "Vehicle type": vehicleType,
-      "Vehicle No.": vehicleNo,
-      "Vehicle Size (Ft)": vehicleSize,
-      "Driver Name": driverName,
-      "Driver Contact No.": driverContactNo,
-    });
     await cascadeStatus(attached.map((a) => a.orderId), "TRANSPORT REACHED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, status: "TRANSPORT REACHED" });
+    res.json({ transportId: req.params.transportId, status: "TRANSPORT REACHED", gatePassFileId });
   } catch (err) {
     next(err);
   }

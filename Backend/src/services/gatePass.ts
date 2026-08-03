@@ -132,12 +132,16 @@ function sumNumeric(items: GatePassItem[], field: "loadQty" | "loadBoxes"): stri
  * trip, combining every attached order's items into a single document (the doer's own call:
  * the template only has room for one Bill To/Ship To, so the first attached order's
  * buyer/billing/shipping snapshot is used for those fields). No-ops if a value already
- * exists on any Transport_SO row for this trip, or if the trip has no attached orders yet.
- * Never throws — every failure is logged and turned into `null`, so callers can always just
- * `await` this. Called both right after attachOrders (the "instant on Save" trigger) and
- * defensively from GET /transport-trips/:id (self-healing retry for the rare failure case).
+ * exists on any Transport_SO row for this trip (unless `force` is set — see below), or if
+ * the trip has no attached orders yet. Never throws — every failure is logged and turned
+ * into `null`, so callers can always just `await` this. Called right after attachOrders
+ * (the "instant on Save" trigger), defensively from GET /transport-trips/:id (self-healing
+ * retry for the rare failure case), and with `force: true` from the Transport Reached
+ * handler when the doer swaps vehicles mid-trip (Same Vehicle = No) — the original PDF has
+ * the old vehicle/driver baked in, so it's regenerated (and the stale file deleted) rather
+ * than left stale.
  */
-export async function ensureDispatchGatePass(transportId: string): Promise<string | null> {
+export async function ensureDispatchGatePass(transportId: string, opts: { force?: boolean } = {}): Promise<string | null> {
   try {
     const [transportRows, soRows, productRows, punchRows] = await Promise.all([
       readTable(env.sheets.transactions, "TRANSPORT"),
@@ -150,7 +154,7 @@ export async function ensureDispatchGatePass(transportId: string): Promise<strin
     if (!transport || attachedSoRows.length === 0) return null;
 
     const existing = attachedSoRows.find((r) => r["Dispatch Gate Pass"])?.["Dispatch Gate Pass"];
-    if (existing) return existing;
+    if (existing && !opts.force) return existing;
 
     if (!env.dispatchGatePassTemplateDocId) {
       console.error("ensureDispatchGatePass: DISPATCH_GATE_PASS_TEMPLATE_DOC_ID not configured, skipping");
@@ -228,6 +232,13 @@ export async function ensureDispatchGatePass(transportId: string): Promise<strin
         await updateRow(env.sheets.transactions, "Transport_SO", "Transport_SO_ID", so.Transport_SO_ID, {
           "Dispatch Gate Pass": pdfFileId,
         });
+      }
+
+      // Regenerated because the vehicle changed — the old PDF is now wrong (stale vehicle/
+      // driver) and nothing else still points at it once every Transport_SO row above has
+      // been overwritten, so it's safe to delete rather than leave it orphaned on Drive.
+      if (existing && existing !== pdfFileId) {
+        await drive.files.delete({ fileId: existing, supportsAllDrives: true }).catch(() => {});
       }
 
       return pdfFileId;

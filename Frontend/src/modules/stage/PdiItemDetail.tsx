@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOrder, listPdiItems } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatTimestamp } from "../../lib/format";
+import { openAttachment } from "../../lib/attachments";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { StageForm } from "../../components/stage/StageForm";
 import { getStage } from "../../lib/stages";
@@ -26,6 +27,34 @@ function Field({ label, value }: { label: string; value?: string }) {
         {label}
       </div>
       <div style={{ fontSize: 14, flex: 1 }}>{value}</div>
+    </div>
+  );
+}
+
+/** Same row layout as Field, but the value is a clickable attachment link opened through our
+ * own viewer (see lib/attachments.ts) — matches OrderDetail.tsx's own FieldFile. A raw
+ * `<a href>` doesn't work here since these values are bare Drive file IDs, not URLs. */
+function FieldFile({ label, url }: { label: string; url?: string }) {
+  const isMobile = useIsMobile();
+  if (!url) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 2 : 16, marginBottom: 12 }}>
+      <div className="text-muted" style={{ fontSize: 12, flex: isMobile ? "0 0 auto" : "0 0 140px" }}>
+        {label}
+      </div>
+      <div style={{ flex: 1 }}>
+        <button
+          type="button"
+          onClick={() => openAttachment(url)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+        >
+          View attachment
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -183,36 +212,9 @@ export function PdiItemDetail() {
                 <Field label="PDI No." value={done.PDI_NO} />
                 <Field label="PDI Update Time" value={formatTimestamp(done.PDI_UPDATE_TIME)} />
                 <Field label="PDI Date" value={done.PDI_DATE} />
-                {done.PDI_ATTACHMENT_URL && (
-                  <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-                    <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
-                      PDI Attachment
-                    </div>
-                    <a href={done.PDI_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
-                      View attachment
-                    </a>
-                  </div>
-                )}
-                {done.LOAD_DEFLECTION_ATTACHMENT_URL && (
-                  <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-                    <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
-                      Load vs Deflection Attachment
-                    </div>
-                    <a href={done.LOAD_DEFLECTION_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
-                      View attachment
-                    </a>
-                  </div>
-                )}
-                {done.BOX_MARKING_ATTACHMENT_URL && (
-                  <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-                    <div className="text-muted" style={{ fontSize: 12, flex: "0 0 140px" }}>
-                      Attachement Box Marking
-                    </div>
-                    <a href={done.BOX_MARKING_ATTACHMENT_URL} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: "var(--color-primary)" }}>
-                      View attachment
-                    </a>
-                  </div>
-                )}
+                <FieldFile label="PDI Attachment" url={done.PDI_ATTACHMENT_URL} />
+                <FieldFile label="Load vs Deflection Attachment" url={done.LOAD_DEFLECTION_ATTACHMENT_URL} />
+                <FieldFile label="Attachement Box Marking" url={done.BOX_MARKING_ATTACHMENT_URL} />
                 <Field label="PDI Remarks" value={done.PDI_REMARKS} />
               </>
             )}
