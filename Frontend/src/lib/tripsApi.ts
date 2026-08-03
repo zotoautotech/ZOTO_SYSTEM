@@ -76,6 +76,7 @@ export interface CreateTripPayload {
   sendThrough?: string;
   transporterId?: string;
   transporterName?: string;
+  transporterType?: string;
   vehicleType?: string;
   vehicleNo?: string;
   vehicleSize?: string;

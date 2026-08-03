@@ -41,6 +41,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [vehicleArrangeFor, setVehicleArrangeFor] = useState<string>("");
   const [transporterId, setTransporterId] = useState("");
   const [transporterName, setTransporterName] = useState("");
+  const [transporterType, setTransporterType] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [vehicleSize, setVehicleSize] = useState("");
@@ -60,9 +61,14 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const { data: eligibleOrders = [] } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
   const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
 
-  function handleTransporterSelect(_value: string, option?: { value: string; label: string }) {
+  function handleTransporterSelect(value: string, option?: { value: string; label: string }) {
     setTransporterId(option?.value ?? "");
     setTransporterName(option?.label ?? "");
+    // Drives the Vehicle Dispatch -> LR/Delivery branch (see tripRoutes.ts) — only "Registered"
+    // transporters get an LR step. The picker only surfaces {value, label}, so look the full
+    // row back up in the master list for its own "Transporter Type" column.
+    const row = transporters.find((t) => t["Transporter ID"] === value);
+    setTransporterType(row?.["Transporter Type"] ?? "");
   }
 
   function canSave() {
@@ -80,6 +86,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         sendThrough,
         transporterId: sendThrough === "Transporter" ? transporterId : undefined,
         transporterName: sendThrough === "Transporter" ? transporterName : undefined,
+        transporterType: sendThrough === "Transporter" ? transporterType : undefined,
         vehicleType,
         vehicleNo,
         vehicleSize,

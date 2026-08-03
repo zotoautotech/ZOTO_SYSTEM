@@ -14,8 +14,8 @@ interface Props {
 }
 
 const PAYMENT_STATUS_OPTIONS = [
-  { value: "Prepaid by ADC", label: "Prepaid by ADC" },
-  { value: "Postpaid by ADC", label: "Postpaid by ADC" },
+  { value: "Prepaid by ZOTO", label: "Prepaid by ZOTO" },
+  { value: "Postpaid by ZOTO", label: "Postpaid by ZOTO" },
   { value: "Pay at Customer", label: "Pay at Customer" },
 ];
 

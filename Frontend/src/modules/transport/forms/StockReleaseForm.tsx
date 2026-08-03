@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { isAxiosError } from "axios";
 import { TextField } from "../../../components/form/TextField";
+import { FileDropzone } from "../../../components/form/FileDropzone";
 import { submitTripStage } from "../../../lib/tripsApi";
 import { useIsMobile } from "../../../lib/responsive";
 import { StageModalShell } from "./StageModalShell";
@@ -11,16 +12,19 @@ interface Props {
   onSaved: () => void;
 }
 
+/** Simplified to just the two fields the doer actually needs to provide — "Type" is now
+ * always "OUT" (set server-side, see tripRoutes.ts's stock-release handler) since that was
+ * the only value ever used in practice, and "Description" was replaced with an attachment
+ * per user request. */
 export function StockReleaseForm({ transportId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
-  const [releaseType, setReleaseType] = useState("");
   const [releaseFrom, setReleaseFrom] = useState("");
-  const [remarks, setRemarks] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   function canSave() {
-    return !!releaseType.trim();
+    return !!releaseFrom.trim();
   }
 
   async function handleSave() {
@@ -28,7 +32,7 @@ export function StockReleaseForm({ transportId, onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await submitTripStage(transportId, "stock-release", { releaseType, releaseFrom, remarks });
+      await submitTripStage(transportId, "stock-release", { releaseFrom, attachmentUrl });
       onSaved();
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
@@ -41,8 +45,7 @@ export function StockReleaseForm({ transportId, onClose, onSaved }: Props) {
     <StageModalShell title="Stock Release Form" tabLabel="Stock Release Details" onClose={onClose}>
       <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
         <TextField label="From" required value={releaseFrom} onChange={(e) => setReleaseFrom(e.target.value)} placeholder="e.g. Main Warehouse" />
-        <TextField label="Type" required value={releaseType} onChange={(e) => setReleaseType(e.target.value)} placeholder="e.g. Full" />
-        <TextField label="Description" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+        <FileDropzone label="Attach Document" value={attachmentUrl} onChange={setAttachmentUrl} context={`stock-release_${transportId}`} />
         {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: isMobile ? "14px var(--space) 28px" : "14px var(--space)", borderTop: "1px solid var(--color-border)", background: "var(--color-bg-page)" }}>

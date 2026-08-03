@@ -28,7 +28,9 @@ export function TaxInvoiceForm({ transportId, onClose, onSaved }: Props) {
   const [error, setError] = useState("");
 
   function canSave() {
-    return !!taxInvoiceNo.trim() && !!taxInvoiceDate;
+    if (!taxInvoiceNo.trim() || !taxInvoiceDate || !taxInvoiceAttachmentUrl || !remarks.trim() || !eWayBillApplicable) return false;
+    if (eWayBillApplicable === "Yes" && (!eWayBillNo.trim() || !eWayBillDate || !eWayBillAttachmentUrl)) return false;
+    return true;
   }
 
   async function handleSave() {
@@ -59,14 +61,14 @@ export function TaxInvoiceForm({ transportId, onClose, onSaved }: Props) {
       <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
         <TextField label="Tax Invoice No." required value={taxInvoiceNo} onChange={(e) => setTaxInvoiceNo(e.target.value)} />
         <TextField label="Tax Invoice Date" required type="date" value={taxInvoiceDate} onChange={(e) => setTaxInvoiceDate(e.target.value)} />
-        <FileDropzone label="Tax Invoice Attachment" value={taxInvoiceAttachmentUrl} onChange={setTaxInvoiceAttachmentUrl} context={`tax-invoice_${transportId}`} />
-        <TextField label="Tax Invoice Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+        <FileDropzone label="Tax Invoice Attachment *" value={taxInvoiceAttachmentUrl} onChange={setTaxInvoiceAttachmentUrl} context={`tax-invoice_${transportId}`} />
+        <TextField label="Tax Invoice Remarks" required value={remarks} onChange={(e) => setRemarks(e.target.value)} />
         <ToggleGroup label="E-Way Bill Applicable" required value={eWayBillApplicable} onChange={setEWayBillApplicable} options={[{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }]} />
         {eWayBillApplicable === "Yes" && (
           <>
-            <TextField label="E-Way Bill No." value={eWayBillNo} onChange={(e) => setEWayBillNo(e.target.value)} />
-            <TextField label="E-Way Bill Date" type="date" value={eWayBillDate} onChange={(e) => setEWayBillDate(e.target.value)} />
-            <FileDropzone label="E-Way Bill Attachment" value={eWayBillAttachmentUrl} onChange={setEWayBillAttachmentUrl} context={`eway-bill_${transportId}`} />
+            <TextField label="E-Way Bill No." required value={eWayBillNo} onChange={(e) => setEWayBillNo(e.target.value)} />
+            <TextField label="E-Way Bill Date" required type="date" value={eWayBillDate} onChange={(e) => setEWayBillDate(e.target.value)} />
+            <FileDropzone label="E-Way Bill Attachment *" value={eWayBillAttachmentUrl} onChange={setEWayBillAttachmentUrl} context={`eway-bill_${transportId}`} />
           </>
         )}
         {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}

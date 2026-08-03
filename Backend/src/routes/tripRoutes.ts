@@ -291,6 +291,10 @@ const createTripSchema = z.object({
   sendThrough: z.string().optional().default(""),
   transporterId: z.string().optional().default(""),
   transporterName: z.string().optional().default(""),
+  // Drives the Vehicle Dispatch -> LR/Delivery branch below (registered transporters get an
+  // LR step; everyone else skips straight to Delivery) — sourced from the Transporter Data
+  // master's own "Transporter Type" column, picked alongside transporterId/transporterName.
+  transporterType: z.string().optional().default(""),
   vehicleType: z.string().optional().default(""),
   vehicleNo: z.string().optional().default(""),
   vehicleSize: z.string().optional().default(""),
@@ -314,6 +318,7 @@ tripsRouter.post("/", async (req, res, next) => {
       "Send Through": body.sendThrough,
       "Transporter ID": body.transporterId,
       "Transporter Name": body.transporterName,
+      "Transporter Type": body.transporterType,
       "Vehicle type": body.vehicleType,
       "Vehicle No.": body.vehicleNo,
       "Vehicle Size (Ft)": body.vehicleSize,
@@ -705,7 +710,11 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
 
 tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
   try {
-    const schema = z.object({ releaseType: z.string().optional().default("OUT"), releaseFrom: z.string().optional().default("") }).merge(remarksSchema);
+    const schema = z.object({
+      releaseType: z.string().optional().default("OUT"),
+      releaseFrom: z.string().optional().default(""),
+      attachmentUrl: z.string().optional().default(""),
+    }).merge(remarksSchema);
     const body = schema.parse(req.body);
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
@@ -737,6 +746,7 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
         From: body.releaseFrom,
         "Release Quantity": p.Quantity ?? "",
         Description: body.remarks,
+        Attachment: body.attachmentUrl,
         Status: "RELEASED",
       });
     }
@@ -767,6 +777,7 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
           From: body.releaseFrom,
           "Release Quantity": p.Quantity ?? "",
           Description: body.remarks,
+          Attachment: body.attachmentUrl,
           Status: "RELEASED",
         }))
       );
@@ -1025,6 +1036,80 @@ tripsRouter.post("/:transportId/vehicle-dispatch", async (req, res, next) => {
   }
 });
 
+/** Blank LR placeholder — same "row exists one stage earlier" convention as Stock Release/
+ * Tax Invoice. Only created for Registered transporters (see the dispatch handler below);
+ * unregistered ones skip LR entirely. Every already-known column (buyer/billing snapshot,
+ * vehicle, Pre Dispatch ID/Dispatch ID) is filled in immediately; the doer's own fields (LR
+ * No./Date/Attachment/Charges/Payment Status/Other Charges/Remarks, Provide LR to the
+ * Customer) stay blank until the LR Form updates this same row in place. */
+async function createPlaceholderLR(
+  transportId: string,
+  transport: SheetRow,
+  attached: { orderId: string; transportSoId: string; order: SheetRow }[],
+  dispatch: SheetRow,
+  employeeId: string
+) {
+  const existing = (await readTable(env.sheets.transactions, "LR")).find((r) => r["Dispatch ID"] === dispatch["Dispatch ID"]);
+  if (existing) return;
+
+  const lrId = await nextId("LR", "LR", "LR ID");
+  await appendRow(env.sheets.transactions, "LR", {
+    Timestamp: new Date().toISOString(),
+    Useremail: employeeId,
+    "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
+    "Dispatch ID": dispatch["Dispatch ID"] ?? "",
+    "LR ID": lrId,
+    ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
+    ...vehicleSnapshotToSheet(transport),
+    "LR No.": "",
+    "LR Date": "",
+    "LR Attachment": "",
+    "LR Charges": "",
+    "Payment Status": "",
+    "Other Charges": "",
+    "LR Remarks": "",
+    "Provide LR to the Customer": "",
+    Status: "Pending LR",
+  });
+}
+
+/** Same placeholder convention for Delivery — created either by the dispatch handler
+ * directly (unregistered transporter, LR skipped) or by the LR handler once LR is actually
+ * completed (registered transporter). Doer-facing fields (Delivered/Reason/Expected Delivery
+ * Date/Receiving Attachment/Any Charges/Amount/Freight Charges to Transporter/Charge
+ * Description/Delivery Remarks) stay blank until the Delivery Form fills them in. */
+async function createPlaceholderDelivery(
+  transportId: string,
+  transport: SheetRow,
+  attached: { orderId: string; transportSoId: string; order: SheetRow }[],
+  dispatch: SheetRow,
+  employeeId: string
+) {
+  const existing = (await readTable(env.sheets.transactions, "DELIVERY")).find((r) => r["Dispatch ID"] === dispatch["Dispatch ID"]);
+  if (existing) return;
+
+  const deliveryId = await nextId("DLRY", "DELIVERY", "Delivery ID");
+  await appendRow(env.sheets.transactions, "DELIVERY", {
+    Timestamp: new Date().toISOString(),
+    Useremail: employeeId,
+    "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
+    "Dispatch ID": dispatch["Dispatch ID"] ?? "",
+    "Delivery ID": deliveryId,
+    ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
+    ...vehicleSnapshotToSheet(transport),
+    Delivered: "",
+    Reason: "",
+    "Expected Delivery Date": "",
+    "Receiving Attachment": "",
+    "Any Charges": "",
+    Amount: "",
+    "Freight Charges to Transporter": "",
+    "Charge Description": "",
+    "Delivery Remarks": "",
+    Status: "Pending Delivery",
+  });
+}
+
 tripsRouter.post("/:transportId/dispatch", async (req, res, next) => {
   try {
     const schema = z.object({
@@ -1041,11 +1126,12 @@ tripsRouter.post("/:transportId/dispatch", async (req, res, next) => {
     const vehicleDispatches = (await readTable(env.sheets.transactions, "Vehicle Dispatch")).filter((r) => r.Transport_ID === req.params.transportId);
 
     const dispatchId = await nextId("DISP", "Dispatch", "Dispatch ID");
-    await appendRow(env.sheets.transactions, "Dispatch", {
+    const preDispatchId = preDispatches.at(-1)?.["Pre Dispatch ID"] ?? "";
+    const dispatchRow = {
       Timestamp: new Date().toISOString(),
       Useremail: req.user!.employeeId,
       Transport_ID: req.params.transportId,
-      "Pre Dispatch ID": preDispatches.at(-1)?.["Pre Dispatch ID"] ?? "",
+      "Pre Dispatch ID": preDispatchId,
       Vehicle_Dispatch_ID: vehicleDispatches.at(-1)?.Vehicle_Dispatch_ID ?? "",
       "Dispatch ID": dispatchId,
       ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
@@ -1057,11 +1143,22 @@ tripsRouter.post("/:transportId/dispatch", async (req, res, next) => {
       "Payment Status": body.paymentStatus,
       "Dispatch Description": body.remarks,
       Status: "DISPATCHED",
-    });
+    };
+    await appendRow(env.sheets.transactions, "Dispatch", dispatchRow);
 
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "DISPATCHED" });
-    await cascadeStatus(attached.map((a) => a.orderId), "DISPATCHED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, dispatchId, status: "DISPATCHED" });
+    // Registered transporters need a formal LR (Lorry Receipt) before Delivery; anyone else
+    // (local/unregistered vehicles) skips that step entirely and goes straight to Delivery —
+    // matches how LR genuinely only applies to GST-registered transport agencies.
+    const isRegisteredTransporter = (transport["Transporter Type"] || "").trim() === "Registered";
+    if (isRegisteredTransporter) {
+      await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "DISPATCHED" });
+      await createPlaceholderLR(req.params.transportId, transport, attached, { ...dispatchRow, "Dispatch ID": dispatchId, "Pre Dispatch ID": preDispatchId }, req.user!.employeeId);
+    } else {
+      await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "LR COLLECTED" });
+      await createPlaceholderDelivery(req.params.transportId, transport, attached, { ...dispatchRow, "Dispatch ID": dispatchId, "Pre Dispatch ID": preDispatchId }, req.user!.employeeId);
+    }
+    await cascadeStatus(attached.map((a) => a.orderId), isRegisteredTransporter ? "DISPATCHED" : "LR COLLECTED", req.user!.employeeId);
+    res.json({ transportId: req.params.transportId, dispatchId, status: isRegisteredTransporter ? "DISPATCHED" : "LR COLLECTED" });
   } catch (err) {
     next(err);
   }
@@ -1085,15 +1182,13 @@ tripsRouter.post("/:transportId/lr", async (req, res, next) => {
     const dispatch = dispatches.at(-1);
     if (!dispatch) return res.status(400).json({ error: { code: "BAD_REQUEST", message: "Trip has not been dispatched yet" } });
 
-    const lrId = await nextId("LR", "LR", "LR ID");
-    await appendRow(env.sheets.transactions, "LR", {
-      Timestamp: new Date().toISOString(),
-      Useremail: req.user!.employeeId,
-      "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
-      "Dispatch ID": dispatch["Dispatch ID"] ?? "",
-      "LR ID": lrId,
-      ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
-      ...vehicleSnapshotToSheet(transport),
+    // Fills in the placeholder createPlaceholderLR() already created when Vehicle Dispatch
+    // was saved (registered transporter) — updates it in place by its own LR ID rather than
+    // appending a second row. Falls back to creating fresh if somehow no placeholder exists
+    // yet (e.g. dispatched before this convention existed).
+    const existingLr = (await readTable(env.sheets.transactions, "LR")).find((r) => r["Dispatch ID"] === dispatch["Dispatch ID"]);
+    const lrId = existingLr?.["LR ID"] ?? (await nextId("LR", "LR", "LR ID"));
+    const lrFields = {
       "LR No.": body.lrNo,
       "LR Date": body.lrDate,
       "LR Attachment": body.lrAttachmentUrl,
@@ -1101,11 +1196,29 @@ tripsRouter.post("/:transportId/lr", async (req, res, next) => {
       "Payment Status": body.paymentStatus,
       "Other Charges": body.otherCharges !== undefined ? String(body.otherCharges) : "",
       "LR Remarks": body.remarks,
-      Status: "COLLECTED",
-    });
+      Status: "LR Completed",
+    };
+    if (existingLr) {
+      await updateRow(env.sheets.transactions, "LR", "LR ID", lrId, lrFields);
+    } else {
+      await appendRow(env.sheets.transactions, "LR", {
+        Timestamp: new Date().toISOString(),
+        Useremail: req.user!.employeeId,
+        "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
+        "Dispatch ID": dispatch["Dispatch ID"] ?? "",
+        "LR ID": lrId,
+        ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
+        ...vehicleSnapshotToSheet(transport),
+        ...lrFields,
+      });
+    }
 
     await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "LR COLLECTED" });
     await cascadeStatus(attached.map((a) => a.orderId), "LR COLLECTED", req.user!.employeeId);
+    // LR is genuinely done now (not just placeholder-created) — Delivery becomes actionable,
+    // so auto-create its own placeholder the same way the dispatch handler does for
+    // unregistered transporters.
+    await createPlaceholderDelivery(req.params.transportId, transport, attached, dispatch, req.user!.employeeId);
     res.json({ transportId: req.params.transportId, lrId, status: "LR COLLECTED" });
   } catch (err) {
     next(err);
@@ -1132,15 +1245,16 @@ tripsRouter.post("/:transportId/delivery", async (req, res, next) => {
     const dispatch = dispatches.at(-1);
     if (!dispatch) return res.status(400).json({ error: { code: "BAD_REQUEST", message: "Trip has not been dispatched yet" } });
 
-    const deliveryId = await nextId("DLRY", "DELIVERY", "Delivery ID");
-    await appendRow(env.sheets.transactions, "DELIVERY", {
-      Timestamp: new Date().toISOString(),
-      Useremail: req.user!.employeeId,
-      "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
-      "Dispatch ID": dispatch["Dispatch ID"] ?? "",
-      "Delivery ID": deliveryId,
-      ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
-      ...vehicleSnapshotToSheet(transport),
+    // Fills in the placeholder createPlaceholderDelivery() already created (either at
+    // dispatch time for an unregistered transporter, or once LR was actually completed for a
+    // registered one) — updates it in place rather than appending a second row.
+    const existingDelivery = (await readTable(env.sheets.transactions, "DELIVERY")).find((r) => r["Dispatch ID"] === dispatch["Dispatch ID"]);
+    const deliveryId = existingDelivery?.["Delivery ID"] ?? (await nextId("DLRY", "DELIVERY", "Delivery ID"));
+    // Only a real "Yes" actually completes delivery — "No" (still in transit / attempted and
+    // failed) leaves the trip's own Status alone so the Delivery Form stays available to
+    // retry, instead of prematurely marking the whole trip DELIVERED.
+    const delivered = body.delivered === "Yes";
+    const deliveryFields = {
       Delivered: body.delivered,
       Reason: body.reason,
       "Expected Delivery Date": body.expectedDeliveryDate,
@@ -1150,12 +1264,28 @@ tripsRouter.post("/:transportId/delivery", async (req, res, next) => {
       "Freight Charges to Transporter": body.freightChargesToTransporter !== undefined ? String(body.freightChargesToTransporter) : "",
       "Charge Description": body.chargeDescription,
       "Delivery Remarks": body.remarks,
-      Status: "DELIVERED",
-    });
+      Status: delivered ? "Delivery Completed" : "Pending Delivery",
+    };
+    if (existingDelivery) {
+      await updateRow(env.sheets.transactions, "DELIVERY", "Delivery ID", deliveryId, deliveryFields);
+    } else {
+      await appendRow(env.sheets.transactions, "DELIVERY", {
+        Timestamp: new Date().toISOString(),
+        Useremail: req.user!.employeeId,
+        "Pre Dispatch ID": dispatch["Pre Dispatch ID"] ?? "",
+        "Dispatch ID": dispatch["Dispatch ID"] ?? "",
+        "Delivery ID": deliveryId,
+        ...(attached[0] ? orderSnapshotToSheet(attached[0].order) : {}),
+        ...vehicleSnapshotToSheet(transport),
+        ...deliveryFields,
+      });
+    }
 
-    await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "DELIVERED" });
-    await cascadeStatus(attached.map((a) => a.orderId), "DELIVERED", req.user!.employeeId);
-    res.json({ transportId: req.params.transportId, deliveryId, status: "DELIVERED" });
+    if (delivered) {
+      await updateRow(env.sheets.transactions, "TRANSPORT", "Transport_ID", req.params.transportId, { Status: "DELIVERED" });
+      await cascadeStatus(attached.map((a) => a.orderId), "DELIVERED", req.user!.employeeId);
+    }
+    res.json({ transportId: req.params.transportId, deliveryId, status: delivered ? "DELIVERED" : "LR COLLECTED" });
   } catch (err) {
     next(err);
   }

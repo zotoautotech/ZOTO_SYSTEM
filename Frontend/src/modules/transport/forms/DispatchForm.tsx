@@ -15,8 +15,8 @@ interface Props {
 }
 
 const PAYMENT_STATUS_OPTIONS = [
-  { value: "Prepaid by ADC", label: "Prepaid by ADC" },
-  { value: "Postpaid by ADC", label: "Postpaid by ADC" },
+  { value: "Prepaid by ZOTO", label: "Prepaid by ZOTO" },
+  { value: "Postpaid by ZOTO", label: "Postpaid by ZOTO" },
   { value: "Pay at Customer", label: "Pay at Customer" },
 ];
 
@@ -74,7 +74,7 @@ export function DispatchForm({ transportId, onClose, onSaved }: Props) {
         {dispatched === "Yes" && (
           <>
             <TextField label="Freight Charges" type="number" value={freightCharges} onChange={(e) => setFreightCharges(e.target.value)} />
-            <TextField label="Other Charges by ADC" type="number" value={otherCharges} onChange={(e) => setOtherCharges(e.target.value)} />
+            <TextField label="Other Charges by ZOTO" type="number" value={otherCharges} onChange={(e) => setOtherCharges(e.target.value)} />
             <SearchableSelect label="Payment Status" value={paymentStatus} onChange={setPaymentStatus} options={PAYMENT_STATUS_OPTIONS} placeholder="Search" />
             <FileDropzone label="Dispatch Gate Pass" value={gatePassAttachmentUrl} onChange={setGatePassAttachmentUrl} context={`gate-pass_${transportId}`} />
           </>
