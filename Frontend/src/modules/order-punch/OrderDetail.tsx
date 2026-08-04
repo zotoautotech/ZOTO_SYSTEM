@@ -10,23 +10,7 @@ import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
 import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
 import { StageForm } from "../../components/stage/StageForm";
 import { getStage } from "../../lib/stages";
-
-function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "none", cursor: "pointer", width: 76 }}
-    >
-      <span style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          {children}
-        </svg>
-      </span>
-      <span style={{ fontSize: 12, color: "var(--color-text)", textAlign: "center", lineHeight: 1.3 }}>{label}</span>
-    </button>
-  );
-}
+import { QuickAction } from "../../components/FloatingActionButton";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

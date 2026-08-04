@@ -27,6 +27,43 @@ npx.cmd vercel --prod
 Deploy Backend whenever `Backend/` changed; Frontend whenever `Frontend/` changed. Check
 `git status`/the diff to know which (or both).
 
+## Backend security hardening
+
+- `Backend/src/middleware/rateLimit.ts` — `loginRateLimit` (20/15min) on `POST /auth/login`,
+  `changePasswordRateLimit` (10/15min) on `POST /auth/change-password`. Best-effort only on
+  Vercel: each serverless instance keeps its own in-memory counter (no shared store), so it
+  doesn't rate-limit perfectly across a fleet of cold starts, but still meaningfully slows a
+  single attacker hammering one warm instance — the realistic threat model for an internal
+  app like this. Requires `app.set("trust proxy", 1)` in `app.ts` (Vercel puts every request
+  behind a proxy; without this `req.ip` is the proxy's address for every request, collapsing
+  everyone into one shared rate-limit bucket).
+- Both `jwt.sign`/`jwt.verify` calls (login token in `auth.ts`, attachment view-token in
+  `uploads.ts`, verification in `middleware/auth.ts`) now pin `algorithm: "HS256"` explicitly
+  — without this, `jsonwebtoken` trusts whatever `alg` the token's own header claims, which is
+  how algorithm-confusion attacks forge a valid signature without ever knowing the real secret.
+- `app.use(helmet({ contentSecurityPolicy: false }))` in `app.ts` — standard defensive headers
+  (X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy). CSP is left off since the
+  one HTML page this API serves (`uploads.ts`'s attachment `/viewer`, for the image zoom
+  controls) relies on an inline `<script>`; not worth tuning a CSP around one page on an
+  internal, login-gated app.
+- `Backend/src/middleware/errorHandler.ts` — non-Zod errors thrown to `next(err)` now return a
+  generic `"Something went wrong…"` message to the client instead of the raw exception message
+  (which could incidentally leak internal details — project IDs, quota info, stack fragments —
+  especially from Google API errors). Full detail still always goes to `console.error` server-
+  side. Zod validation messages still pass through verbatim (safe, field-level text).
+- `JWT_SECRET` was rotated in System 1 (`ZOTO SYSTEM`) after discovering it was still the
+  placeholder default (`change-me-to-a-long-random-string`) in both local `.env` and Vercel's
+  prod env var — a critical weak-secret vulnerability (anyone could forge a valid login JWT).
+  Rotating a live `JWT_SECRET` forces every currently-logged-in session to be rejected on next
+  request, so a rotation must be paired with a heads-up to users before/around the redeploy
+  that ships it. System 2 (`ZOTO 2 SYSTEM`)'s secret was already strong, no rotation needed.
+- Known, deliberately deferred `npm audit` findings (breaking-change fixes only, not silently
+  ignored): Backend's `googleapis` chain (uuid/gaxios/googleapis-common) needs a `144→174`
+  major bump; both Frontends' `react-router`/`react-router-dom` open-redirect + constructor-
+  injection advisories need a `6→7` major bump; both Frontends' `esbuild`/`vite` dev-server
+  advisory needs a `vite@5→8` major bump (dev-only, not a prod risk). None applied without
+  dedicated regression testing first — ask before forcing any of these.
+
 ## HOME (app launcher)
 
 The `/` route is a ZOTO-wide app launcher, not part of the Sales CRR module — mirrors the
@@ -59,6 +96,21 @@ buttons. Every form's fields stack single-column (a two-column grid layout was t
 explicitly rejected by the user — it visually shifted paired fields like Purchase Order No./
 Purchase Order Date left/right instead of the plain top-to-bottom stack expected — so don't
 reintroduce a `gridTemplateColumns`-based field layout without asking first).
+
+**Mobile action buttons use `Frontend/src/components/FloatingActionButton.tsx`**, matching the
+old AppSheet reference's own floating circular button instead of squeezing another small icon
+button into an already-crowded header/action row. Two exports: `FloatingActionButton` (bare
+fixed bottom-right circle, `stackIndex` prop offsets it upward when more than one is visible
+at once, e.g. `TripDetail.tsx`'s "Attach Orders" + "Give Stage Form") and `QuickAction` (the
+shared "Give X Form"-style detail-page action — desktop renders the old inline stacked
+icon-circle-plus-label button near the top of the page, mobile renders a `FloatingActionButton`
+instead so the action is reachable with a thumb without scrolling back up). `QuickAction` is
+used by `OrderDetail.tsx`, `PdiItemDetail.tsx`, `DispatchApprovalItemDetail.tsx`, and
+`TripDetail.tsx` — previously each of these four files had its own copy-pasted `QuickAction`
+function; now there's one shared definition, so a future detail-view action should import it
+rather than redefining it locally. List-view "+" create actions (e.g.
+`OrderPunchList.tsx`) use plain `FloatingActionButton` directly (desktop keeps the inline
+header "+" button, `isMobile` switches to the FAB).
 
 `Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
 list, reused for both Punch Order and Sale Order routes via a `basePath` prop derived from
@@ -781,6 +833,17 @@ needed since it's just a normal PDF fileId by that point.
 
 ## Known gotchas
 
+- **`TripQueueList.tsx` had no mobile branch at all**, unlike every other list component —
+  its `CustomerFilterPanel` + `DataTable` wrapper used an unconditional
+  `display: flex; minHeight: calc(100vh - 128px)`. On mobile, `CustomerFilterPanel` renders a
+  horizontal chip row instead of a sidebar, and flexbox row's default `align-items: stretch`
+  stretched that chip row to the full container height — a giant blank-looking pink column
+  that squeezed the actual `DataTable` to nothing. This made Transport Reached/Stock Release/
+  Tax Invoice/Dispatch/Collect LR/Delivery render as blank pink blobs on phone width in
+  production. Fixed by adding the same `isMobile ? stack-vertically : flex-row` branch every
+  other list component (`TransportList.tsx`, `PdiList.tsx`, etc.) already had. If a future
+  list-style component ever "looks blank" on mobile only, suspect a missing mobile branch on
+  a flex-row wrapper around `CustomerFilterPanel` first.
 - **A negative "!== done" check on `ORDER_PUNCH.STATUS` resurrects quick-action buttons on
   orders that have long since moved past that stage** — `OrderDetail.tsx`'s Sale Order
   quick actions used `order.STATUS !== "SALE ORDER"` to decide whether to show "Add

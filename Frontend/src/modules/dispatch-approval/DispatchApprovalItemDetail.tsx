@@ -6,6 +6,7 @@ import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatTimestamp } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { DispatchApprovalForm } from "./DispatchApprovalForm";
+import { QuickAction } from "../../components/FloatingActionButton";
 
 function pick(row: GoodsRow | undefined, ...keys: string[]): string {
   if (!row) return "";
@@ -35,23 +36,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 600 }}>{title}</h3>
       {children}
     </div>
-  );
-}
-
-function QuickAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, border: "none", background: "none", cursor: "pointer", width: 76 }}
-    >
-      <span style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          {children}
-        </svg>
-      </span>
-      <span style={{ fontSize: 12, color: "var(--color-text)", textAlign: "center", lineHeight: 1.3 }}>{label}</span>
-    </button>
   );
 }
 
