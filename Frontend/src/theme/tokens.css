@@ -221,6 +221,38 @@ textarea:focus {
   border: 2px solid var(--color-bg-page);
 }
 
+@media (max-width: 599px) {
+  /* iOS Safari force-zooms the whole page whenever a focused input's font-size is under
+     16px — every form in this app used 14px, so tapping any field jerked the layout in and
+     left it zoomed. 16px is the exact threshold that stops it; the visual difference at
+     phone size is negligible next to the bug it fixes. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable touch targets — 10px/14px padding rendered ~36-38px tall buttons, under the
+     ~44px both Apple and Google recommend, which made the doer-facing action buttons
+     genuinely fiddly to hit one-handed. */
+  .btn {
+    min-height: 44px;
+    padding: 11px 18px;
+  }
+
+  /* Stop any stray wide child (long IDs, addresses, pasted GSTINs) from forcing the whole
+     page to scroll sideways — the content itself should wrap or scroll in its own box. */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Long unbroken values (order IDs, Drive links, GSTINs) otherwise blow out their container
+     instead of wrapping. */
+  .card {
+    overflow-wrap: anywhere;
+  }
+}
+
 .sheet-scroll::-webkit-scrollbar-thumb:hover {
   background: #939393;
 }
