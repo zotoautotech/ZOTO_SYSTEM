@@ -7,6 +7,7 @@ import { CustomerFilterPanel } from "../../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Modal } from "../../components/Modal";
+import { FloatingActionButton } from "../../components/FloatingActionButton";
 import { formatTimestamp } from "../../lib/format";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions, useSetHeaderLeft } from "../../lib/headerActions";
@@ -205,7 +206,11 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
       </button>
     ) : (
       <>
-        {!hideCreate && (
+        {/* On mobile this becomes a floating action button instead (see the FAB rendered
+            below, near the bottom of this component's return) — matches the old AppSheet
+            reference and frees up the crowded header row instead of squeezing a 5th icon
+            button into it. */}
+        {!hideCreate && !isMobile && (
           <button
             aria-label="New"
             onClick={() => navigate("/modules/punch-order/new")}
@@ -352,6 +357,10 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
             </button>
           </div>
         </Modal>
+      )}
+
+      {isMobile && !hideCreate && !selectMode && (
+        <FloatingActionButton onClick={() => navigate("/modules/punch-order/new")} />
       )}
     </div>
   );
