@@ -8,6 +8,7 @@ import { formatTimestamp } from "../../lib/format";
 import { listTrips, type TripRecord } from "../../lib/tripsApi";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions } from "../../lib/headerActions";
+import { useIsMobile } from "../../lib/responsive";
 
 /** One list component for the "Transport" screen (Status=OPEN, create+attach) and every
  * TRIP_STAGES queue (Status=that stage's prevStatus) — same Completed-toggle pattern as
@@ -32,6 +33,7 @@ export function TripQueueList({
   onCreateNew?: () => void;
 }) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { query } = useSearch();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
@@ -103,10 +105,15 @@ export function TripQueueList({
     ? `No completed ${label.toLowerCase()} trips.`
     : `No trips awaiting ${label}.`;
 
+  // On mobile, CustomerFilterPanel renders its own horizontal chip row (not a sidebar) — the
+  // desktop-only `display: flex` wrapper below stretched that chip row to the full
+  // `calc(100vh - 128px)` height (flex row's default `align-items: stretch`), turning it into
+  // a giant blank-looking pink column and squeezing the DataTable pane to nothing. Stacking
+  // instead of a row on mobile fixes both.
   return (
-    <div style={{ display: "flex", minHeight: "calc(100vh - 128px)" }}>
+    <div style={isMobile ? undefined : { display: "flex", minHeight: "calc(100vh - 128px)" }}>
       <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
-      <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
+      <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
         <DataTable
           columns={columns}
           rows={filtered}
