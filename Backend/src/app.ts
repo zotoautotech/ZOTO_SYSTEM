@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import compression from "compression";
+import helmet from "helmet";
 import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -12,6 +13,19 @@ import { uploadsRouter } from "./routes/uploads.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
+
+// Vercel puts every request behind a proxy — without this, req.ip (and therefore
+// express-rate-limit's per-client bucketing) sees the proxy's own address for every
+// request instead of the real client IP, making the login rate limit useless (everyone
+// would share one bucket).
+app.set("trust proxy", 1);
+
+// Sets the usual defensive headers (X-Content-Type-Options, X-Frame-Options,
+// Strict-Transport-Security, Referrer-Policy, etc.) — CSP is left off since this is
+// primarily a JSON API and the one HTML page it does serve (uploads.ts's attachment
+// /viewer, for the image zoom controls) relies on an inline <script>; tuning a CSP around
+// that one page isn't worth it for an internal, login-gated app.
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Express auto-generates an ETag for every JSON response by default, so a browser doing a
 // conditional GET on an unchanged-looking body gets back a bare 304 and reuses whatever it

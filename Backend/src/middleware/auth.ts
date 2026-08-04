@@ -28,7 +28,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
   try {
     const token = header.slice("Bearer ".length);
-    const payload = jwt.verify(token, env.jwtSecret) as AuthUser;
+    // Pin the algorithm explicitly — without this, jsonwebtoken trusts whatever `alg` the
+    // token's own header claims, which is how algorithm-confusion attacks forge a valid
+    // signature (e.g. an attacker-crafted RS256 token verified as if it were HS256, or vice
+    // versa) without ever knowing the real secret.
+    const payload = jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] }) as AuthUser;
     req.user = payload;
     next();
   } catch {

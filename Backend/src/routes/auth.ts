@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { readTable, updateRow } from "../services/sheets.js";
 import { getPermissions, parseBool, parseModules } from "../services/permissions.js";
 import { requireAuth } from "../middleware/auth.js";
+import { loginRateLimit, changePasswordRateLimit } from "../middleware/rateLimit.js";
 
 export const authRouter = Router();
 
@@ -17,7 +18,7 @@ const loginSchema = z.object({ employeeId: z.string().min(1), password: z.string
  * system. "Admin" in Permissions_Process grants full module access (see
  * `parseModules`).
  */
-authRouter.post("/login", async (req, res, next) => {
+authRouter.post("/login", loginRateLimit, async (req, res, next) => {
   try {
     const { employeeId, password } = loginSchema.parse(req.body);
     const users = await readTable(env.sheets.transactions, "USERS", { refresh: true });
@@ -46,7 +47,7 @@ authRouter.post("/login", async (req, res, next) => {
       canEdit: parseBool(user.CAN_EDIT),
       canDelete: parseBool(user.CAN_DELETE),
     };
-    const token = jwt.sign(payload, env.jwtSecret, { expiresIn: "7d" });
+    const token = jwt.sign(payload, env.jwtSecret, { expiresIn: "7d", algorithm: "HS256" });
 
     res.json({ token, user: payload });
   } catch (err) {
@@ -88,7 +89,7 @@ const changePasswordSchema = z.object({
  * tab (row matched on their own JWT `employeeId`, so nobody can target another row).
  * Requires the current password to match first.
  */
-authRouter.post("/change-password", requireAuth, async (req, res, next) => {
+authRouter.post("/change-password", requireAuth, changePasswordRateLimit, async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
     const users = await readTable(env.sheets.transactions, "USERS", { refresh: true });

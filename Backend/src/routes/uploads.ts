@@ -61,13 +61,15 @@ uploadsRouter.post("/", requireAuth, upload.single("file"), async (req, res, nex
 uploadsRouter.get("/:fileId/view-url", requireAuth, (req, res) => {
   const token = jwt.sign({ fileId: req.params.fileId, purpose: "view-attachment" }, env.jwtSecret, {
     expiresIn: "5m",
+    algorithm: "HS256",
   });
   res.json({ token });
 });
 
 function verifyViewToken(fileId: string, token: string): boolean {
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as { fileId: string; purpose: string };
+    // Pin the algorithm explicitly — see the matching comment in middleware/auth.ts for why.
+    const payload = jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] }) as { fileId: string; purpose: string };
     return payload.purpose === "view-attachment" && payload.fileId === fileId;
   } catch {
     return false;
