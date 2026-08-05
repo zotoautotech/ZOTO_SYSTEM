@@ -1,4 +1,9 @@
-import rateLimit from "express-rate-limit";
+import type { RequestHandler } from "express";
+import rateLimitImport, { type Options as RateLimitOptions } from "express-rate-limit";
+
+// Same Vercel build-cache type-resolution flakiness as helmet's app.ts import (see the
+// comment there) — cast around it rather than depend on the cache behaving.
+const rateLimit = rateLimitImport as unknown as (options: Partial<RateLimitOptions>) => RequestHandler;
 
 /** Passwords in USERS are plain text (see auth.ts) with no lockout of their own, so the
  * login endpoint is the one place that actually needs brute-force protection at the HTTP
