@@ -833,6 +833,18 @@ needed since it's just a normal PDF fileId by that point.
 
 ## Known gotchas
 
+- **A brand-new Backend dependency can fail `tsc` on Vercel with "This expression is not
+  callable" on its default import, even though it type-checks and works fine locally** —
+  hit this with both `helmet` and `express-rate-limit` the first time each was deployed.
+  Vercel restored its build cache from the last deployment (predating the new dependency),
+  then `npm install` added just that one package incrementally on top of the stale cached
+  `node_modules` — the new package's dual ESM/CJS `"exports"` map type resolution comes out
+  broken/non-callable in that specific state, purely a type-only artifact (the runtime import
+  itself is fine). Fix: cast the import to its known-callable shape instead of chasing the
+  cache — see `Backend/src/app.ts`'s `helmet` cast and `Backend/src/middleware/rateLimit.ts`'s
+  `rateLimit` cast for the pattern (`import fooImport from "foo"; const foo = fooImport as
+  unknown as <real callable type>;`). If a *future* new Backend dependency throws this exact
+  error on its first Vercel deploy, apply the same cast rather than debugging further.
 - **The FG (goods) master tab was renamed live in Sheets from `"MASTER OF FG INVENTORY"` to
   `"FINAL GOOD SKU"`** — `Backend/src/routes/masters.ts` (`GET`/`POST /masters/goods`, plus
   the FG-ID counter) hardcoded the old name in three places, so the Order Punch item search
