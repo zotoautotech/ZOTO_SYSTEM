@@ -238,10 +238,13 @@ JWT), so an admin edit to a user's row takes effect within seconds:
 - `Permissions_Process` column — comma-separated module/process names (or blank/`ALL` =
   unrestricted, fail-open). `"Admin"` anywhere in the list = full access (`modules: "ALL"`).
   Aliases old Process names case-insensitively (`Sale Order` etc.) — see `permissions.ts`.
-- `CAN_ADD` / `CAN_EDIT` / `CAN_DELETE` columns — `Yes`/`true`/`1` = granted. Only
-  `CAN_DELETE` is currently wired to a route guard (Punch Order list's bulk-delete,
-  fail-closed: blank = no access, since it's irreversible); `CAN_ADD`/`CAN_EDIT` are parsed
-  and exposed on `req.user`/the frontend `AuthUser` but not yet gating any route/UI.
+- `CAN_ADD` / `CAN_EDIT` / `CAN_DELETE` columns — `Yes`/`true`/`1` = granted, fail-closed
+  (blank = no access). `CAN_DELETE` gates Punch/Sale Order list's bulk-delete; `CAN_EDIT`
+  gates the same list's select-mode "Edit" button (`OrderPunchList.tsx`, only enabled with
+  exactly one row selected, navigates to that order's detail page — same destination as
+  tapping the row, since there's no separate raw edit form; the point is a doer with edit
+  rights but not delete rights). `CAN_ADD` is still parsed and exposed on `req.user`/the
+  frontend `AuthUser` but not yet gating any route/UI.
 All four are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
 Passwords are the one exception: a logged-in doer can self-service change their own password
 via Settings (`POST /auth/change-password`, requires the current password, writes straight
