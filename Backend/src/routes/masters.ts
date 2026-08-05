@@ -276,7 +276,7 @@ mastersRouter.get("/transporters", async (req, res, next) => {
 
 mastersRouter.get("/goods", async (req, res, next) => {
   try {
-    const rows = await readTable(env.sheets.fg, "MASTER OF FG INVENTORY", {
+    const rows = await readTable(env.sheets.fg, "FINAL GOOD SKU", {
       refresh: refresh(req.query.refresh),
     });
     res.json(rows);
@@ -299,9 +299,9 @@ mastersRouter.post("/goods", async (req, res, next) => {
   try {
     const body = newPartSchema.parse(req.body);
     const now = new Date().toISOString();
-    const fgId = await nextSequentialId(env.sheets.fg, "MASTER OF FG INVENTORY", "FG ID", "");
+    const fgId = await nextSequentialId(env.sheets.fg, "FINAL GOOD SKU", "FG ID", "");
 
-    await appendRow(env.sheets.fg, "MASTER OF FG INVENTORY", {
+    await appendRow(env.sheets.fg, "FINAL GOOD SKU", {
       TIMESTAMP: now,
       USEREMAIL: req.user!.employeeId,
       "FG ID": fgId,

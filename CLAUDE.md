@@ -833,6 +833,14 @@ needed since it's just a normal PDF fileId by that point.
 
 ## Known gotchas
 
+- **The FG (goods) master tab was renamed live in Sheets from `"MASTER OF FG INVENTORY"` to
+  `"FINAL GOOD SKU"`** — `Backend/src/routes/masters.ts` (`GET`/`POST /masters/goods`, plus
+  the FG-ID counter) hardcoded the old name in three places, so the Order Punch item search
+  silently returned "No matches" for every part after the rename until this was caught and
+  fixed. Same tab, same `FG_SHEET_ID` spreadsheet, shared identically by both System 1 and
+  System 2 — if this tab (or any other FG master tab) gets renamed again in Sheets, grep
+  `Backend/src/routes/masters.ts` for the literal tab name string, same as any other header-
+  drift fix in this project.
 - **`TripQueueList.tsx` had no mobile branch at all**, unlike every other list component —
   its `CustomerFilterPanel` + `DataTable` wrapper used an unconditional
   `display: flex; minHeight: calc(100vh - 128px)`. On mobile, `CustomerFilterPanel` renders a
