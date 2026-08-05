@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import compression from "compression";
-import helmet from "helmet";
+import helmetImport from "helmet";
 import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -11,6 +11,13 @@ import { ordersRouter } from "./routes/orders.js";
 import { tripsRouter } from "./routes/tripRoutes.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+
+// helmet's own type declarations sometimes resolve as a non-callable namespace on Vercel's
+// build (its dual ESM/CJS "exports" map has been flaky under some npm-install/build-cache
+// states there even though this same import type-checks and works fine locally) — cast
+// around the type-only mismatch rather than chase Vercel's build cache; the runtime import
+// itself is unaffected.
+const helmet = helmetImport as unknown as (options?: Record<string, unknown>) => express.RequestHandler;
 
 export const app = express();
 
