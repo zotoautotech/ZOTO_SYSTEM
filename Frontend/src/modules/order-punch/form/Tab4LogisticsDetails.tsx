@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ToggleGroup } from "../../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../../components/form/SearchableSelect";
 import { TextField } from "../../../components/form/TextField";
-import { listTransporters, transportersToOptions } from "../../../lib/mastersApi";
+import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../../lib/mastersApi";
 import type { OrderFormState } from "./types";
 
 interface Props {
@@ -17,6 +17,12 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
   });
   const options = transportersToOptions(transporters);
 
+  const { data: zotoVehicles = [] } = useQuery({
+    queryKey: ["masters", "zoto-vehicles"],
+    queryFn: listZotoVehicles,
+  });
+  const zotoVehicleOptions = zotoVehiclesToOptions(zotoVehicles);
+
   function handleTransporterSelect(_value: string, option?: { value: string; label: string }) {
     const row = transporters.find((t) => t["Transporter ID"] === option?.value);
     update({
@@ -27,6 +33,21 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
       transporterPersonName: row?.["Contact Person Name"] ?? "",
       transporterPersonContactNo: row?.["Contact Person Contact No."] ?? "",
       transporterAddress: row?.["Transporter Address"] ?? "",
+    });
+  }
+
+  // "ZOTO Vehicle" Preferred Delivery Mode — pick one of ZOTO's own vehicles by ID and
+  // auto-fill its type/number/size/driver details, same pattern as handleTransporterSelect.
+  function handleZotoVehicleSelect(value: string) {
+    const row = zotoVehicles.find((v) => v["zoto vehical id"] === value);
+    update({
+      preferredZotoVehicleId: value,
+      zotoVehicleDetails: row?.["Zoto Vehicle Details"] ?? "",
+      zotoVehicleType: row?.["Vehicle type"] ?? "",
+      zotoVehicleNo: row?.["Vehicle No."] ?? "",
+      zotoVehicleSize: row?.["Vehicle Size (Ft)"] ?? "",
+      zotoVehicleDriverName: row?.["Driver Name"] ?? "",
+      zotoVehicleDriverContactNo: row?.["Driver Contact No."] ?? "",
     });
   }
 
@@ -43,6 +64,7 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
           { value: "Transporter", label: "Transporter" },
           { value: "Cust. Vehicle", label: "Cust. Vehicle" },
           { value: "Local Vehicle", label: "Local Vehicle" },
+          { value: "ZOTO Vehicle", label: "ZOTO Vehicle" },
         ]}
       />
       <ToggleGroup
@@ -84,6 +106,28 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
               <TextField label="Transporter Person Name" value={form.transporterPersonName} disabled />
               <TextField label="Transporter Person Contact No." value={form.transporterPersonContactNo} disabled />
               <TextField label="Transporter Address" value={form.transporterAddress} disabled />
+            </>
+          )}
+        </>
+      )}
+
+      {form.preferredDeliveryMode === "ZOTO Vehicle" && (
+        <>
+          <SearchableSelect
+            label="Preferred ZOTO Vehicle ID"
+            required
+            value={form.preferredZotoVehicleId}
+            onChange={handleZotoVehicleSelect}
+            options={zotoVehicleOptions}
+            placeholder="Search ZOTO vehicle…"
+          />
+          {form.preferredZotoVehicleId && (
+            <>
+              <TextField label="Vehicle Type" value={form.zotoVehicleType} disabled />
+              <TextField label="Vehicle No." value={form.zotoVehicleNo} disabled />
+              <TextField label="Vehicle Size (Ft)" value={form.zotoVehicleSize} disabled />
+              <TextField label="Driver Name" value={form.zotoVehicleDriverName} disabled />
+              <TextField label="Driver Contact No." value={form.zotoVehicleDriverContactNo} disabled />
             </>
           )}
         </>

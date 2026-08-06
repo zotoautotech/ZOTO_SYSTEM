@@ -56,6 +56,19 @@ export interface TransporterRow {
   [key: string]: string;
 }
 
+/** "ZOTO Vehicle" tab on the transport sheet — ZOTO's own owned-vehicle master. Column names
+ * match the live sheet exactly (including its own "zoto vehical id" typo). */
+export interface ZotoVehicleRow {
+  "zoto vehical id": string;
+  "Zoto Vehicle Details": string;
+  "Vehicle type": string;
+  "Vehicle No.": string;
+  "Vehicle Size (Ft)": string;
+  "Driver Name": string;
+  "Driver Contact No.": string;
+  [key: string]: string;
+}
+
 export async function listCustomers(): Promise<CustomerRow[]> {
   const res = await api.get<CustomerRow[]>("/masters/customers");
   return res.data;
@@ -162,5 +175,20 @@ export function transportersToOptions(transporters: TransporterRow[]): SelectOpt
       value: t["Transporter ID"],
       label: t.Name || t["Transporter ID"],
       subtitle: t["Transporter Type"] || undefined,
+    }));
+}
+
+export async function listZotoVehicles(): Promise<ZotoVehicleRow[]> {
+  const res = await api.get<ZotoVehicleRow[]>("/masters/zoto-vehicles");
+  return res.data;
+}
+
+export function zotoVehiclesToOptions(vehicles: ZotoVehicleRow[]): SelectOption[] {
+  return vehicles
+    .filter((v) => v["zoto vehical id"])
+    .map((v) => ({
+      value: v["zoto vehical id"],
+      label: v["Zoto Vehicle Details"] || v["zoto vehical id"],
+      subtitle: v["Vehicle No."] || undefined,
     }));
 }

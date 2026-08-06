@@ -48,6 +48,9 @@ function validateTab(tab: number, form: OrderFormState): string | null {
     if (form.preferredDeliveryMode === "Transporter" && !form.preferredTptId) {
       return "Select a Preferred Transporter ID before continuing";
     }
+    if (form.preferredDeliveryMode === "ZOTO Vehicle" && !form.preferredZotoVehicleId) {
+      return "Select a Preferred ZOTO Vehicle ID before continuing";
+    }
   }
   if (form.paymentType === "Advance" && form.advancePct !== undefined && (form.advancePct < 0 || form.advancePct > 100)) {
     return "Advance Payment (%) must be between 0 and 100";
@@ -127,6 +130,13 @@ export function OrderPunchForm() {
         transporterPersonName: form.transporterPersonName,
         transporterPersonContactNo: form.transporterPersonContactNo,
         transporterAddress: form.transporterAddress,
+        preferredZotoVehicleId: form.preferredZotoVehicleId,
+        zotoVehicleDetails: form.zotoVehicleDetails,
+        zotoVehicleType: form.zotoVehicleType,
+        zotoVehicleNo: form.zotoVehicleNo,
+        zotoVehicleSize: form.zotoVehicleSize,
+        zotoVehicleDriverName: form.zotoVehicleDriverName,
+        zotoVehicleDriverContactNo: form.zotoVehicleDriverContactNo,
         items: form.items.map((it) => ({
           fgId: it.fgId,
           partNo: it.partNo,

@@ -295,6 +295,10 @@ const createTripSchema = z.object({
   // LR step; everyone else skips straight to Delivery) — sourced from the Transporter Data
   // master's own "Transporter Type" column, picked alongside transporterId/transporterName.
   transporterType: z.string().optional().default(""),
+  // Set only when sendThrough === "ZOTO Vehicle" — the picked row's own "zoto vehical id"
+  // from the ZOTO Vehicle master, kept alongside the auto-filled vehicleType/vehicleNo/
+  // vehicleSize/driverName/driverContactNo fields (same relationship as transporterId).
+  zotoVehicleId: z.string().optional().default(""),
   vehicleType: z.string().optional().default(""),
   vehicleNo: z.string().optional().default(""),
   vehicleSize: z.string().optional().default(""),
@@ -319,6 +323,7 @@ tripsRouter.post("/", async (req, res, next) => {
       "Transporter ID": body.transporterId,
       "Transporter Name": body.transporterName,
       "Transporter Type": body.transporterType,
+      "ZOTO Vehicle ID": body.zotoVehicleId,
       "Vehicle type": body.vehicleType,
       "Vehicle No.": body.vehicleNo,
       "Vehicle Size (Ft)": body.vehicleSize,

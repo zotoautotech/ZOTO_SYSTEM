@@ -87,6 +87,13 @@ export const ORDER_PUNCH_MAP: Record<string, string> = {
   TRANSPORTER_PERSON_NAME: "Transporter Person Name",
   TRANSPORTER_PERSON_CONTACT: "Transporter Person Contact No.",
   TRANSPORTER_ADDRESS: "Transporter Address",
+  PREFERRED_ZOTO_VEHICLE_ID: "Preferred ZOTO Vehicle ID",
+  ZOTO_VEHICLE_DETAILS: "ZOTO Vehicle Details",
+  ZOTO_VEHICLE_TYPE: "ZOTO Vehicle Type",
+  ZOTO_VEHICLE_NO: "ZOTO Vehicle No.",
+  ZOTO_VEHICLE_SIZE: "ZOTO Vehicle Size (Ft)",
+  ZOTO_VEHICLE_DRIVER_NAME: "ZOTO Vehicle Driver Name",
+  ZOTO_VEHICLE_DRIVER_CONTACT: "ZOTO Vehicle Driver Contact No.",
 
   // GST Details
   INVOICE_DISCOUNT_RS: "Invoice Discount (rs)",

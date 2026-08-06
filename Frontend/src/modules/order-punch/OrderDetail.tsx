@@ -373,6 +373,10 @@ export function OrderDetail() {
             <Field label="Transporter Person Name" value={order.TRANSPORTER_PERSON_NAME} />
             <Field label="Transporter Person Contact No." value={order.TRANSPORTER_PERSON_CONTACT} />
             <Field label="Transporter Address" value={order.TRANSPORTER_ADDRESS} />
+            <Field label="Preferred ZOTO Vehicle" value={order.ZOTO_VEHICLE_DETAILS || order.PREFERRED_ZOTO_VEHICLE_ID} />
+            <Field label="ZOTO Vehicle No." value={order.ZOTO_VEHICLE_NO} />
+            <Field label="ZOTO Vehicle Driver" value={order.ZOTO_VEHICLE_DRIVER_NAME} />
+            <Field label="ZOTO Vehicle Driver Contact No." value={order.ZOTO_VEHICLE_DRIVER_CONTACT} />
           </Section>
 
           {partsCard}

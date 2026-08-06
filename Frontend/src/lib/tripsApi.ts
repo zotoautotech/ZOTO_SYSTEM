@@ -77,6 +77,7 @@ export interface CreateTripPayload {
   transporterId?: string;
   transporterName?: string;
   transporterType?: string;
+  zotoVehicleId?: string;
   vehicleType?: string;
   vehicleNo?: string;
   vehicleSize?: string;

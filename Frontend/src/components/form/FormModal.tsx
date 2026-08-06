@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useIsMobile } from "../../lib/responsive";
 
 /** Fixed desktop dimensions for every modal form in the app — two tiers, chosen once here
@@ -41,6 +42,16 @@ interface FormModalProps {
 export function FormModal({ title, onClose, size = "standard", zIndex = 50, sectionLabel, headerActions, children }: FormModalProps) {
   const isMobile = useIsMobile();
   const { width, height } = FORM_MODAL_SIZES[size];
+
+  // Escape closes the modal from anywhere inside it — so a doer who tabbed/typed their way
+  // in can also back out without reaching for the mouse.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   return (
     <div

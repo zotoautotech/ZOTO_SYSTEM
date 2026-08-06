@@ -17,7 +17,7 @@ export interface QueuedSaleOrder {
   freightPaidAt: string;
 }
 
-const DELIVERY_MODE_OPTIONS = ["Courier", "Porter", "Transporter", "Cust. Vehicle", "Local Vehicle"].map((v) => ({ value: v, label: v }));
+const DELIVERY_MODE_OPTIONS = ["Courier", "Porter", "Transporter", "Cust. Vehicle", "Local Vehicle", "ZOTO Vehicle"].map((v) => ({ value: v, label: v }));
 
 interface Props {
   eligibleOrders: OrderRecord[];

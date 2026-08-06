@@ -6,7 +6,7 @@ import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
-import { listTransporters, transportersToOptions } from "../../lib/mastersApi";
+import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
 import { formatTimestamp } from "../../lib/format";
 import { TransportOrderForm, type QueuedSaleOrder } from "./TransportOrderForm";
@@ -16,7 +16,7 @@ interface Props {
   onCreated: (transportId: string) => void;
 }
 
-const SEND_THROUGH_OPTIONS = ["Courier", "Porter", "Transporter", "Cust. Vehicle", "Local Vehicle"] as const;
+const SEND_THROUGH_OPTIONS = ["Courier", "Porter", "Transporter", "Cust. Vehicle", "Local Vehicle", "ZOTO Vehicle"] as const;
 const VEHICLE_ARRANGE_OPTIONS = ["Customer", "Transporter booking", "Multi Location"] as const;
 const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wheeler", "10 Wheeler", "12 Wheeler"].map((v) => ({
   value: v,
@@ -42,6 +42,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [transporterId, setTransporterId] = useState("");
   const [transporterName, setTransporterName] = useState("");
   const [transporterType, setTransporterType] = useState("");
+  const [zotoVehicleId, setZotoVehicleId] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [vehicleSize, setVehicleSize] = useState("");
@@ -58,6 +59,8 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
 
   const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
   const transporterOptions = transportersToOptions(transporters);
+  const { data: zotoVehicles = [] } = useQuery({ queryKey: ["masters", "zoto-vehicles"], queryFn: listZotoVehicles });
+  const zotoVehicleOptions = zotoVehiclesToOptions(zotoVehicles);
   const { data: eligibleOrders = [] } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
   const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
 
@@ -69,6 +72,19 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
     // row back up in the master list for its own "Transporter Type" column.
     const row = transporters.find((t) => t["Transporter ID"] === value);
     setTransporterType(row?.["Transporter Type"] ?? "");
+  }
+
+  // "ZOTO Vehicle" Send Through — pick one of ZOTO's own vehicles by ID and auto-fill the
+  // same Vehicle type/No./Size/Driver Name/Driver Contact No. fields that Transporter/Cust.
+  // Vehicle/Local Vehicle otherwise require typing by hand.
+  function handleZotoVehicleSelect(value: string) {
+    setZotoVehicleId(value);
+    const row = zotoVehicles.find((v) => v["zoto vehical id"] === value);
+    setVehicleType(row?.["Vehicle type"] ?? "");
+    setVehicleNo(row?.["Vehicle No."] ?? "");
+    setVehicleSize(row?.["Vehicle Size (Ft)"] ?? "");
+    setDriverName(row?.["Driver Name"] ?? "");
+    setDriverContactNo(row?.["Driver Contact No."] ?? "");
   }
 
   function canSave() {
@@ -87,6 +103,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         transporterId: sendThrough === "Transporter" ? transporterId : undefined,
         transporterName: sendThrough === "Transporter" ? transporterName : undefined,
         transporterType: sendThrough === "Transporter" ? transporterType : undefined,
+        zotoVehicleId: sendThrough === "ZOTO Vehicle" ? zotoVehicleId : undefined,
         vehicleType,
         vehicleNo,
         vehicleSize,
@@ -150,11 +167,29 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             </>
           )}
 
-          <SearchableSelect label="Vehicle type" required value={vehicleType} onChange={(v) => setVehicleType(v)} options={VEHICLE_TYPES} placeholder="Search" />
-          <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
-          <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
-          <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
-          <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} />
+          {sendThrough === "ZOTO Vehicle" && (
+            <SearchableSelect
+              label="ZOTO Vehicle ID"
+              required
+              value={zotoVehicleId}
+              onChange={handleZotoVehicleSelect}
+              options={zotoVehicleOptions}
+              placeholder="Search ZOTO vehicle…"
+            />
+          )}
+
+          <SearchableSelect
+            label="Vehicle type"
+            required
+            value={vehicleType}
+            onChange={(v) => setVehicleType(v)}
+            options={VEHICLE_TYPES}
+            placeholder="Search"
+          />
+          <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
+          <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
+          <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
+          <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
 
           <ToggleGroup
             label="Freight Applicable On Invoice?"

@@ -274,6 +274,23 @@ mastersRouter.get("/transporters", async (req, res, next) => {
   }
 });
 
+/** "ZOTO Vehicle" tab on the transport sheet — ZOTO's own owned-vehicle master (Timestamp,
+ * User Email, Zoto Vehicle Details, zoto vehical id, Vehicle type, Vehicle No., Vehicle Size
+ * (Ft), Driver Name, Driver Contact No.). Backs the "ZOTO Vehicle" Send Through / Preferred
+ * Delivery Mode option — selecting a vehicle ID auto-fills the same Vehicle type/No./Size/
+ * Driver Name/Driver Contact No. fields that are otherwise typed by hand, same pattern as
+ * /transporters above. */
+mastersRouter.get("/zoto-vehicles", async (req, res, next) => {
+  try {
+    const rows = await readTable(env.sheets.transport, "ZOTO Vehicle", {
+      refresh: refresh(req.query.refresh),
+    });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 mastersRouter.get("/goods", async (req, res, next) => {
   try {
     const rows = await readTable(env.sheets.fg, "FINAL GOOD SKU", {

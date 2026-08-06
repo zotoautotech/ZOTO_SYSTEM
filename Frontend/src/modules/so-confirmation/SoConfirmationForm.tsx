@@ -214,6 +214,13 @@ export function SoConfirmationForm({ orderId, onClose, onSaved }: Props) {
               transporterPersonName: form.transporterPersonName,
               transporterPersonContactNo: form.transporterPersonContactNo,
               transporterAddress: form.transporterAddress,
+              preferredZotoVehicleId: form.preferredZotoVehicleId,
+              zotoVehicleDetails: form.zotoVehicleDetails,
+              zotoVehicleType: form.zotoVehicleType,
+              zotoVehicleNo: form.zotoVehicleNo,
+              zotoVehicleSize: form.zotoVehicleSize,
+              zotoVehicleDriverName: form.zotoVehicleDriverName,
+              zotoVehicleDriverContactNo: form.zotoVehicleDriverContactNo,
               items: form.items.map((it) => ({
                 fgId: it.fgId,
                 partNo: it.partNo,

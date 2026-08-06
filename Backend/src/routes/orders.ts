@@ -139,6 +139,13 @@ const createOrderSchema = z.object({
   transporterPersonName: z.string().optional().default(""),
   transporterPersonContactNo: z.string().optional().default(""),
   transporterAddress: z.string().optional().default(""),
+  preferredZotoVehicleId: z.string().optional().default(""),
+  zotoVehicleDetails: z.string().optional().default(""),
+  zotoVehicleType: z.string().optional().default(""),
+  zotoVehicleNo: z.string().optional().default(""),
+  zotoVehicleSize: z.string().optional().default(""),
+  zotoVehicleDriverName: z.string().optional().default(""),
+  zotoVehicleDriverContactNo: z.string().optional().default(""),
   items: z.array(itemSchema).optional().default([]),
   dispatchPlan: z.array(dispatchPlanLineSchema).optional().default([]),
 });
@@ -796,6 +803,13 @@ ordersRouter.post("/", async (req, res, next) => {
         TRANSPORTER_PERSON_NAME: body.transporterPersonName,
         TRANSPORTER_PERSON_CONTACT: body.transporterPersonContactNo,
         TRANSPORTER_ADDRESS: body.transporterAddress,
+        PREFERRED_ZOTO_VEHICLE_ID: body.preferredZotoVehicleId,
+        ZOTO_VEHICLE_DETAILS: body.zotoVehicleDetails,
+        ZOTO_VEHICLE_TYPE: body.zotoVehicleType,
+        ZOTO_VEHICLE_NO: body.zotoVehicleNo,
+        ZOTO_VEHICLE_SIZE: body.zotoVehicleSize,
+        ZOTO_VEHICLE_DRIVER_NAME: body.zotoVehicleDriverName,
+        ZOTO_VEHICLE_DRIVER_CONTACT: body.zotoVehicleDriverContactNo,
         BASIC_AMOUNT: money(basicAmount),
         TAX_AMOUNT: money(taxAmount),
         TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)),
@@ -1292,6 +1306,7 @@ const confirmationChangesSchema = z.object({
   shippingSame: z.string().optional(), shippingAddress: z.string().optional(), shippingState: z.string().optional(), shippingPincode: z.string().optional(),
   preferredDeliveryMode: z.string().optional(), preferredTransportMode: z.string().optional(), freightPaidBy: z.string().optional(), freightOnInvoice: z.string().optional(),
   preferredTptId: z.string().optional(), preferredTptName: z.string().optional(), transporterType: z.string().optional(), transporterContactNo: z.string().optional(), transporterPersonName: z.string().optional(), transporterPersonContactNo: z.string().optional(), transporterAddress: z.string().optional(),
+  preferredZotoVehicleId: z.string().optional(), zotoVehicleDetails: z.string().optional(), zotoVehicleType: z.string().optional(), zotoVehicleNo: z.string().optional(), zotoVehicleSize: z.string().optional(), zotoVehicleDriverName: z.string().optional(), zotoVehicleDriverContactNo: z.string().optional(),
   items: z.array(itemSchema).optional(),
   invoiceDiscountRs: z.number().min(0).optional(),
 });
@@ -1461,6 +1476,9 @@ ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
           PREFERRED_TPT_ID: body.changes.preferredTptId, PREFERRED_TPT_NAME: body.changes.preferredTptName, TRANSPORTER_TYPE: body.changes.transporterType,
           TRANSPORTER_CONTACT: body.changes.transporterContactNo, TRANSPORTER_PERSON_NAME: body.changes.transporterPersonName,
           TRANSPORTER_PERSON_CONTACT: body.changes.transporterPersonContactNo, TRANSPORTER_ADDRESS: body.changes.transporterAddress,
+          PREFERRED_ZOTO_VEHICLE_ID: body.changes.preferredZotoVehicleId, ZOTO_VEHICLE_DETAILS: body.changes.zotoVehicleDetails,
+          ZOTO_VEHICLE_TYPE: body.changes.zotoVehicleType, ZOTO_VEHICLE_NO: body.changes.zotoVehicleNo, ZOTO_VEHICLE_SIZE: body.changes.zotoVehicleSize,
+          ZOTO_VEHICLE_DRIVER_NAME: body.changes.zotoVehicleDriverName, ZOTO_VEHICLE_DRIVER_CONTACT: body.changes.zotoVehicleDriverContactNo,
         }
       : {};
     const withoutUndefined = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));

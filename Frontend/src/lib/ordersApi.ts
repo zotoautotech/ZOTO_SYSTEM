@@ -111,6 +111,13 @@ export interface NewOrderPayload {
   transporterPersonName?: string;
   transporterPersonContactNo?: string;
   transporterAddress?: string;
+  preferredZotoVehicleId?: string;
+  zotoVehicleDetails?: string;
+  zotoVehicleType?: string;
+  zotoVehicleNo?: string;
+  zotoVehicleSize?: string;
+  zotoVehicleDriverName?: string;
+  zotoVehicleDriverContactNo?: string;
   items?: NewOrderItem[];
 }
 
@@ -204,6 +211,13 @@ export interface SoConfirmationChanges {
   transporterPersonName?: string;
   transporterPersonContactNo?: string;
   transporterAddress?: string;
+  preferredZotoVehicleId?: string;
+  zotoVehicleDetails?: string;
+  zotoVehicleType?: string;
+  zotoVehicleNo?: string;
+  zotoVehicleSize?: string;
+  zotoVehicleDriverName?: string;
+  zotoVehicleDriverContactNo?: string;
   items?: NewOrderItem[];
   invoiceDiscountRs?: number;
 }

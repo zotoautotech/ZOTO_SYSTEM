@@ -74,6 +74,13 @@ export interface OrderFormState {
   transporterPersonName: string;
   transporterPersonContactNo: string;
   transporterAddress: string;
+  preferredZotoVehicleId: string;
+  zotoVehicleDetails: string;
+  zotoVehicleType: string;
+  zotoVehicleNo: string;
+  zotoVehicleSize: string;
+  zotoVehicleDriverName: string;
+  zotoVehicleDriverContactNo: string;
 }
 
 export function emptyOrderForm(): OrderFormState {
@@ -112,5 +119,12 @@ export function emptyOrderForm(): OrderFormState {
     transporterPersonName: "",
     transporterPersonContactNo: "",
     transporterAddress: "",
+    preferredZotoVehicleId: "",
+    zotoVehicleDetails: "",
+    zotoVehicleType: "",
+    zotoVehicleNo: "",
+    zotoVehicleSize: "",
+    zotoVehicleDriverName: "",
+    zotoVehicleDriverContactNo: "",
   };
 }
