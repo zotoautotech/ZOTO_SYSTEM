@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ToggleGroup } from "../../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../../components/form/SearchableSelect";
@@ -22,6 +23,29 @@ export function Tab4LogisticsDetails({ form, update }: Props) {
     queryFn: listZotoVehicles,
   });
   const zotoVehicleOptions = zotoVehiclesToOptions(zotoVehicles);
+
+  // Default punch form starts with Delivery Mode = ZOTO Vehicle / Vehicle ID = VEH-001
+  // (see emptyOrderForm()), but its Type/No./Size/Driver detail fields can't be filled in
+  // until the ZOTO Vehicle master has actually loaded (it's fetched async). Once it has,
+  // fill them in the same way handleZotoVehicleSelect below does for a manual pick — only
+  // when the ID is already set but its details are still blank, so this never overwrites a
+  // doer's own later selection.
+  useEffect(() => {
+    if (form.preferredZotoVehicleId && !form.zotoVehicleType && zotoVehicles.length > 0) {
+      const row = zotoVehicles.find((v) => v["zoto vehical id"] === form.preferredZotoVehicleId);
+      if (row) {
+        update({
+          zotoVehicleDetails: row["Zoto Vehicle Details"] ?? "",
+          zotoVehicleType: row["Vehicle type"] ?? "",
+          zotoVehicleNo: row["Vehicle No."] ?? "",
+          zotoVehicleSize: row["Vehicle Size (Ft)"] ?? "",
+          zotoVehicleDriverName: row["Driver Name"] ?? "",
+          zotoVehicleDriverContactNo: row["Driver Contact No."] ?? "",
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zotoVehicles, form.preferredZotoVehicleId]);
 
   function handleTransporterSelect(_value: string, option?: { value: string; label: string }) {
     const row = transporters.find((t) => t["Transporter ID"] === option?.value);

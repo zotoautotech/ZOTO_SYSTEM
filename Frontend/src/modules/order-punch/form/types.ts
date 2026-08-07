@@ -108,9 +108,13 @@ export function emptyOrderForm(): OrderFormState {
     shippingAddress: "",
     shippingState: "",
     shippingPincode: "",
-    preferredDeliveryMode: "Transporter",
+    // Defaults per user request: most doer orders go out on ZOTO's own vehicle, paid by
+    // the seller — Tab4LogisticsDetails auto-fills the ZOTO Vehicle detail fields below
+    // once the vehicle master loads (see its own effect), rather than hardcoding VEH-001's
+    // actual details here, so this stays correct if the sheet data ever changes.
+    preferredDeliveryMode: "ZOTO Vehicle",
     preferredTransportMode: "Surface",
-    freightPaidBy: "",
+    freightPaidBy: "Seller",
     freightOnInvoice: "No",
     preferredTptId: "",
     preferredTptName: "",
@@ -119,7 +123,7 @@ export function emptyOrderForm(): OrderFormState {
     transporterPersonName: "",
     transporterPersonContactNo: "",
     transporterAddress: "",
-    preferredZotoVehicleId: "",
+    preferredZotoVehicleId: "VEH-001",
     zotoVehicleDetails: "",
     zotoVehicleType: "",
     zotoVehicleNo: "",
