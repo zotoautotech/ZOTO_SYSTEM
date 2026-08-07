@@ -1,3 +1,5 @@
+import { handleFieldNavKeyDown } from "../../lib/keyboardNav";
+
 interface PercentInputProps {
   label: string;
   required?: boolean;
@@ -28,6 +30,7 @@ export function PercentInput({ label, required, value, onChange }: PercentInputP
           type="number"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+          onKeyDown={handleFieldNavKeyDown}
           style={{ flex: 1, border: "none", outline: "none", padding: "12px 0", fontSize: 14 }}
         />
       </div>

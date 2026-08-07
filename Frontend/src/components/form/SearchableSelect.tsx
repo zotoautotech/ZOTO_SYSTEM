@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { focusNextField, focusPrevField } from "../../lib/keyboardNav";
 
 export interface SelectOption {
   value: string;
@@ -104,6 +105,12 @@ export function SearchableSelect({
     if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
       openDropdown();
+    } else if (!open && e.key === "PageDown") {
+      e.preventDefault();
+      focusNextField(e.currentTarget);
+    } else if (!open && e.key === "PageUp") {
+      e.preventDefault();
+      focusPrevField(e.currentTarget);
     }
   }
 

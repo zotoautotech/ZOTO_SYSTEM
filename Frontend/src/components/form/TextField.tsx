@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes } from "react";
+import { handleFieldNavKeyDown } from "../../lib/keyboardNav";
 
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -6,7 +7,7 @@ interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-export function TextField({ label, required, error, style, ...rest }: TextFieldProps) {
+export function TextField({ label, required, error, style, onKeyDown, ...rest }: TextFieldProps) {
   return (
     <div style={{ marginBottom: 20 }}>
       <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
@@ -15,6 +16,14 @@ export function TextField({ label, required, error, style, ...rest }: TextFieldP
       </label>
       <input
         {...rest}
+        onKeyDown={(e) => {
+          // A field's own onKeyDown (if given) runs first and can call
+          // e.preventDefault()/e.stopPropagation() to opt out of the Tally-style
+          // Enter/PageUp/PageDown navigation below — same override pattern used
+          // throughout this app's shared components.
+          onKeyDown?.(e);
+          if (!e.defaultPrevented) handleFieldNavKeyDown(e);
+        }}
         style={{
           width: "100%",
           padding: "12px 14px",

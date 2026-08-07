@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { focusNextField, focusPrevField } from "../../lib/keyboardNav";
 
 interface Option<T extends string> {
   value: T;
@@ -11,30 +12,6 @@ interface ToggleGroupProps<T extends string> {
   value: T | "";
   onChange: (value: T) => void;
   options: Option<T>[];
-}
-
-/** Find the next focusable element in the page's natural tab order after `from`, and focus
- * it. Only queried once, at the moment Enter is pressed inside a ToggleGroup — this is NOT
- * a persistent/global listener, so it can't repeat the bug that broke SearchableSelect
- * earlier (a document-level mousedown listener that fired — and stole focus — on every
- * click anywhere on the page, even when its own dropdown was closed). `.tabIndex !== -1`
- * excludes this same ToggleGroup's own non-active roving-tabindex siblings (see below). */
-function focusNextTabbable(from: HTMLElement) {
-  const focusable = Array.from(
-    document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")
-  ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-  const idx = focusable.indexOf(from);
-  if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus();
-}
-
-/** Mirror of focusNextTabbable, for PageUp — jumps back to the previous field in the page's
- * tab order (same "one-shot query on keypress, no persistent listener" shape as above). */
-function focusPrevTabbable(from: HTMLElement) {
-  const focusable = Array.from(
-    document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")
-  ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-  const idx = focusable.indexOf(from);
-  if (idx > 0) focusable[idx - 1].focus();
 }
 
 /** Tally-style keyboard navigation, mouse unchanged: Left/Right (or Up/Down) arrows move a
@@ -76,14 +53,20 @@ export function ToggleGroup<T extends string>({
       // doesn't exist in the DOM yet at this exact synchronous instant, since React hasn't
       // committed the re-render triggered by the onChange() call above. Deferring one frame
       // lets that render land first, so the newly-revealed field is actually there to jump to.
+      // A plain setTimeout(fn, 0) — not requestAnimationFrame — on purpose: rAF only fires
+      // on the browser's next composited/painted frame, which is suspended whenever the tab
+      // isn't actively rendering (backgrounded/minimized/not visible). A doer who Tabs away
+      // mid-action, or a tab that's simply not the active one, would silently never advance.
+      // setTimeout only depends on the JS event loop, so it reliably fires right after
+      // React's synchronous commit from the onChange() call above, regardless of paint state.
       const target = e.currentTarget;
-      requestAnimationFrame(() => focusNextTabbable(target));
+      setTimeout(() => focusNextField(target), 0);
     } else if (e.key === "PageDown") {
       e.preventDefault();
-      focusNextTabbable(e.currentTarget);
+      focusNextField(e.currentTarget);
     } else if (e.key === "PageUp") {
       e.preventDefault();
-      focusPrevTabbable(e.currentTarget);
+      focusPrevField(e.currentTarget);
     }
   }
 
