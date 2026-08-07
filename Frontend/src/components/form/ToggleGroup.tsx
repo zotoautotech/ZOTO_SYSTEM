@@ -27,6 +27,16 @@ function focusNextTabbable(from: HTMLElement) {
   if (idx >= 0 && idx < focusable.length - 1) focusable[idx + 1].focus();
 }
 
+/** Mirror of focusNextTabbable, for PageUp — jumps back to the previous field in the page's
+ * tab order (same "one-shot query on keypress, no persistent listener" shape as above). */
+function focusPrevTabbable(from: HTMLElement) {
+  const focusable = Array.from(
+    document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")
+  ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
+  const idx = focusable.indexOf(from);
+  if (idx > 0) focusable[idx - 1].focus();
+}
+
 /** Tally-style keyboard navigation, mouse unchanged: Left/Right (or Up/Down) arrows move a
  * "roving" highlight between options without selecting anything yet (standard ARIA
  * radiogroup pattern — only the highlighted option is a Tab stop at any given time, via
@@ -68,6 +78,12 @@ export function ToggleGroup<T extends string>({
       // lets that render land first, so the newly-revealed field is actually there to jump to.
       const target = e.currentTarget;
       requestAnimationFrame(() => focusNextTabbable(target));
+    } else if (e.key === "PageDown") {
+      e.preventDefault();
+      focusNextTabbable(e.currentTarget);
+    } else if (e.key === "PageUp") {
+      e.preventDefault();
+      focusPrevTabbable(e.currentTarget);
     }
   }
 
