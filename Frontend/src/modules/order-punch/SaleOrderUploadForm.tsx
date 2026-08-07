@@ -4,6 +4,7 @@ import { uploadSaleOrderForm } from "../../lib/ordersApi";
 import { TextField } from "../../components/form/TextField";
 import { FileDropzone } from "../../components/form/FileDropzone";
 import { FormModal } from "../../components/form/FormModal";
+import { todayIso } from "../../lib/format";
 
 interface Props {
   orderId: string;
@@ -13,7 +14,7 @@ interface Props {
 
 export function SaleOrderUploadForm({ orderId, onClose, onSaved }: Props) {
   const [soNo, setSoNo] = useState("");
-  const [soDate, setSoDate] = useState(new Date().toISOString().slice(0, 10));
+  const [soDate, setSoDate] = useState(todayIso());
   const [soAttachmentUrl, setSoAttachmentUrl] = useState("");
   const [soRemarks, setSoRemarks] = useState("");
   const [error, setError] = useState("");

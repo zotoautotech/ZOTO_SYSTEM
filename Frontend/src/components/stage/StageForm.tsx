@@ -7,6 +7,7 @@ import { FormModal } from "../form/FormModal";
 import { submitStageForm, submitPdiItemForm } from "../../lib/ordersApi";
 import type { StageDef } from "../../lib/stages";
 import { useIsMobile } from "../../lib/responsive";
+import { todayIso } from "../../lib/format";
 
 interface Props {
   stage: StageDef;
@@ -23,7 +24,12 @@ interface Props {
  * Saves via POST /orders/:id/:stageKey (Backend/src/routes/stageRoutes.ts). */
 export function StageForm({ stage, orderId, itemId, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
-  const [values, setValues] = useState<Record<string, string>>({});
+  // Date fields start on today — these forms are filled in as the work actually happens, so
+  // today is nearly always the answer, and typing it out by hand every time was busywork.
+  // Still editable; a doer backdating an entry just overwrites it.
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(stage.fields.filter((f) => f.type === "date").map((f) => [f.key, todayIso()]))
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
