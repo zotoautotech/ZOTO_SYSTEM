@@ -9,7 +9,24 @@ import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
 import { getOrder, listPdiItems, type OrderRecord } from "../../lib/ordersApi";
-import { TransportOrderForm, type QueuedSaleOrder } from "./TransportOrderForm";
+
+interface PickedItem {
+  itemId: string;
+  partName: string;
+  qty: number;
+  unit: string;
+  loadBoxes?: number;
+}
+
+interface QueuedSaleOrder {
+  orderId: string;
+  customerName: string;
+  timestamp: string;
+  items: PickedItem[];
+  preferredDeliveryMode: string;
+  freightPaidBy: string;
+  freightPaidAt: string;
+}
 
 interface Props {
   onClose: () => void;
@@ -33,12 +50,16 @@ const DEFAULT_ZOTO_VEHICLE_ID = "VEH-001";
  * same GET /masters/transporters already used by the Order Punch logistics tab) — selecting
  * one auto-fills Transporter Name, same pattern as Tab4LogisticsDetails.tsx.
  *
- * "Select Sale Orders" queues one or more orders (each with its own picked items/quantities,
- * via the nested TransportOrderForm → TransportItemsForm flow) client-side before the trip
- * even exists; Save creates the trip then attaches every queued order in one attachOrders()
- * call — matches the old CRR reference's nested New-row flow instead of the previous
- * simplified "create trip, then separately attach whole orders from the trip detail page"
- * two-step process. */
+ * "Select Sale Orders" is a checkbox table over the eligible orders: ticking one queues it
+ * client-side before the trip even exists, with every item at its full Balance Qty to
+ * Dispatch and the logistics fields taken off the order itself. Save then creates the trip
+ * and attaches every queued order in one attachOrders() call.
+ *
+ * This replaced a three-deep nested modal flow (Transport Form → Load Limit Details, one
+ * pass per item) that existed only to re-enter values the order already carried. Its one
+ * genuine capability was a Load Qty below the full quantity; the user asked for that to go
+ * too, so partial loads are deliberately not supported here — restoring them means bringing
+ * back a per-item quantity input, not just re-adding a button. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
   // Opening defaults — the overwhelmingly common case is ZOTO's own vehicle going straight to
   // a customer with freight off-invoice, so the doer only touches these when it's an
@@ -61,7 +82,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [queuedOrders, setQueuedOrders] = useState<QueuedSaleOrder[]>([]);
-  const [showOrderForm, setShowOrderForm] = useState(false);
   const [loadingOrderId, setLoadingOrderId] = useState("");
   const queryClient = useQueryClient();
 
@@ -113,16 +133,21 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           orderId: order.ORDER_ID,
           customerName: order.CUSTOMER_NAME || "",
           timestamp: new Date().toISOString(),
-          items: detail.items.map((it) => {
-            const boxQty = Number(completedPdiItems.find((r) => r.ITEM_ID === it.ITEM_ID)?.BOX_QUANTITY || 0);
-            return {
-              itemId: it.ITEM_ID,
-              partName: it.PART_NAME,
-              qty: Number(it.QTY || 0),
-              unit: it.UOM || "NOS",
-              loadBoxes: boxQty > 0 ? boxQty : undefined,
-            };
-          }),
+          // Load Qty is the item's full Balance Qty to Dispatch. Zero/blank-quantity items are
+          // dropped rather than sent: attachOrders' schema requires a positive qty, so one bad
+          // item would 400 the whole trip instead of just itself.
+          items: detail.items
+            .filter((it) => Number(it.QTY || 0) > 0)
+            .map((it) => {
+              const boxQty = Number(completedPdiItems.find((r) => r.ITEM_ID === it.ITEM_ID)?.BOX_QUANTITY || 0);
+              return {
+                itemId: it.ITEM_ID,
+                partName: it.PART_NAME,
+                qty: Number(it.QTY),
+                unit: it.UOM || "NOS",
+                loadBoxes: boxQty > 0 ? boxQty : undefined,
+              };
+            }),
           preferredDeliveryMode: order.PREFERRED_DELIVERY_MODE || "",
           freightPaidBy,
           // No "Freight Paid at" column exists on the order, so mirror who's paying rather
@@ -352,11 +377,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             </table>
           </div>
           <TextField label="Selected Items Count" value={String(queuedOrders.reduce((n, q) => n + q.items.length, 0))} disabled />
-          {/* Ticking a box loads the whole order. Partial loads (a Load Qty below the full
-            * order quantity) still need the per-item flow, so keep it reachable. */}
-          <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
-            Add with custom load quantities
-          </button>
 
           {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
@@ -369,17 +389,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-
-      {showOrderForm && (
-        <TransportOrderForm
-          eligibleOrders={unqueuedEligibleOrders}
-          onClose={() => setShowOrderForm(false)}
-          onSave={(entry) => {
-            setQueuedOrders((prev) => [...prev, entry]);
-            setShowOrderForm(false);
-          }}
-        />
-      )}
     </FormModal>
   );
 }

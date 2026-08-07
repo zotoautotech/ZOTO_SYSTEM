@@ -204,10 +204,14 @@ simplification of the order-level pattern above.
   carried from the item's completed PDI Box Quantity, delivery mode/freight-paid-by taken off
   the order's own preferred fields, `freightPaidAt` mirrored to `"Pay at Customer"` when the
   customer pays, since no such column exists on `ORDER_PUNCH`), plus a header select-all box.
-  The older nested `TransportOrderForm.tsx` ("Order Details"/"Logistic Details" tabs →
-  `TransportItemsForm.tsx` "Load Limit Details" per-item quantity picker) is still reachable
-  behind the "Add with custom load quantities" button — it's the only way to load a **partial**
-  quantity, so don't delete it as dead code. Either path queues
+  Items whose `QTY` is blank/0 are dropped from the payload rather than sent — `attachOrders`'
+  zod schema requires a positive `qty`, so one bad line would 400 the whole trip. This
+  **replaced** the old three-deep nested modal flow (`TransportOrderForm.tsx` "Order Details"/
+  "Logistic Details" tabs → `TransportItemsForm.tsx` "Load Limit Details" per-item picker);
+  both files are deleted. Their one real capability was a Load Qty *below* the full quantity —
+  the user explicitly asked for that to go, so **partial loads are deliberately unsupported**;
+  restoring them means rebuilding a per-item quantity input, not just re-adding a button.
+  Queuing happens
   before the trip exists; Save creates the trip then calls `attachOrders()` once for every
   queued order, matching the old CRR reference's nested New-row flow instead of the previous
   "create trip, then separately attach whole orders from the trip detail page" two-step
