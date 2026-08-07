@@ -61,7 +61,13 @@ export function ToggleGroup<T extends string>({
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onChange(options[i].value);
-      focusNextTabbable(e.currentTarget);
+      // Selecting an option can conditionally reveal a new field right after this group
+      // (e.g. "Advance Payment (%)" only appears once Payment Type = Advance) — that field
+      // doesn't exist in the DOM yet at this exact synchronous instant, since React hasn't
+      // committed the re-render triggered by the onChange() call above. Deferring one frame
+      // lets that render land first, so the newly-revealed field is actually there to jump to.
+      const target = e.currentTarget;
+      requestAnimationFrame(() => focusNextTabbable(target));
     }
   }
 
