@@ -49,16 +49,25 @@ export function SearchableSelect({
   // "Add New" occupies row 0 when present, pushing option rows down by one.
   const rowCount = filtered.length + (onAddNew ? 1 : 0);
 
+  // Bug fixed here: this used to call closeAndReturnFocus() — which also calls
+  // triggerRef.current?.focus() — for EVERY mousedown anywhere on the page, even when this
+  // particular dropdown was never open (the listener is mounted per-instance and isn't
+  // scoped to `open`). Focusing an off-screen field makes the browser auto-scroll the page
+  // to it, so every click anywhere (e.g. an unrelated ToggleGroup button) yanked the page
+  // down to wherever this field happened to sit and stole the click. A plain outside click
+  // should just close quietly with no focus/scroll side effect — only an intentional
+  // keyboard action (Escape, selecting a row) should return focus to the trigger.
   useEffect(() => {
+    if (!open) return;
     function onClickOutside(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        closeAndReturnFocus();
+        setOpen(false);
+        setQuery("");
       }
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     setHighlighted(0);
