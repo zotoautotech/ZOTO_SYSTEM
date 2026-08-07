@@ -194,9 +194,20 @@ simplification of the order-level pattern above.
   `Frontend/src/components/stage/TripQueueList.tsx` (one generic list for all 7
   Transport-family routes), `Frontend/src/modules/transport/` — `TransportList.tsx`
   (wraps `TripQueueList` + `CreateTripModal`), `CreateTripModal.tsx` ("Arrange Vehicle Form",
-  renamed from "Transport Main Form") — its "Select Sale Orders" section queues one or more
-  orders client-side (each via the nested `TransportOrderForm.tsx` "Order Details"/"Logistic
-  Details" tabs → `TransportItemsForm.tsx` "Load Limit Details" per-item quantity picker)
+  renamed from "Transport Main Form") — opens with `Send Through: ZOTO Vehicle`, `Vehicle
+  Arrange for: Customer`, `ZOTO Vehicle ID: VEH-001` and `Freight Applicable On Invoice?: N`,
+  matching the Order Punch form's own defaults; VEH-001's Vehicle type/No./Size/Driver fields
+  are filled by a `useEffect` rather than inline, since the vehicle master only arrives after
+  first render (it bails out once `vehicleType` is set so it can never clobber a doer's edit).
+  Its "Select Sale Orders" section is a **checkbox table over the eligible orders** — ticking a
+  row queues that whole order client-side (every item at full order quantity, `loadBoxes`
+  carried from the item's completed PDI Box Quantity, delivery mode/freight-paid-by taken off
+  the order's own preferred fields, `freightPaidAt` mirrored to `"Pay at Customer"` when the
+  customer pays, since no such column exists on `ORDER_PUNCH`), plus a header select-all box.
+  The older nested `TransportOrderForm.tsx` ("Order Details"/"Logistic Details" tabs →
+  `TransportItemsForm.tsx` "Load Limit Details" per-item quantity picker) is still reachable
+  behind the "Add with custom load quantities" button — it's the only way to load a **partial**
+  quantity, so don't delete it as dead code. Either path queues
   before the trip exists; Save creates the trip then calls `attachOrders()` once for every
   queued order, matching the old CRR reference's nested New-row flow instead of the previous
   "create trip, then separately attach whole orders from the trip detail page" two-step

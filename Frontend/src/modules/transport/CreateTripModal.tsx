@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
@@ -8,7 +8,7 @@ import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
-import { formatTimestamp } from "../../lib/format";
+import { getOrder, listPdiItems, type OrderRecord } from "../../lib/ordersApi";
 import { TransportOrderForm, type QueuedSaleOrder } from "./TransportOrderForm";
 
 interface Props {
@@ -22,6 +22,9 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
   value: v,
   label: v,
 }));
+/** Same default the Order Punch logistics tab uses — ZOTO's own vehicle, currently the only
+ * row in the ZOTO Vehicle master. Details auto-fill from that master once it loads. */
+const DEFAULT_ZOTO_VEHICLE_ID = "VEH-001";
 
 /** "Arrange Vehicle Form" (renamed from "Transport Main Form" per user request) — Send
  * Through / Vehicle Arrange for toggles, Transporter ID only when Send Through =
@@ -37,18 +40,21 @@ const VEHICLE_TYPES = ["2 Wheeler", "3 Wheeler", "4 Wheeler", "6 Wheeler", "8 Wh
  * simplified "create trip, then separately attach whole orders from the trip detail page"
  * two-step process. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
-  const [sendThrough, setSendThrough] = useState<string>("");
-  const [vehicleArrangeFor, setVehicleArrangeFor] = useState<string>("");
+  // Opening defaults — the overwhelmingly common case is ZOTO's own vehicle going straight to
+  // a customer with freight off-invoice, so the doer only touches these when it's an
+  // exception. All still editable.
+  const [sendThrough, setSendThrough] = useState<string>("ZOTO Vehicle");
+  const [vehicleArrangeFor, setVehicleArrangeFor] = useState<string>("Customer");
   const [transporterId, setTransporterId] = useState("");
   const [transporterName, setTransporterName] = useState("");
   const [transporterType, setTransporterType] = useState("");
-  const [zotoVehicleId, setZotoVehicleId] = useState("");
+  const [zotoVehicleId, setZotoVehicleId] = useState(DEFAULT_ZOTO_VEHICLE_ID);
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [vehicleSize, setVehicleSize] = useState("");
   const [driverName, setDriverName] = useState("");
   const [driverContactNo, setDriverContactNo] = useState("");
-  const [freightOnInvoice, setFreightOnInvoice] = useState<string>("");
+  const [freightOnInvoice, setFreightOnInvoice] = useState<string>("N");
   const [freightCharge, setFreightCharge] = useState("");
   const [freightGstApplicable, setFreightGstApplicable] = useState<string>("");
   const [description, setDescription] = useState("");
@@ -56,6 +62,8 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [error, setError] = useState("");
   const [queuedOrders, setQueuedOrders] = useState<QueuedSaleOrder[]>([]);
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [loadingOrderId, setLoadingOrderId] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
   const transporterOptions = transportersToOptions(transporters);
@@ -63,6 +71,79 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const zotoVehicleOptions = zotoVehiclesToOptions(zotoVehicles);
   const { data: eligibleOrders = [] } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
   const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
+  // PDI already recorded a Box Quantity per item, so auto-selecting an order can carry Load
+  // Boxes over the same way the manual Load Limit Details form does.
+  const { data: completedPdiItems = [] } = useQuery({ queryKey: ["pdiItems", "COMPLETED"], queryFn: () => listPdiItems("COMPLETED") });
+
+  // The vehicle master loads after first render, so the VEH-001 default can't fill its own
+  // Vehicle type/No./Size/Driver fields synchronously — do it once the master arrives, and
+  // only while the fields are still untouched so a doer's own edits are never overwritten.
+  useEffect(() => {
+    if (sendThrough !== "ZOTO Vehicle" || !zotoVehicleId || vehicleType || zotoVehicles.length === 0) return;
+    const row = zotoVehicles.find((v) => v["zoto vehical id"] === zotoVehicleId);
+    if (!row) return;
+    setVehicleType(row["Vehicle type"] ?? "");
+    setVehicleNo(row["Vehicle No."] ?? "");
+    setVehicleSize(row["Vehicle Size (Ft)"] ?? "");
+    setDriverName(row["Driver Name"] ?? "");
+    setDriverContactNo(row["Driver Contact No."] ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zotoVehicles, zotoVehicleId, sendThrough]);
+
+  /** Ticking an order's box queues it whole — every item at its full order quantity, and the
+   * logistics fields taken straight off the order's own preferred values. That's what the
+   * nested Transport Form / Load Limit Details flow was collecting by hand for the ordinary
+   * "ship all of it" case; that flow is still available below for a partial load. */
+  async function toggleOrder(order: OrderRecord, checked: boolean) {
+    if (!checked) {
+      setQueuedOrders((prev) => prev.filter((q) => q.orderId !== order.ORDER_ID));
+      return;
+    }
+    setLoadingOrderId(order.ORDER_ID);
+    setError("");
+    try {
+      const detail = await queryClient.fetchQuery({
+        queryKey: ["order", order.ORDER_ID],
+        queryFn: () => getOrder(order.ORDER_ID),
+      });
+      const freightPaidBy = order.FREIGHT_PAID_BY || "";
+      setQueuedOrders((prev) => [
+        ...prev,
+        {
+          orderId: order.ORDER_ID,
+          customerName: order.CUSTOMER_NAME || "",
+          timestamp: new Date().toISOString(),
+          items: detail.items.map((it) => {
+            const boxQty = Number(completedPdiItems.find((r) => r.ITEM_ID === it.ITEM_ID)?.BOX_QUANTITY || 0);
+            return {
+              itemId: it.ITEM_ID,
+              partName: it.PART_NAME,
+              qty: Number(it.QTY || 0),
+              unit: it.UOM || "NOS",
+              loadBoxes: boxQty > 0 ? boxQty : undefined,
+            };
+          }),
+          preferredDeliveryMode: order.PREFERRED_DELIVERY_MODE || "",
+          freightPaidBy,
+          // No "Freight Paid at" column exists on the order, so mirror who's paying rather
+          // than leaving a required-by-the-manual-form field blank.
+          freightPaidAt: freightPaidBy === "Customer" ? "Pay at Customer" : "",
+        },
+      ]);
+    } catch {
+      setError(`Could not load items for ${order.CUSTOMER_NAME || order.ORDER_ID} — please try again.`);
+    } finally {
+      setLoadingOrderId("");
+    }
+  }
+
+  async function toggleAll(checked: boolean) {
+    if (!checked) {
+      setQueuedOrders([]);
+      return;
+    }
+    for (const order of unqueuedEligibleOrders) await toggleOrder(order, true);
+  }
 
   function handleTransporterSelect(value: string, option?: { value: string; label: string }) {
     setTransporterId(option?.value ?? "");
@@ -216,28 +297,65 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
             Select Sale Orders here that will transport through this vehicle. <span style={{ color: "#d32f2f" }}>*</span>
           </label>
-          {queuedOrders.length > 0 && (
-            <div style={{ overflowX: "auto", marginBottom: 12 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--color-text-muted)" }}>
-                    <th style={{ padding: "6px 8px" }}>Customer Name</th>
-                    <th style={{ padding: "6px 8px" }}>Timestamp</th>
+          <div style={{ overflowX: "auto", marginBottom: 12, border: "1px solid var(--color-border)", borderRadius: 10 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--color-text-muted)", background: "var(--color-bg-page)" }}>
+                  <th style={{ padding: "8px 10px", width: 36 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all sale orders"
+                      checked={eligibleOrders.length > 0 && queuedOrders.length === eligibleOrders.length}
+                      onChange={(e) => toggleAll(e.target.checked)}
+                    />
+                  </th>
+                  <th style={{ padding: "8px 10px" }}>Customer Name</th>
+                  <th style={{ padding: "8px 10px" }}>CUST ID</th>
+                  <th style={{ padding: "8px 10px" }}>Delivery Mode</th>
+                  <th style={{ padding: "8px 10px" }}>Freight Paid by</th>
+                  <th style={{ padding: "8px 10px" }}>Items</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eligibleOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "14px 10px", color: "var(--color-text-muted)" }}>
+                      No sale orders are pending transport.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {queuedOrders.map((q) => (
-                    <tr key={q.orderId} style={{ borderTop: "1px solid var(--color-border)" }}>
-                      <td style={{ padding: "6px 8px" }}>{q.customerName || q.orderId}</td>
-                      <td style={{ padding: "6px 8px" }}>{formatTimestamp(q.timestamp)}</td>
+                )}
+                {eligibleOrders.map((o) => {
+                  const queued = queuedOrders.find((q) => q.orderId === o.ORDER_ID);
+                  const loading = loadingOrderId === o.ORDER_ID;
+                  return (
+                    <tr key={o.ORDER_ID} style={{ borderTop: "1px solid var(--color-border)" }}>
+                      <td style={{ padding: "8px 10px" }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${o.CUSTOMER_NAME || o.ORDER_ID}`}
+                          checked={!!queued}
+                          disabled={loading}
+                          onChange={(e) => toggleOrder(o, e.target.checked)}
+                        />
+                      </td>
+                      <td style={{ padding: "8px 10px" }}>{o.CUSTOMER_NAME || o.ORDER_ID}</td>
+                      <td style={{ padding: "8px 10px" }}>{o.CUST_ID}</td>
+                      <td style={{ padding: "8px 10px" }}>{o.PREFERRED_DELIVERY_MODE || "—"}</td>
+                      <td style={{ padding: "8px 10px" }}>{o.FREIGHT_PAID_BY || "—"}</td>
+                      <td style={{ padding: "8px 10px" }}>
+                        {loading ? "Loading…" : queued ? `${queued.items.length} (${queued.items.reduce((n, it) => n + it.qty, 0)} qty)` : "—"}
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <TextField label="Selected Items Count" value={String(queuedOrders.reduce((n, q) => n + q.items.length, 0))} disabled />
+          {/* Ticking a box loads the whole order. Partial loads (a Load Qty below the full
+            * order quantity) still need the per-item flow, so keep it reachable. */}
           <button className="btn" style={{ width: "100%", color: "#d32f2f", marginBottom: 20 }} onClick={() => setShowOrderForm(true)}>
-            New
+            Add with custom load quantities
           </button>
 
           {error && <p style={{ color: "#d32f2f", fontSize: 13, marginTop: 8 }}>{error}</p>}
