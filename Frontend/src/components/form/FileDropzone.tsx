@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { api } from "../../lib/api";
 import { openAttachment } from "../../lib/attachments";
+import { handlePageNavKeyDown } from "../../lib/keyboardNav";
 
 interface FileDropzoneProps {
   label: string;
@@ -47,8 +48,25 @@ export function FileDropzone({ label, value, onChange, context }: FileDropzonePr
         style={{ display: "none" }}
         onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
       />
+      {/* This used to be a plain <div onClick> — not focusable at all (and the hidden
+       * <input type="file"> above is display:none, also excluded from tab order), so Tab
+       * silently skipped straight over the whole upload control. tabIndex + role="button"
+       * make it a real Tab stop; Enter/Space open the file picker like a click would.
+       * PageUp/PageDown reuse the same shared field-to-field navigation every other field
+       * uses (see lib/keyboardNav.ts). */}
       <div
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          } else {
+            handlePageNavKeyDown(e);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={value ? `${label}: view attachment` : `${label}: click to upload`}
         className="card"
         style={{
           padding: 24,

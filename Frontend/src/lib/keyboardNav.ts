@@ -48,3 +48,17 @@ export function handleFieldNavKeyDown(e: React.KeyboardEvent<HTMLInputElement>) 
     focusPrevField(e.currentTarget);
   }
 }
+
+/** PageUp/PageDown only, generic over any focusable element — for custom controls (like
+ * FileDropzone's upload area) that need Enter for their own action instead of "advance to
+ * next field", but should still support the same field-to-field paging every other field
+ * in the app does. */
+export function handlePageNavKeyDown<T extends HTMLElement>(e: React.KeyboardEvent<T>) {
+  if (e.key === "PageDown") {
+    e.preventDefault();
+    focusNextField(e.currentTarget);
+  } else if (e.key === "PageUp") {
+    e.preventDefault();
+    focusPrevField(e.currentTarget);
+  }
+}
