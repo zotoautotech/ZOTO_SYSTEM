@@ -208,15 +208,23 @@ function ItemBlock({
 
   useEffect(() => {
     if (!custId || !item.partName) return;
+    // The rate column is "Default Rate T1" on System 1's billing master and
+    // "Default Rate T2" on System 2's — accept either so one shared component works
+    // against both, instead of silently never matching on whichever it isn't.
+    const rateOf = (s: (typeof billingStrategies)[number]) => s["Default Rate T1"] || s["Default Rate T2"];
     const match = billingStrategies.find(
       (s) =>
         s["CUST ID"] === custId &&
         (s["Part Code"] && item.partNo ? s["Part Code"] === item.partNo : s["Part Name"] === item.partName) &&
-        s["Default Rate T1"]
+        rateOf(s)
     );
-    if (match) {
-      onChange({ price: Number(match["Default Rate T1"]) });
-    }
+    if (!match) return;
+    // Rates are annotated in the sheet — "1100 (WB)", "2100 (B)" — so Number() on the raw
+    // string is NaN, which landed in the form as an empty Price box with no error. Strip
+    // everything but the number first, same as formatCurrency() does for sheet-formatted
+    // currency values.
+    const price = Number(String(rateOf(match)).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(price) && price > 0) onChange({ price });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [custId, item.fgId, item.partName, billingStrategies]);
 
