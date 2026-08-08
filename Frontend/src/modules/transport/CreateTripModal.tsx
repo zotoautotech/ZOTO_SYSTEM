@@ -297,7 +297,11 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             * relief driver), and the doer has to be able to record what really left the gate.
             * Same pre-fill-but-editable convention the logistics fields already follow. */}
           <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
-          <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
+          {/* Not type="number": the vehicle master stores sizes like "6FT", and a number input
+            * silently renders a non-numeric value as blank — which is exactly how VEH-001's
+            * "6FT" disappeared here while showing fine on the Order Punch form. The whole
+            * chain (master → tripsApi.vehicleSize → the sheet) is a string. */}
+          <TextField label="Vehicle Size (Ft)" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
           <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
           <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} />
 

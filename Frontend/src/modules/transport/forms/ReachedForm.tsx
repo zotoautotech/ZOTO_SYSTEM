@@ -140,7 +140,9 @@ export function ReachedForm({ transportId, onClose, onSaved }: Props) {
           <>
             <SearchableSelect label="Vehicle type" required value={vehicleType} onChange={(v) => setVehicleType(v)} options={VEHICLE_TYPES} placeholder="Search" />
             <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
-            <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
+            {/* Text, not number — sizes are recorded as "6FT" in the vehicle master, and a
+              * number input blanks any non-numeric value (see CreateTripModal). */}
+            <TextField label="Vehicle Size (Ft)" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
             <TextField label="Driver Name" value={driverName} onChange={(e) => setDriverName(e.target.value)} />
             <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} />
           </>
