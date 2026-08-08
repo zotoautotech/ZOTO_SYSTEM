@@ -292,10 +292,14 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
             options={VEHICLE_TYPES}
             placeholder="Search"
           />
-          <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
-          <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
-          <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
-          <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} disabled={sendThrough === "ZOTO Vehicle"} />
+          {/* Picking a ZOTO vehicle fills these from the master, but they stay editable — the
+            * truck that actually shows up can differ from the master row (a swapped vehicle, a
+            * relief driver), and the doer has to be able to record what really left the gate.
+            * Same pre-fill-but-editable convention the logistics fields already follow. */}
+          <TextField label="Vehicle No." required value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
+          <TextField label="Vehicle Size (Ft)" type="number" value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} />
+          <TextField label="Driver Name" required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
+          <TextField label="Driver Contact No." required value={driverContactNo} onChange={(e) => setDriverContactNo(e.target.value)} />
 
           <ToggleGroup
             label="Freight Applicable On Invoice?"
