@@ -243,6 +243,22 @@ function ItemBlock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uomList.join("|")]);
 
+  // ORDER_ITEMS has no FG ID column at all, so an order reopened for editing arrives with
+  // fgId blank and the Part (ID) picker renders empty even though the item plainly names
+  // its part. Recover the id from the goods master by part no./name once that master has
+  // loaded, so the picker shows the real part and re-saving keeps pointing at the same one.
+  useEffect(() => {
+    if (item.fgId || goods.length === 0) return;
+    if (!item.partNo && !item.partName) return;
+    const match = goods.find(
+      (g) =>
+        (item.partNo && (g["PART NO."] ?? "").trim() === item.partNo.trim()) ||
+        (item.partName && (g.Name ?? "").trim().toLowerCase() === item.partName.trim().toLowerCase())
+    );
+    if (match?.["FG ID"]) onChange({ fgId: match["FG ID"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goods.length, item.fgId, item.partNo, item.partName]);
+
   useEffect(() => {
     if (!custId || !item.partName) return;
     // The rate column is "Default Rate T1" on System 1's billing master and
