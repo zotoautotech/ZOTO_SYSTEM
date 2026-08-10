@@ -27,6 +27,7 @@ import { TransportList } from "./modules/transport/TransportList";
 import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
 import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
+import { MyTasksList } from "./checklist/MyTasksList";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="home/:view" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="checklist" element={<MyTasksList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/punch-order" element={<OrderPunchList />} />
         <Route path="modules/sale-order" element={<OrderPunchList hideCreate />} />

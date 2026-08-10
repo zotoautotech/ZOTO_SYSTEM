@@ -26,6 +26,8 @@ export const env = {
     transport: process.env.TRANSPORT_SHEET_ID ?? "",
     fg: process.env.FG_SHEET_ID ?? "",
     home: process.env.ZOTO_HOME_SHEET_ID ?? "",
+    checklistMaster: process.env.CHECKLIST_MASTER_SHEET_ID ?? "",
+    checklistAccounts: process.env.CHECKLIST_ACCOUNTS_SHEET_ID ?? "",
   },
 
   driveFolderId: process.env.DRIVE_FOLDER_ID ?? "",

@@ -18,7 +18,10 @@ export function Home() {
   const filtered = tiles.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   function hrefFor(tile: { name: string; view: string }) {
-    return tile.name.toUpperCase().startsWith("SALES CRR") ? "/modules" : `/home/${encodeURIComponent(tile.view)}`;
+    const name = tile.name.toUpperCase();
+    if (name.startsWith("SALES CRR")) return "/modules";
+    if (name.startsWith("CHECKLIST")) return "/checklist";
+    return `/home/${encodeURIComponent(tile.view)}`;
   }
 
   return (

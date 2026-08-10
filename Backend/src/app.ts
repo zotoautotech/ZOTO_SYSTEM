@@ -10,6 +10,7 @@ import { homeRouter } from "./routes/home.js";
 import { ordersRouter } from "./routes/orders.js";
 import { tripsRouter } from "./routes/tripRoutes.js";
 import { uploadsRouter } from "./routes/uploads.js";
+import { checklistRouter } from "./routes/checklist.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 // helmet's own type declarations sometimes resolve as a non-callable namespace on Vercel's
@@ -64,6 +65,7 @@ app.use("/api/v1/home", homeRouter);
 app.use("/api/v1/orders", ordersRouter);
 app.use("/api/v1/transport-trips", tripsRouter);
 app.use("/api/v1/uploads", uploadsRouter);
+app.use("/api/v1/checklist", checklistRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
