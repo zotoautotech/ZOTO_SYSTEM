@@ -17,15 +17,6 @@ function HomeIcon() {
   );
 }
 
-function ModulesIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M8 8h8M8 12h8M8 16h5" />
-    </svg>
-  );
-}
-
 function SettingsIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -105,11 +96,12 @@ function timeAgo(ts: number | null): string {
   return `${hours} hour${hours === 1 ? "" : "s"} ago`;
 }
 
-const NAV_ITEMS = [
-  { to: "/", icon: HomeIcon, label: "Home", end: true },
-  { to: "/modules", icon: ModulesIcon, label: "Sales CRR", end: false },
-  { to: "/checklist", icon: ModulesIcon, label: "Checklist", end: false },
-];
+// The sidebar only ever shows Home — HOME's own tile grid is the one place a doer switches
+// between apps (Sales CRR, Checklist, …), not a permanent per-app link pinned here. Used to
+// carry a "Sales CRR" entry (and briefly a "Checklist" one too) always visible regardless of
+// which app you were actually in — removed per explicit correction: apps show up when you've
+// clicked into them from Home, not as a standing sidebar list.
+const NAV_ITEMS = [{ to: "/", icon: HomeIcon, label: "Home", end: true }];
 
 const UTILITY_ITEMS = [
   { to: "/settings", icon: SettingsIcon, label: "Settings" },
