@@ -34,7 +34,7 @@ export async function listDoers() {
 
 export interface PunchTaskPayload {
   task: string;
-  doerEmail: string;
+  doerId: string;
   department: string;
   frequency: string;
   dayDate: string;

@@ -19,13 +19,24 @@ const MASTER_ACCOUNTS_TAB = "Master Accounts";
 
 checklistRouter.use(requireAuth, requireModule("checklist"));
 
-/** Looks up the logged-in doer's own Email ID from Doer List by their Employee Id (EMP ID),
- * needed since ZOTO's JWT only carries employeeId/name, not email — but Task Allotter/Email
- * on the Checklist sheets are email-keyed, matching the old AppSheet USEREMAIL() convention. */
-async function getUserEmail(employeeId: string): Promise<string> {
+/**
+ * The old AppSheet schema keyed everything (Doer, Task Allotter, Master Accounts' Email
+ * column) off USEREMAIL() — but the live Employee Master's Email column turned out to be
+ * genuinely empty for every employee (confirmed directly against the sheet, not assumed).
+ * The Apps Script routing/recurrence pipeline never validates or parses this value — it
+ * just copies whatever string sits in Task List Master's "Doer" column straight through
+ * into Master Accounts' "Email" column — so any stable per-doer identifier works. This app
+ * uses the doer's own Employee Id (ZOTO login id, always populated) instead of an email
+ * everywhere a "doer email" would have gone. Keeping the sheet's own column name ("Email")
+ * unchanged — only what value gets written into it changed.
+ */
+
+/** Full Name + Designation for display, looked up from Doer List by Employee Id. Falls back
+ * to the bare Employee Id if the doer isn't found there (display-only, never blocks anything). */
+async function getDoerDisplayName(employeeId: string): Promise<string> {
   const doers = (await readTable(env.sheets.checklistMaster, DOER_LIST_TAB)).map(doerFromSheet);
   const doer = doers.find((d) => d.EMP_ID?.trim() === employeeId.trim());
-  return doer?.EMAIL?.trim() ?? "";
+  return doer ? `${doer.NAME} (${doer.DESIGNATION})` : employeeId;
 }
 
 /** Issues a "UNQ-<8 random hex chars>" id, checked against existing Unique ID values in
@@ -54,7 +65,7 @@ checklistRouter.get("/doers", async (_req, res, next) => {
 
 const punchTaskSchema = z.object({
   task: z.string().min(1),
-  doerEmail: z.string().min(1),
+  doerId: z.string().min(1),
   department: z.string().min(1),
   frequency: z.enum(["D", "W", "M", "Y", "Q", "F", "E1st", "E2nd", "E3rd", "E4th", "ELast"]),
   dayDate: z.string().min(1),
@@ -70,7 +81,6 @@ checklistRouter.post("/tasks", async (req, res, next) => {
   try {
     const body = punchTaskSchema.parse(req.body);
     const uniqueId = await nextUniqueId();
-    const allotterEmail = await getUserEmail(req.user!.employeeId);
     const now = new Date().toISOString();
 
     await appendRow(
@@ -79,11 +89,11 @@ checklistRouter.post("/tasks", async (req, res, next) => {
       taskListMasterToSheet({
         TASK: body.task,
         DEPARTMENT: body.department,
-        DOER: body.doerEmail,
+        DOER: body.doerId,
         FREQUENCY: body.frequency,
         DAY_DATE: body.dayDate,
         UNIQUE_ID: uniqueId,
-        TASK_ALLOTTER: allotterEmail,
+        TASK_ALLOTTER: req.user!.employeeId,
         TIMESTAMP: now,
         TASK_DATATIME: now,
         TIMES: body.times !== undefined ? String(body.times) : "",
@@ -124,16 +134,13 @@ function delayDuration(planned: string): string {
  * "Pending Status" entry is a dead reference, no such Master Accounts column exists). */
 checklistRouter.get("/tasks/mine", async (req, res, next) => {
   try {
-    const email = await getUserEmail(req.user!.employeeId);
+    const employeeId = req.user!.employeeId.trim();
     const wantCompleted = req.query.status === "COMPLETED";
-
-    const doers = (await readTable(env.sheets.checklistMaster, DOER_LIST_TAB)).map(doerFromSheet);
-    const doer = doers.find((d) => d.EMAIL?.trim().toLowerCase() === email.toLowerCase());
-    const fullName = doer ? `${doer.NAME} (${doer.DESIGNATION})` : email;
+    const fullName = await getDoerDisplayName(employeeId);
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => r.EMAIL?.trim().toLowerCase() === email.toLowerCase())
+      .filter((r) => r.EMAIL?.trim() === employeeId)
       .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim()))
       .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
 

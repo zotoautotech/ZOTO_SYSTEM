@@ -36,7 +36,7 @@ export function TaskPunchForm({ onClose, onSaved }: Props) {
   const { data: doers = [] } = useQuery({ queryKey: ["checklist", "doers"], queryFn: listDoers });
 
   const [task, setTask] = useState("");
-  const [doerEmail, setDoerEmail] = useState("");
+  const [doerId, setDoerId] = useState("");
   const [department, setDepartment] = useState("");
   const [frequency, setFrequency] = useState("D");
   const [dayDate, setDayDate] = useState("");
@@ -46,11 +46,11 @@ export function TaskPunchForm({ onClose, onSaved }: Props) {
   const [error, setError] = useState("");
 
   const doerOptions = doers
-    .filter((d) => d.EMAIL)
-    .map((d) => ({ value: d.EMAIL, label: d.NAME, subtitle: d.DESIGNATION }));
+    .filter((d) => d.EMP_ID)
+    .map((d) => ({ value: d.EMP_ID, label: d.NAME, subtitle: d.DESIGNATION }));
 
   function canSave() {
-    return task.trim() !== "" && doerEmail !== "" && dayDate !== "" && (frequency === "D" || times.trim() !== "");
+    return task.trim() !== "" && doerId !== "" && dayDate !== "" && (frequency === "D" || times.trim() !== "");
   }
 
   async function handleSave() {
@@ -60,7 +60,7 @@ export function TaskPunchForm({ onClose, onSaved }: Props) {
     try {
       await punchTask({
         task,
-        doerEmail,
+        doerId,
         department,
         frequency,
         dayDate,
@@ -83,10 +83,10 @@ export function TaskPunchForm({ onClose, onSaved }: Props) {
         <SearchableSelect
           label="Doer"
           required
-          value={doerEmail}
+          value={doerId}
           onChange={(value, option) => {
-            setDoerEmail(value);
-            const doer = doers.find((d) => d.EMAIL === value);
+            setDoerId(value);
+            const doer = doers.find((d) => d.EMP_ID === value);
             setDepartment(doer?.DEPARTMENT ?? "");
             void option;
           }}
