@@ -5,6 +5,7 @@ import { appendRow, readTable } from "../services/sheets.js";
 import { listSheetTabs } from "../services/googleAuth.js";
 import { nextSequentialId } from "../services/ids.js";
 import { requireAuth } from "../middleware/auth.js";
+import { getPermissions } from "../services/permissions.js";
 
 export const mastersRouter = Router();
 mastersRouter.use(requireAuth);
@@ -44,9 +45,21 @@ mastersRouter.get("/customers", async (req, res, next) => {
     // Row 4 of the sheet ("ASHOKA PACKWELL INDUSTRIES", CUST ID "SD") predates the
     // CUST-#### numbering and isn't a real pickable customer — exclude anything
     // that doesn't follow the CUST-#### id format used from CUST-0001 onward.
-    const slim = rows
-      .filter((r) => /^CUST-\d+$/.test(r["CUST ID"] ?? ""))
-      .map((r) => Object.fromEntries(CUSTOMER_LIST_FIELDS.map((f) => [f, r[f] ?? ""])));
+    let visible = rows.filter((r) => /^CUST-\d+$/.test(r["CUST ID"] ?? ""));
+
+    // A non-Admin doer only sees the customers assigned to them — matched against
+    // CUSTOMER MASTER T1's own "Field Sale Repersentative" column (the same doer-assignment
+    // field getBuyerFields() reads to auto-fill Sale Staff Name on Order Punch). An Admin
+    // (Permissions_Process contains "Admin", perms.modules === "ALL") still sees the full
+    // customer book — this only narrows things for everyone else. Permissions are read live
+    // (not trusted from the JWT), same convention as every other permission check.
+    const perms = req.user ? await getPermissions(req.user.employeeId) : null;
+    if (perms && perms.modules !== "ALL") {
+      const myName = req.user!.name.trim().toLowerCase();
+      visible = visible.filter((r) => (r["Field Sale Repersentative"] ?? "").trim().toLowerCase() === myName);
+    }
+
+    const slim = visible.map((r) => Object.fromEntries(CUSTOMER_LIST_FIELDS.map((f) => [f, r[f] ?? ""])));
     res.json(slim);
   } catch (err) {
     next(err);
