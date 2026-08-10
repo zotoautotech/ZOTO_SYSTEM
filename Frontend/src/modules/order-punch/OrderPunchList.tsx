@@ -122,6 +122,11 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
       )
     : byCustomer;
 
+  // Exactly one row selected AND that row still at PENDING — the only state the punch form
+  // can reopen (see the Edit button below).
+  const editableSelection =
+    selectedIds.size === 1 && orders.find((o) => o.ORDER_ID === Array.from(selectedIds)[0])?.STATUS === "PENDING";
+
   const columns: Column<OrderRecord>[] = [
     { key: "status", header: "Status", render: (o) => <StatusBadge status={o.STATUS} /> },
     { key: "timestamp", header: "Timestamp", render: (o) => formatTimestamp(o.CREATED_AT) },
@@ -190,13 +195,22 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
         {canEdit && (
           <button
             className="btn"
-            onClick={() => navigate(`${basePath}/${Array.from(selectedIds)[0]}`)}
-            disabled={selectedIds.size !== 1}
+            onClick={() => navigate(`${basePath}/${Array.from(selectedIds)[0]}/edit`)}
+            /* Only a still-PENDING order can be reopened in the punch form — once a discount
+               is applied it has downstream SALE_ORDERS/discount rows derived from its amounts,
+               and the server refuses the edit (409). Disabling here explains that up front
+               instead of letting the doer fill the form and fail on save. */
+            disabled={selectedIds.size !== 1 || !editableSelection}
+            title={
+              selectedIds.size === 1 && !editableSelection
+                ? "Only orders still at PENDING can be edited here"
+                : undefined
+            }
             style={{
               display: "flex",
               alignItems: "center",
               gap: 6,
-              opacity: selectedIds.size !== 1 ? 0.5 : 1,
+              opacity: selectedIds.size !== 1 || !editableSelection ? 0.5 : 1,
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

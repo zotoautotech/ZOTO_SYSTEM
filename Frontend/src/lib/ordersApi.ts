@@ -126,6 +126,14 @@ export async function createOrder(payload: NewOrderPayload) {
   return res.data;
 }
 
+/** Edits an existing punch order. Same payload shape as createOrder — the server replaces
+ * the order's items wholesale and recomputes its amounts. Only allowed while the order is
+ * still PENDING; later stages are edited through SO Confirmation's Changes flow instead. */
+export async function updateOrder(orderId: string, payload: NewOrderPayload) {
+  const res = await api.put<{ orderId: string }>(`/orders/${orderId}`, payload);
+  return res.data;
+}
+
 export interface OrderDiscountItemLine {
   itemId: string;
   type: "Percentage" | "Rupees";

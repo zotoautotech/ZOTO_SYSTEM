@@ -683,6 +683,124 @@ ordersRouter.delete("/", requireCanDelete, async (req, res, next) => {
   }
 });
 
+type PunchBody = z.infer<typeof createOrderSchema>;
+
+/** The ORDER_PUNCH fields that come straight off the punch form, shared by create
+ * (POST /) and edit (PUT /:id) so the two can't drift apart as fields are added. Excludes
+ * everything the two handlers set differently — ORDER_ID/CREATED_AT/STATUS/amounts. */
+function punchFieldsFromBody(body: PunchBody, seller: SheetRow, buyer: SheetRow): SheetRow {
+  return {
+    PO_NO: body.poNo,
+    PO_DATE: body.poDate,
+    PO_ATTACHMENT_URL: body.poAttachmentUrl,
+    OTHER_ATTACHMENT_URL: body.otherAttachmentUrl,
+    PO_REMARKS: body.poRemarks,
+    ORDER_TYPE: body.orderType,
+    SALE_TYPE: body.saleType,
+    PAYMENT_TYPE: body.paymentType,
+    ADVANCE_PCT: body.advancePct !== undefined ? String(body.advancePct) : "",
+    ...seller,
+    CUST_ID: body.custId,
+    CUSTOMER_NAME: body.customerName,
+    ...buyer,
+    THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
+    CONTACT_PERSON: body.contactPerson,
+    CONTACT_NO: body.contactNo,
+    ORDER_GIVEN_BY: body.orderGivenBy,
+    BILLING_ADDRESS: body.billingAddress,
+    BILLING_STATE: body.billingState,
+    BILLING_PINCODE: body.billingPincode,
+    BILLING_COUNTRY: body.billingCountry,
+    SHIPPING_SAME: body.shippingSame ?? "",
+    SHIPPING_ADDRESS: body.shippingAddress,
+    SHIPPING_STATE: body.shippingState,
+    SHIPPING_PINCODE: body.shippingPincode,
+    PREFERRED_DELIVERY_MODE: body.preferredDeliveryMode,
+    PREFERRED_TRANSPORT_MODE: body.preferredTransportMode,
+    FREIGHT_PAID_BY: body.freightPaidBy,
+    FREIGHT_ON_INVOICE: body.freightOnInvoice,
+    PREFERRED_TPT_ID: body.preferredTptId,
+    PREFERRED_TPT_NAME: body.preferredTptName,
+    TRANSPORTER_TYPE: body.transporterType,
+    TRANSPORTER_CONTACT: body.transporterContactNo,
+    TRANSPORTER_PERSON_NAME: body.transporterPersonName,
+    TRANSPORTER_PERSON_CONTACT: body.transporterPersonContactNo,
+    TRANSPORTER_ADDRESS: body.transporterAddress,
+    PREFERRED_ZOTO_VEHICLE_ID: body.preferredZotoVehicleId,
+    ZOTO_VEHICLE_DETAILS: body.zotoVehicleDetails,
+    ZOTO_VEHICLE_TYPE: body.zotoVehicleType,
+    ZOTO_VEHICLE_NO: body.zotoVehicleNo,
+    ZOTO_VEHICLE_SIZE: body.zotoVehicleSize,
+    ZOTO_VEHICLE_DRIVER_NAME: body.zotoVehicleDriverName,
+    ZOTO_VEHICLE_DRIVER_CONTACT: body.zotoVehicleDriverContactNo,
+  };
+}
+
+/** Builds ORDER_ITEMS rows and the order's basic/tax totals, applying the same per-line
+ * GST split used everywhere else. Item IDs are positional (`<orderId>-01`, `-02`, …), so
+ * an edit that replaces the item list renumbers from scratch. */
+function buildItemRows(
+  orderId: string,
+  items: PunchBody["items"],
+  billingState: string,
+  sellerState: string,
+  now: string,
+  employeeId: string
+): { itemRows: SheetRow[]; basicAmount: number; taxAmount: number } {
+  let basicAmount = 0;
+  let taxAmount = 0;
+  const itemRows: SheetRow[] = [];
+  for (const item of items) {
+    const itemId = `${orderId}-${String(itemRows.length + 1).padStart(2, "0")}`;
+    const lineBasic = item.price * item.qty - item.discountRs;
+    const { cgst, sgst, igst, lineTax } = splitGst(lineBasic, item.gstSlabPct, billingState, sellerState);
+    basicAmount += lineBasic;
+    taxAmount += lineTax;
+    itemRows.push({
+      ITEM_ID: itemId,
+      ORDER_ID: orderId,
+      FG_ID: item.fgId,
+      PART_NO: item.partNo,
+      PART_NAME: item.partName,
+      SEGMENT: item.segment,
+      CATEGORY: item.category,
+      STRATEGY_ID: item.strategyId,
+      PRICE: money(item.price),
+      QTY: String(item.qty),
+      UOM: item.uom,
+      DISCOUNT_ON: item.discountOn,
+      DISCOUNT_RS: money(item.discountRs),
+      DISCOUNT_PCT: String(item.discountPct),
+      BASIC_AMOUNT: money(lineBasic),
+      GST_SLAB_PCT: String(item.gstSlabPct),
+      CGST: money(cgst),
+      SGST: money(sgst),
+      IGST: money(igst),
+      TAX_AMOUNT: money(lineTax),
+      TOTAL_AMOUNT: money(roundOff(lineBasic + lineTax)),
+      SPECIAL_INSTRUCTIONS: item.specialInstructions,
+      PACKING_REQUIREMENTS: item.packingRequirements,
+      NOTES: item.notes,
+      STATUS: "PENDING",
+      CREATED_AT: now,
+      CREATED_BY: employeeId,
+    });
+  }
+  return { itemRows, basicAmount, taxAmount };
+}
+
+/** Blocks punching for a customer assigned to a different doer. Shared by create and edit —
+ * an edit can change the customer, so it needs the same gate. Returns the assigned rep's
+ * name when the punch should be refused, else null. */
+async function blockedByCustomerAssignment(employeeId: string, userName: string, buyer: SheetRow): Promise<string | null> {
+  const perms = await getPermissions(employeeId);
+  const assignedTo = String(buyer.SALE_STAFF_NAME || "").trim();
+  if (perms && perms.modules !== "ALL" && assignedTo && assignedTo.toLowerCase() !== userName.trim().toLowerCase()) {
+    return assignedTo;
+  }
+  return null;
+}
+
 ordersRouter.post("/", async (req, res, next) => {
   try {
     const body = createOrderSchema.parse(req.body);
@@ -699,55 +817,21 @@ ordersRouter.post("/", async (req, res, next) => {
     // customer in the picker and every order in the lists; this is the one gate. Enforced
     // here rather than only in the UI, since the form's own check is just a courtesy
     // message. Permissions are read live from USERS, not trusted from the JWT.
-    const perms = await getPermissions(req.user!.employeeId);
-    const assignedTo = String(buyer.SALE_STAFF_NAME || "").trim();
-    if (perms && perms.modules !== "ALL" && assignedTo && assignedTo.toLowerCase() !== req.user!.name.trim().toLowerCase()) {
+    const blockedBy = await blockedByCustomerAssignment(req.user!.employeeId, req.user!.name, buyer);
+    if (blockedBy) {
       return res.status(403).json({
-        error: { code: "FORBIDDEN", message: `This customer is assigned to ${assignedTo} — only they can punch an order for it.` },
+        error: { code: "FORBIDDEN", message: `This customer is assigned to ${blockedBy} — only they can punch an order for it.` },
       });
     }
 
-    let basicAmount = 0;
-    let taxAmount = 0;
-
-    const itemRows: SheetRow[] = [];
-    for (const item of body.items) {
-      const itemId = `${orderId}-${String(itemRows.length + 1).padStart(2, "0")}`;
-      const lineBasic = item.price * item.qty - item.discountRs;
-      const { cgst, sgst, igst, lineTax } = splitGst(lineBasic, item.gstSlabPct, body.billingState, String(seller.SELLER_STATE || ""));
-      basicAmount += lineBasic;
-      taxAmount += lineTax;
-
-      itemRows.push({
-        ITEM_ID: itemId,
-        ORDER_ID: orderId,
-        FG_ID: item.fgId,
-        PART_NO: item.partNo,
-        PART_NAME: item.partName,
-        SEGMENT: item.segment,
-        CATEGORY: item.category,
-        STRATEGY_ID: item.strategyId,
-        PRICE: money(item.price),
-        QTY: String(item.qty),
-        UOM: item.uom,
-        DISCOUNT_ON: item.discountOn,
-        DISCOUNT_RS: money(item.discountRs),
-        DISCOUNT_PCT: String(item.discountPct),
-        BASIC_AMOUNT: money(lineBasic),
-        GST_SLAB_PCT: String(item.gstSlabPct),
-        CGST: money(cgst),
-        SGST: money(sgst),
-        IGST: money(igst),
-        TAX_AMOUNT: money(lineTax),
-        TOTAL_AMOUNT: money(roundOff(lineBasic + lineTax)),
-        SPECIAL_INSTRUCTIONS: item.specialInstructions,
-        PACKING_REQUIREMENTS: item.packingRequirements,
-        NOTES: item.notes,
-        STATUS: "PENDING",
-        CREATED_AT: now,
-        CREATED_BY: req.user!.employeeId,
-      });
-    }
+    const { itemRows, basicAmount, taxAmount } = buildItemRows(
+      orderId,
+      body.items,
+      body.billingState,
+      String(seller.SELLER_STATE || ""),
+      now,
+      req.user!.employeeId
+    );
 
     await appendRows(env.sheets.transactions, "ORDER_ITEMS", itemRows.map(itemToSheet));
 
@@ -782,49 +866,7 @@ ordersRouter.post("/", async (req, res, next) => {
         ORDER_ID: orderId,
         CREATED_AT: now,
         CREATED_BY: req.user!.employeeId,
-        PO_NO: body.poNo,
-        PO_DATE: body.poDate,
-        PO_ATTACHMENT_URL: body.poAttachmentUrl,
-        OTHER_ATTACHMENT_URL: body.otherAttachmentUrl,
-        PO_REMARKS: body.poRemarks,
-        ORDER_TYPE: body.orderType,
-        SALE_TYPE: body.saleType,
-        PAYMENT_TYPE: body.paymentType,
-        ADVANCE_PCT: body.advancePct !== undefined ? String(body.advancePct) : "",
-        ...seller,
-        CUST_ID: body.custId,
-        CUSTOMER_NAME: body.customerName,
-        ...buyer,
-        THIS_ORDER_PAYMENT_TERMS: body.thisOrderPaymentTerms,
-        CONTACT_PERSON: body.contactPerson,
-        CONTACT_NO: body.contactNo,
-        ORDER_GIVEN_BY: body.orderGivenBy,
-        BILLING_ADDRESS: body.billingAddress,
-        BILLING_STATE: body.billingState,
-        BILLING_PINCODE: body.billingPincode,
-        BILLING_COUNTRY: body.billingCountry,
-        SHIPPING_SAME: body.shippingSame ?? "",
-        SHIPPING_ADDRESS: body.shippingAddress,
-        SHIPPING_STATE: body.shippingState,
-        SHIPPING_PINCODE: body.shippingPincode,
-        PREFERRED_DELIVERY_MODE: body.preferredDeliveryMode,
-        PREFERRED_TRANSPORT_MODE: body.preferredTransportMode,
-        FREIGHT_PAID_BY: body.freightPaidBy,
-        FREIGHT_ON_INVOICE: body.freightOnInvoice,
-        PREFERRED_TPT_ID: body.preferredTptId,
-        PREFERRED_TPT_NAME: body.preferredTptName,
-        TRANSPORTER_TYPE: body.transporterType,
-        TRANSPORTER_CONTACT: body.transporterContactNo,
-        TRANSPORTER_PERSON_NAME: body.transporterPersonName,
-        TRANSPORTER_PERSON_CONTACT: body.transporterPersonContactNo,
-        TRANSPORTER_ADDRESS: body.transporterAddress,
-        PREFERRED_ZOTO_VEHICLE_ID: body.preferredZotoVehicleId,
-        ZOTO_VEHICLE_DETAILS: body.zotoVehicleDetails,
-        ZOTO_VEHICLE_TYPE: body.zotoVehicleType,
-        ZOTO_VEHICLE_NO: body.zotoVehicleNo,
-        ZOTO_VEHICLE_SIZE: body.zotoVehicleSize,
-        ZOTO_VEHICLE_DRIVER_NAME: body.zotoVehicleDriverName,
-        ZOTO_VEHICLE_DRIVER_CONTACT: body.zotoVehicleDriverContactNo,
+        ...punchFieldsFromBody(body, seller, buyer),
         BASIC_AMOUNT: money(basicAmount),
         TAX_AMOUNT: money(taxAmount),
         TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)),
@@ -835,6 +877,104 @@ ordersRouter.post("/", async (req, res, next) => {
     );
 
     res.status(201).json({ orderId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Edits an already-punched order in place — the "Edit" action on the Punch Order list.
+ * Deliberately restricted to orders still sitting at STATUS "PENDING": the moment a
+ * discount is applied the order gains SALE_ORDERS/Order Punch Discount rows derived from
+ * these exact amounts, and rewriting the punch underneath them would silently desync every
+ * downstream copy. Editing later in the lifecycle is what SO Confirmation's "Changes" flow
+ * is for, which updates ORDER_PUNCH and SALE_ORDERS together.
+ *
+ * Items are replaced wholesale (delete + re-append, renumbered `<orderId>-01`…) rather than
+ * diffed, matching the same replace strategy the Changes flow already uses. DISPATCH_PLAN
+ * rows are rebuilt too, since they reference item IDs that this renumbering invalidates.
+ */
+ordersRouter.put("/:id", async (req, res, next) => {
+  try {
+    const body = createOrderSchema.parse(req.body);
+    const now = new Date().toISOString();
+    const orderId = req.params.id;
+
+    const rows = await readTable(env.sheets.transactions, ORDER_TAB);
+    const existing = rows.find((r) => r.ORDER_ID === orderId);
+    if (!existing) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+    }
+    const existingPunch = punchFromSheet(existing);
+    if ((existingPunch.STATUS || "") !== "PENDING") {
+      return res.status(409).json({
+        error: {
+          code: "NOT_EDITABLE",
+          message: `This order has already moved on to "${existingPunch.STATUS}" and can no longer be edited here.`,
+        },
+      });
+    }
+
+    const [seller, buyer] = await Promise.all([getSellerFields(), getBuyerFields(body.custId)]);
+
+    const blockedBy = await blockedByCustomerAssignment(req.user!.employeeId, req.user!.name, buyer);
+    if (blockedBy) {
+      return res.status(403).json({
+        error: { code: "FORBIDDEN", message: `This customer is assigned to ${blockedBy} — only they can punch an order for it.` },
+      });
+    }
+
+    const { itemRows, basicAmount, taxAmount } = buildItemRows(
+      orderId,
+      body.items,
+      body.billingState,
+      String(seller.SELLER_STATE || ""),
+      now,
+      req.user!.employeeId
+    );
+
+    await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", [orderId]);
+    await appendRows(env.sheets.transactions, "ORDER_ITEMS", itemRows.map(itemToSheet));
+
+    await deleteRows(env.sheets.transactions, "DISPATCH_PLAN", "ORDER_ID", [orderId]);
+    const dspIds = await nextIds("DSP", "DISPATCH_PLAN", "DSP_ID", body.dispatchPlan.length);
+    const dispatchPlanRows: SheetRow[] = [];
+    for (const [i, plan] of body.dispatchPlan.entries()) {
+      const targetItem = itemRows[plan.itemIndex];
+      if (!targetItem) continue;
+      dispatchPlanRows.push({
+        DSP_ID: dspIds[i],
+        ITEM_ID: targetItem.ITEM_ID,
+        ORDER_ID: orderId,
+        EXPECTED_DATE: plan.expectedDate,
+        PLANNED_QTY: String(plan.plannedQty),
+        UOM: plan.uom,
+        STATUS: "PENDING",
+        CREATED_AT: now,
+        CREATED_BY: req.user!.employeeId,
+        UPDATED_AT: now,
+        UPDATED_BY: req.user!.employeeId,
+        ROW_VERSION: "1",
+      });
+    }
+    await appendRows(env.sheets.transactions, "DISPATCH_PLAN", dispatchPlanRows);
+
+    // updateRow merges by header, so ORDER_ID/CREATED_AT/CREATED_BY and anything else not
+    // in this patch keep their original values — only what the form owns is rewritten.
+    await updateRow(
+      env.sheets.transactions,
+      ORDER_TAB,
+      "ORDER_ID",
+      orderId,
+      punchToSheet({
+        ...punchFieldsFromBody(body, seller, buyer),
+        BASIC_AMOUNT: money(basicAmount),
+        TAX_AMOUNT: money(taxAmount),
+        TOTAL_AMOUNT: money(roundOff(basicAmount + taxAmount)),
+      })
+    );
+
+    res.json({ orderId });
   } catch (err) {
     next(err);
   }

@@ -57,9 +57,16 @@ export default function App() {
         <Route path="modules/punch-order" element={<OrderPunchList />} />
         <Route path="modules/sale-order" element={<OrderPunchList hideCreate />} />
         <Route path="modules/punch-order/new" element={<OrderPunchForm />} />
+        {/* Declared before the ":orderId" detail route below so "edit" isn't swallowed as
+            an order id — same ordering hazard noted in CLAUDE.md's Known gotchas. */}
+        <Route path="modules/punch-order/:orderId/edit" element={<OrderPunchForm />} />
         <Route path="modules/punch-order/:orderId" element={<OrderDetail />} />
         <Route path="modules/punch-order/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/punch-order/:orderId/items/:itemId" element={<OrderItemDetail />} />
+        {/* The Sale Order list is the same OrderPunchList component, so its Edit action
+            builds a /modules/sale-order/... URL — registered here too so it resolves rather
+            than dead-ending. Before ":orderId", same ordering reason as punch-order above. */}
+        <Route path="modules/sale-order/:orderId/edit" element={<OrderPunchForm />} />
         <Route path="modules/sale-order/:orderId" element={<OrderDetail />} />
         <Route path="modules/sale-order/:orderId/items" element={<OrderItemsView />} />
         <Route path="modules/sale-order/:orderId/items/:itemId" element={<OrderItemDetail />} />

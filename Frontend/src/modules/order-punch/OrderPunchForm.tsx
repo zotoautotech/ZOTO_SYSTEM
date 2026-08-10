@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { createOrder } from "../../lib/ordersApi";
-import { emptyOrderForm, type OrderFormState } from "./form/types";
+import { createOrder, getOrder, updateOrder } from "../../lib/ordersApi";
+import { emptyOrderForm, orderToFormState, type OrderFormState } from "./form/types";
 import { Tab1PurchaseOrder } from "./form/Tab1PurchaseOrder";
 import { Tab2OrderDetails } from "./form/Tab2OrderDetails";
 import { Tab3BillingAddress } from "./form/Tab3BillingAddress";
@@ -39,7 +39,11 @@ function validateTab(tab: number, form: OrderFormState, user: AuthUser | null): 
     }
     if (!form.custId) return "Select a Customer ID before continuing";
     for (const [i, item] of form.items.entries()) {
-      if (!item.fgId) return `Select a part for item ${i + 1} before continuing`;
+      // partName counts as "a part is selected" alongside fgId: ORDER_ITEMS has no FG ID
+      // column at all (verified against the live sheet), so an order reopened for editing
+      // comes back with fgId blank even though its part is perfectly well identified.
+      // Picking a part in the form always sets both, so this is no looser on a new punch.
+      if (!item.fgId && !item.partName) return `Select a part for item ${i + 1} before continuing`;
       if (!item.qty) return `Enter a quantity for item ${i + 1} before continuing`;
       if (!item.price) return `Enter a price for item ${i + 1} before continuing`;
     }
@@ -71,10 +75,26 @@ export function OrderPunchForm() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  // Present only on the /:orderId/edit route — the same form reopened on a saved order.
+  const { orderId } = useParams();
+  const isEdit = !!orderId;
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const { data: existing, isLoading: loadingExisting, error: loadError } = useQuery({
+    queryKey: ["orders", orderId],
+    queryFn: () => getOrder(orderId!),
+    enabled: isEdit,
+  });
+
+  // Prefill once the saved order arrives. Keyed on ORDER_ID rather than the whole object so
+  // a background refetch can't wipe out edits the doer has already typed.
+  useEffect(() => {
+    if (!existing) return;
+    setForm(orderToFormState(existing.order as never, existing.items as never));
+  }, [existing?.order?.ORDER_ID]);
 
   function update(patch: Partial<OrderFormState>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -104,7 +124,7 @@ export function OrderPunchForm() {
     setSaving(true);
     setError("");
     try {
-      await createOrder({
+      const payload = {
         poNo: form.poNo,
         poDate: form.poDate,
         poAttachmentUrl: form.poAttachmentUrl,
@@ -158,7 +178,12 @@ export function OrderPunchForm() {
           gstSlabPct: it.gstSlabPct,
           notes: it.remarks,
         })),
-      });
+      };
+      if (isEdit) {
+        await updateOrder(orderId!, payload);
+      } else {
+        await createOrder(payload);
+      }
       // invalidateQueries() only auto-refetches queries with an ACTIVE observer right now —
       // the list page isn't mounted yet (we're still on this modal, about to navigate to it),
       // so invalidate alone just marks the cache stale without fetching, and the list's
@@ -176,8 +201,22 @@ export function OrderPunchForm() {
     }
   }
 
+  if (isEdit && (loadingExisting || loadError)) {
+    return (
+      <FormModal title="Edit Order Punch" onClose={() => navigate("/modules/punch-order")} size="standard">
+        <div style={{ padding: 24, fontSize: 14, color: loadError ? "var(--color-error)" : undefined }}>
+          {loadError ? "Could not load this order." : "Loading order…"}
+        </div>
+      </FormModal>
+    );
+  }
+
   return (
-    <FormModal title="Order Punch Form" onClose={() => navigate("/modules/punch-order")} size="standard">
+    <FormModal
+      title={isEdit ? `Edit Order Punch — ${orderId}` : "Order Punch Form"}
+      onClose={() => navigate("/modules/punch-order")}
+      size="standard"
+    >
         {isMobile && (
           <div style={{ textAlign: "center", fontWeight: 600, fontSize: 14, padding: "0 var(--space)" }}>
             {TABS[tab]}

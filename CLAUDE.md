@@ -868,6 +868,35 @@ trip and exposed via `openAttachment()` (same "View attachment" pattern as every
 attachment in this app) on `TripDetail.tsx`'s Vehicle Details section — no new viewer UI was
 needed since it's just a normal PDF fileId by that point.
 
+## Editing a punched order
+
+`PUT /orders/:id` reopens an already-punched order in the same 4-tab punch form
+(`modules/punch-order/:orderId/edit`, and the mirrored `sale-order` path since
+`OrderPunchList` is shared). `OrderPunchForm` switches to edit mode purely on the presence
+of the `:orderId` param; `orderToFormState()` (`form/types.ts`) rehydrates the saved
+ORDER_PUNCH row + ORDER_ITEMS back into form state.
+
+- **Restricted to `STATUS === "PENDING"`** — the server 409s otherwise, and the list's Edit
+  button is disabled unless exactly one selected row is PENDING. Once a discount is applied
+  the order has `SALE_ORDERS`/`Order Punch Discount` rows derived from its exact amounts;
+  rewriting the punch underneath them would silently desync every downstream copy. Editing
+  later in the lifecycle is what SO Confirmation's Changes flow is for.
+- Items are **replaced wholesale** (delete + re-append, renumbered `<orderId>-01`…), same
+  strategy the Changes flow uses. `DISPATCH_PLAN` rows are rebuilt too since they reference
+  item IDs the renumbering invalidates.
+- `punchFieldsFromBody()`/`buildItemRows()`/`blockedByCustomerAssignment()` (`orders.ts`) are
+  shared by create and edit so the two can't drift as fields are added — **add new punch
+  fields to the helper, not to one handler.**
+- **`ORDER_ITEMS` has no FG ID column at all** (verified against live headers), so
+  `itemToSheet` silently drops `FG_ID` on write and an edited order always comes back with
+  `fgId` blank. `validateTab()` therefore accepts `partName` *or* `fgId` as "a part is
+  selected" — reverting that check to `fgId`-only makes every edit unable to leave Tab 2.
+  Same class of gap: `Client Classification` and every `ZOTO Vehicle *` column are mapped in
+  `orderPunchMap.ts` but don't exist in the live sheet, so those never persist either.
+- **`SHIPPING_SAME` and `IS_SHIPPING_SAME` share one column** (`Is Shipping Address Same`);
+  reads only return whichever the reverse map made canonical, so `orderToFormState` accepts
+  either. Reading just `SHIPPING_SAME` leaves it blank and Tab 3 refuses to advance.
+
 ## Known gotchas
 
 - **A brand-new Backend dependency can fail `tsc` on Vercel with "This expression is not
