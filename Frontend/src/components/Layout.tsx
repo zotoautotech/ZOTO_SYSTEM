@@ -17,6 +17,15 @@ function HomeIcon() {
   );
 }
 
+function AppSectionIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -96,12 +105,16 @@ function timeAgo(ts: number | null): string {
   return `${hours} hour${hours === 1 ? "" : "s"} ago`;
 }
 
-// The sidebar only ever shows Home — HOME's own tile grid is the one place a doer switches
-// between apps (Sales CRR, Checklist, …), not a permanent per-app link pinned here. Used to
-// carry a "Sales CRR" entry (and briefly a "Checklist" one too) always visible regardless of
-// which app you were actually in — removed per explicit correction: apps show up when you've
-// clicked into them from Home, not as a standing sidebar list.
-const NAV_ITEMS = [{ to: "/", icon: HomeIcon, label: "Home", end: true }];
+const HOME_NAV_ITEM = { to: "/", icon: HomeIcon, label: "Home", end: true };
+
+// Each top-level app's own root route + sidebar label — used to add ONE contextual entry
+// below Home while you're actually inside that app, not a permanently pinned list of every
+// app at once (that was tried and explicitly rejected: HOME's own tile grid is the one place
+// a doer switches apps). Add a new app's own entry here when it gets its own top-level route.
+const APP_SECTIONS: Record<string, { to: string; label: string }> = {
+  modules: { to: "/modules", label: "Sales CRR" },
+  checklist: { to: "/checklist", label: "Checklist" },
+};
 
 const UTILITY_ITEMS = [
   { to: "/settings", icon: SettingsIcon, label: "Settings" },
@@ -181,6 +194,13 @@ export function Layout() {
   // don't let a new app silently fall through to the SALES CRR default (that's the exact bug
   // that showed Checklist pages breadcrumbed as "SALES CRR").
   const pathSegments = location.pathname.split("/").filter(Boolean);
+  // Home always shows; the current app's own section (Sales CRR/Checklist/…) is appended
+  // only while pathSegments[0] actually matches one of APP_SECTIONS's keys, so the sidebar
+  // never lists an app you aren't currently inside.
+  const currentSection = APP_SECTIONS[pathSegments[0]];
+  const navItems = currentSection
+    ? [HOME_NAV_ITEM, { to: currentSection.to, icon: AppSectionIcon, label: currentSection.label, end: false }]
+    : [HOME_NAV_ITEM];
   const crumbs: { label: string; to: string }[] =
     location.pathname === "/"
       ? [{ label: "HOME", to: "/" }]
@@ -359,7 +379,7 @@ export function Layout() {
           </button>
         )}
 
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
