@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
+import { getPermissions } from "../services/permissions.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
@@ -691,6 +692,20 @@ ordersRouter.post("/", async (req, res, next) => {
     // Fetched early (not just at write time below) because the seller's state is needed
     // to decide CGST+SGST vs IGST per line item.
     const [seller, buyer] = await Promise.all([getSellerFields(), getBuyerFields(body.custId)]);
+
+    // Punching is restricted to the doer a customer is assigned to (CUSTOMER MASTER's
+    // "Field Sale Repersentative", already resolved into SALE_STAFF_NAME above); an Admin
+    // can punch for anyone. Viewing is deliberately NOT restricted — every doer sees every
+    // customer in the picker and every order in the lists; this is the one gate. Enforced
+    // here rather than only in the UI, since the form's own check is just a courtesy
+    // message. Permissions are read live from USERS, not trusted from the JWT.
+    const perms = await getPermissions(req.user!.employeeId);
+    const assignedTo = String(buyer.SALE_STAFF_NAME || "").trim();
+    if (perms && perms.modules !== "ALL" && assignedTo && assignedTo.toLowerCase() !== req.user!.name.trim().toLowerCase()) {
+      return res.status(403).json({
+        error: { code: "FORBIDDEN", message: `This customer is assigned to ${assignedTo} — only they can punch an order for it.` },
+      });
+    }
 
     let basicAmount = 0;
     let taxAmount = 0;

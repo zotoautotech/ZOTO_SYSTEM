@@ -10,6 +10,7 @@ import { Tab3BillingAddress } from "./form/Tab3BillingAddress";
 import { Tab4LogisticsDetails } from "./form/Tab4LogisticsDetails";
 import { useIsMobile } from "../../lib/responsive";
 import { FormModal } from "../../components/form/FormModal";
+import { useAuth, type AuthUser } from "../../lib/auth";
 
 const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Logistics Details"];
 
@@ -20,8 +21,15 @@ const TABS = ["Purchase Order Details", "Order Details", "Billing Address", "Log
 // Is Shipping Address Same, the three Logistics toggles, and Preferred Transporter ID
 // (only when Preferred Delivery Mode is "Transporter") — matching the old CRR system's
 // required set.
-function validateTab(tab: number, form: OrderFormState): string | null {
+function validateTab(tab: number, form: OrderFormState, user: AuthUser | null): string | null {
   if (tab === 1) {
+    // Only the doer a customer is assigned to may punch for it (an Admin may punch for
+    // anyone) — blocked here so it's caught on the customer's own tab instead of after
+    // filling all four. POST /orders enforces the same rule server-side.
+    const assignedTo = form.custAssignedTo.trim();
+    if (assignedTo && user?.modules !== "ALL" && assignedTo.toLowerCase() !== (user?.name ?? "").trim().toLowerCase()) {
+      return `This customer is assigned to ${assignedTo} — only they can punch an order for it`;
+    }
     if (!form.saleType) return "Select a Sale Type before continuing";
     // Order Type / Payment Type don't apply to a Return Order and are hidden on this tab
     // for that Sale Type, so they can't be required for it either.
@@ -62,6 +70,7 @@ export function OrderPunchForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState<OrderFormState>(emptyOrderForm());
   const [error, setError] = useState("");
@@ -72,7 +81,7 @@ export function OrderPunchForm() {
   }
 
   function goNext() {
-    const err = validateTab(tab, form);
+    const err = validateTab(tab, form, user);
     if (err) {
       setError(err);
       return;
@@ -87,7 +96,7 @@ export function OrderPunchForm() {
   }
 
   async function handleSave() {
-    const err = validateTab(tab, form);
+    const err = validateTab(tab, form, user);
     if (err) {
       setError(err);
       return;

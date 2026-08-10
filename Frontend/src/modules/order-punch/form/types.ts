@@ -46,6 +46,10 @@ export interface OrderFormState {
   customerType: "Existing" | "New" | "";
   custId: string;
   customerName: string;
+  // The doer this customer is assigned to (CUSTOMER MASTER's "Field Sale Repersentative").
+  // Carried on form state purely so validateTab() can block a punch for someone else's
+  // customer without needing the whole customer list — POST /orders enforces it for real.
+  custAssignedTo: string;
   buyerGstin: string;
   clientClassification: "Existing" | "New" | "Prospective" | "";
 
@@ -97,6 +101,7 @@ export function emptyOrderForm(): OrderFormState {
     customerType: "",
     custId: "",
     customerName: "",
+    custAssignedTo: "",
     buyerGstin: "",
     clientClassification: "",
     items: [emptyItem()],

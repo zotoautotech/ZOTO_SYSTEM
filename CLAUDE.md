@@ -261,6 +261,25 @@ JWT), so an admin edit to a user's row takes effect within seconds:
   rights but not delete rights). `CAN_ADD` is still parsed and exposed on `req.user`/the
   frontend `AuthUser` but not yet gating any route/UI.
 All four are managed by hand-editing the sheet, not through an in-app admin UI (deliberate).
+
+**Customer assignment gates punching, not viewing.** `CUSTOMER MASTER`'s
+`Field Sale Repersentative` column (misspelled in the live sheet, see Known gotchas) names
+the doer a customer belongs to. Deliberately scoped so that:
+- **Viewing is never restricted** — `GET /masters/customers` returns every customer to every
+  doer, and every order list stays fully visible. An earlier version filtered the picker down
+  to just the doer's own customers; that was explicitly rejected — the doer must still be able
+  to see and search the whole customer book.
+- **Punching is restricted** — `POST /orders` 403s if the customer's assigned rep isn't the
+  logged-in doer's `USERS.Name` (case-insensitive). An Admin (`Permissions_Process` contains
+  `Admin`, i.e. `perms.modules === "ALL"`) can punch for anyone. A customer with a *blank*
+  assigned rep is punchable by anyone — unassigned, not locked.
+- The punch form mirrors this as UX only: `OrderFormState.custAssignedTo` is captured when a
+  customer is picked, `Tab2OrderDetails.tsx` shows a red "This customer is assigned to X"
+  notice, and `validateTab()` blocks moving past the customer's own tab. **None of that is the
+  real gate** — the server check is, since the form's is trivially bypassable.
+Matching is on the doer's **Name**, not Employee Id, so `USERS.Name` must match the customer
+master's rep spelling exactly. Assigning a customer to a doer who isn't in `USERS` (or a name
+typo) silently locks that customer to Admins only.
 Passwords are the one exception: a logged-in doer can self-service change their own password
 via Settings (`POST /auth/change-password`, requires the current password, writes straight
 back to their `Employee Id` row's `Password` cell — nobody else's row can be targeted since

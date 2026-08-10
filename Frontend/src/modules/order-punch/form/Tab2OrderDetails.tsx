@@ -19,6 +19,7 @@ import { UOM_OPTIONS } from "../../../lib/modules";
 import { AddNewCustomerModal } from "./AddNewCustomerModal";
 import { AddNewPartModal } from "./AddNewPartModal";
 import { emptyItem, type ItemFormState, type OrderFormState } from "./types";
+import { useAuth } from "../../../lib/auth";
 
 interface Props {
   form: OrderFormState;
@@ -27,6 +28,7 @@ interface Props {
 
 export function Tab2OrderDetails({ form, update }: Props) {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const { user } = useAuth();
 
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ["masters", "customers"],
@@ -35,11 +37,20 @@ export function Tab2OrderDetails({ form, update }: Props) {
   });
   const customerOptions = customersToOptions(customers);
 
+  // Every doer can browse every customer, but only the one a customer is assigned to
+  // (CUSTOMER MASTER's "Field Sale Repersentative" — misspelled in the live sheet) may
+  // actually punch an order for it; an Admin can punch for anyone. This is the courtesy
+  // message explaining why — POST /orders enforces the same rule server-side.
+  const assignedTo = form.custAssignedTo.trim();
+  const assignedToSomeoneElse =
+    !!assignedTo && user?.modules !== "ALL" && assignedTo.toLowerCase() !== (user?.name ?? "").trim().toLowerCase();
+
   async function selectExistingCustomer(custId: string, customerName: string) {
     const selectedCustomer = customers.find((customer) => customer["CUST ID"] === custId);
     update({
       custId,
       customerName,
+      custAssignedTo: selectedCustomer?.["Field Sale Repersentative"] || "",
       billingAddress: selectedCustomer?.["BILLING ADDRESS"] || "",
       billingState: selectedCustomer?.["Billing STATE"] || "",
       billingPincode: selectedCustomer?.["Billing PIN CODE"] || "",
@@ -139,6 +150,32 @@ export function Tab2OrderDetails({ form, update }: Props) {
           addNewLabel="Add New Customer"
           onAddNew={() => setShowAddCustomer(true)}
         />
+      )}
+      {assignedToSomeoneElse && (
+        <p
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            margin: "-4px 0 16px",
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid var(--color-error)",
+            background: "#fdecea",
+            color: "var(--color-error)",
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v5M12 16h.01" />
+          </svg>
+          <span>
+            This customer is assigned to <strong>{assignedTo}</strong> — only they can punch an order for it.
+          </span>
+        </p>
       )}
       {showAddCustomer && (
         <AddNewCustomerModal
