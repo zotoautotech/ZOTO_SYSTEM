@@ -141,9 +141,11 @@ export function OrderDetail() {
             <tr>
               {[
                 "Part No.",
-                "Part Name",
                 "Segment",
                 "Category",
+                // Part Name sits immediately left of Qty so the two read together — Segment/
+                // Category are usually blank and were pushing them far apart.
+                "Part Name",
                 "Qty",
                 "UOM",
                 ...(hideFinancials ? [] : ["Price", "Basic Amount", "Tax Amount", "Total Amount"]),
@@ -173,11 +175,11 @@ export function OrderDetail() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.PART_NO}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.SEGMENT}</td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.CATEGORY}</td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)", fontWeight: 500 }}>
                   {it.PART_NAME}
                 </td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.SEGMENT}</td>
-                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.CATEGORY}</td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.QTY}</td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--color-border)" }}>{it.UOM}</td>
                 {!hideFinancials && (
