@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { appendRow, readTable, updateRow } from "../services/sheets.js";
+import { appendRow, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { requireAuth, requireModule } from "../middleware/auth.js";
 import {
   doerFromSheet,
@@ -99,18 +99,43 @@ checklistRouter.post("/tasks", async (req, res, next) => {
   }
 });
 
+/** Formats a "days/hours overdue" style string from Planned -> now, matching the old
+ * AppSheet "Delay Duration" virtual column (=NOW()-[Planned]) shown on the CHECKLIST
+ * Account pending view. Blank once the task instance has no Planned date at all. */
+function delayDuration(planned: string): string {
+  if (!planned) return "";
+  const plannedMs = Date.parse(planned);
+  if (Number.isNaN(plannedMs)) return "";
+  const diffMs = Date.now() - plannedMs;
+  if (diffMs <= 0) return "On Time";
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
 /** GET /checklist/tasks/mine?status=COMPLETED — the logged-in doer's own task instances from
  * Master Accounts, filtered by their Email (never a client-side filter). Pending = Status
- * blank; Completed = Status set (Done/Rejected/leave types). */
+ * blank; Completed = Status set (Done/Rejected/leave types). FULL_NAME and DELAY_DURATION
+ * are synthesized here — they're virtual/formula columns in the old AppSheet schema (Full
+ * Name = lookup from Doer List by Email, Delay Duration = NOW()-Planned), never physical
+ * Master Accounts columns, matching the old app's "CHECKLIST Account" pending view exactly
+ * (ColumnOrder: Full Name, Task, Delay Duration, Planned, Task Frequency — its own
+ * "Pending Status" entry is a dead reference, no such Master Accounts column exists). */
 checklistRouter.get("/tasks/mine", async (req, res, next) => {
   try {
     const email = await getUserEmail(req.user!.employeeId);
     const wantCompleted = req.query.status === "COMPLETED";
 
-    const rows = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
+    const doers = (await readTable(env.sheets.checklistMaster, DOER_LIST_TAB)).map(doerFromSheet);
+    const doer = doers.find((d) => d.EMAIL?.trim().toLowerCase() === email.toLowerCase());
+    const fullName = doer ? `${doer.NAME} (${doer.DESIGNATION})` : email;
+
+    const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
       .filter((r) => r.EMAIL?.trim().toLowerCase() === email.toLowerCase())
-      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim()));
+      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim()))
+      .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
     res.json({ tasks: rows });

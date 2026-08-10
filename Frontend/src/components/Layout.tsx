@@ -108,6 +108,7 @@ function timeAgo(ts: number | null): string {
 const NAV_ITEMS = [
   { to: "/", icon: HomeIcon, label: "Home", end: true },
   { to: "/modules", icon: ModulesIcon, label: "Sales CRR", end: false },
+  { to: "/checklist", icon: ModulesIcon, label: "Checklist", end: false },
 ];
 
 const UTILITY_ITEMS = [
@@ -181,16 +182,21 @@ export function Layout() {
     return () => clearInterval(id);
   }, []);
 
-  // "modules" is folded into the "SALES CRR" crumb (both point at /modules) so it
-  // isn't shown twice. Every crumb but the current page is a clickable link, so
-  // you can jump back to any step — not just the immediate parent.
+  // "modules"/"checklist" is folded into its own app-root crumb (both point at the app's own
+  // root route) so it isn't shown twice. Every crumb but the current page is a clickable
+  // link, so you can jump back to any step — not just the immediate parent. Each top-level
+  // app (Sales CRR at /modules, Checklist at /checklist, …) gets its own root crumb here —
+  // don't let a new app silently fall through to the SALES CRR default (that's the exact bug
+  // that showed Checklist pages breadcrumbed as "SALES CRR").
   const pathSegments = location.pathname.split("/").filter(Boolean);
   const crumbs: { label: string; to: string }[] =
     location.pathname === "/"
       ? [{ label: "HOME", to: "/" }]
       : pathSegments[0] === "home"
         ? [{ label: "HOME", to: "/" }]
-        : [{ label: "SALES CRR", to: "/modules" }];
+        : pathSegments[0] === "checklist"
+          ? [{ label: "CHECKLIST", to: "/checklist" }]
+          : [{ label: "SALES CRR", to: "/modules" }];
   // Dispatch Approval doers shouldn't be able to click through to the full order (see
   // plans/pure-puzzling-gray.md) — the order-financials view is hidden there now, but the
   // intermediate "ORD-xxxx" / "Order Punch Items View" crumbs on this module's own per-item
@@ -202,7 +208,7 @@ export function Layout() {
   const isItemLevelModulePage =
     (pathSegments[1] === "dispatch-approval" || pathSegments[1] === "pdi") && pathSegments[3] === "items";
   pathSegments.forEach((seg, i) => {
-    if (seg === "modules" || seg === "home") return;
+    if (seg === "modules" || seg === "home" || seg === "checklist") return;
     if (isItemLevelModulePage && (i === 2 || i === 3)) return;
     crumbs.push({
       label: seg === "items" ? "Order Punch Items View" : seg.replace(/-/g, " "),

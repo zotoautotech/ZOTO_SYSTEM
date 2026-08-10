@@ -30,32 +30,42 @@ export function MyTasksList() {
     queryClient.invalidateQueries({ queryKey: ["checklist", "mine"] });
   }
 
+  // Column order/set matches the old AppSheet "CHECKLIST Account" pending view exactly
+  // (Full Name, Task, Delay Duration, Planned, Task Frequency, grouped by Date/sorted by
+  // Planned) plus the completion fields (Status/Delay Status/Attachment/Remark's) once a
+  // task has actually been completed, matching "CHECKLIST Completed Account".
   const columns: Column<ChecklistTaskRecord>[] = [
+    { key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" },
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
-    { key: "frequency", header: "Frequency", render: (row) => row.FREQUENCY || "—" },
+    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
-    { key: "status", header: "Status", render: (row) => row.STATUS || "—" },
-    { key: "delayStatus", header: "Delay Status", render: (row) => row.DELAY_STATUS || "—" },
-    {
-      key: "attachment",
-      header: "Attachment",
-      render: (row) =>
-        row.ATTACHMENT_FILE ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              openAttachment(row.ATTACHMENT_FILE);
-            }}
-            style={{ color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
-          >
-            View
-          </button>
-        ) : (
-          "—"
-        ),
-    },
-    { key: "remarks", header: "Remark's", render: (row) => row.REMARKS || "—" },
+    { key: "frequency", header: "Task Frequency", render: (row) => row.FREQUENCY || "—" },
+    ...(showCompleted
+      ? ([
+          { key: "status", header: "Status", render: (row) => row.STATUS || "—" },
+          { key: "delayStatus", header: "Delay Status", render: (row) => row.DELAY_STATUS || "—" },
+          {
+            key: "attachment",
+            header: "Attachment",
+            render: (row) =>
+              row.ATTACHMENT_FILE ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openAttachment(row.ATTACHMENT_FILE);
+                  }}
+                  style={{ color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+                >
+                  View
+                </button>
+              ) : (
+                "—"
+              ),
+          },
+          { key: "remarks", header: "Remark's", render: (row) => row.REMARKS || "—" },
+        ] as Column<ChecklistTaskRecord>[])
+      : []),
   ];
 
   useSetHeaderActions(
@@ -100,7 +110,10 @@ export function MyTasksList() {
                 <span className="text-muted" style={{ fontSize: 12 }}>{row.PLANNED ? formatTimestamp(row.PLANNED) : "—"}</span>
               </div>
               <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
-                {row.FREQUENCY} · {row.STATUS || "Pending"}
+                {row.FULL_NAME || "—"}
+              </div>
+              <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
+                {row.FREQUENCY} · {row.DELAY_DURATION || (row.STATUS || "Pending")}
               </div>
             </button>
           ))}
