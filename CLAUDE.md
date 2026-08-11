@@ -114,9 +114,15 @@ header "+" button, `isMobile` switches to the FAB).
 
 `Frontend/src/modules/order-punch/` is the main working area: `OrderPunchList.tsx` (shared
 list, reused for both Punch Order and Sale Order routes via a `basePath` prop derived from
-the URL), `OrderPunchForm.tsx` (4-tab punch form, `form/Tab1-4*.tsx` + `form/types.ts` for
-form state), `OrderDetail.tsx` (detail view, also shared between both modules),
+the URL — its column list shows `SALE_STAFF_NAME` as "Assigned Person" rather than
+`ORDER_TYPE`), `OrderPunchForm.tsx` (4-tab punch form, `form/Tab1-4*.tsx` + `form/types.ts`
+for form state), `OrderDetail.tsx` (detail view, also shared between both modules),
 `SaleOrderDiscountForm.tsx` / `SaleOrderUploadForm.tsx` (the two Sale Order step modals).
+`OrderItemsView.tsx` (the `.../items` route) shows only Part Name/Qty/UOM/Price/Basic
+Amount/Tax Amount/Total Amount/Remarks — trimmed down from a wider goods-master-joined
+column set (Part No./Part Description/Segment/Category/Sub Category/Paint/Standard Packing
+were dropped entirely, along with the `listGoods`/FG-ID-lookup code that fed them, per user
+request; re-add both together if those columns come back).
 `Frontend/src/modules/so-confirmation/SoConfirmationList.tsx` is the next-stage queue: it
 reads saved `SALE_ORDERS` rows, uses the approved list/table pattern with a Completed toggle,
 and opens the shared `OrderDetail`/items routes under `/modules/so-confirmation/:orderId`.
@@ -896,6 +902,56 @@ ORDER_PUNCH row + ORDER_ITEMS back into form state.
 - **`SHIPPING_SAME` and `IS_SHIPPING_SAME` share one column** (`Is Shipping Address Same`);
   reads only return whichever the reverse map made canonical, so `orderToFormState` accepts
   either. Reading just `SHIPPING_SAME` leaves it blank and Tab 3 refuses to advance.
+
+## Checklist app (Accounts department)
+
+A separate top-level app off HOME (`/checklist`, not nested under `/modules` — same
+"each tile is its own app" pattern as Sales CRR, see the HOME section above), reached from
+the `CHECKLIST-ZOTO-V1` tile. Scope so far: **Accounts department only** — the old AppSheet
+reference (`CHECKLIST-ADC-V1`) covers 11 departments; the other 10 aren't built yet, same
+shape repeats when they are.
+
+**Sits on top of an existing, untouched Apps Script pipeline** (not something this app owns
+or should modify casually): `onChangeHANDLER` (on `ZOTO/CHECKLIST MASTER-FY26-27`, tab
+`Task List Master`) → `sentdata_allchecklist_deptwise()` routes each new row by its
+`Department` column into the matching department's `Task List <Dept>` tab → that
+department's own `createChecklist1()` (a separate Apps Script project, e.g.
+`Checklist-ACCOUNTS`) expands each template into dated `Master Accounts` instances
+(D/W/M/Y/Q/F/E1st..ELast recurrence). This app's backend only ever writes the punch-in row
+and reads/completes the resulting instances — it never touches routing or recurrence logic.
+
+**Two spreadsheets** — env vars `CHECKLIST_MASTER_SHEET_ID` (`Task List Master`, `Doer
+List`, `PcFollowUp`, `USERS`) and `CHECKLIST_ACCOUNTS_SHEET_ID` (`Task List Accounts`,
+`Master Accounts`, `Working Day Calender`, `Holiday List`). **Doer identity is Employee Id,
+not email** — the old AppSheet schema keyed everything off `USEREMAIL()`, but Employee
+Master's own Email column is genuinely empty for every employee (confirmed directly), so
+`Backend/src/routes/checklist.ts` writes the doer's Employee Id everywhere an email would
+have gone; the Apps Script pipeline never validates that value, just copies it through.
+
+**`GET /checklist/tasks/mine` is a shared department-wide queue, not a personal inbox** —
+confirmed by previewing the old app as both an admin email and a regular doer email: both
+saw the identical full list. Anyone with Checklist access sees and can complete *any* pending
+row, not just their own. "Pending" = `Status` blank **and** `Planned <= now` — the recurrence
+engine bulk-generates a task's entire range up front, so without the date filter a doer's
+queue floods with instances scheduled weeks/months ahead.
+
+**Admin-only views** (gated by a `"USERS"` tab *inside* `ZOTO/CHECKLIST MASTER-FY26-27`
+itself — `checklistPermissions.ts`'s `isChecklistAdmin()`, separate from the Sales CRR USERS
+sheet that gates base `requireModule("checklist")` access), shown as sidebar sub-links
+indented under Checklist only while inside the app: **Assigned Checklist** (every punched
+template across every doer, reads `Task List Master` directly with a
+`CustomerFilterPanel`-style doer filter + count badges + "+ Add" to punch from there — this
+is the *only* place a task gets punched now, not the shared queue page) and **Dashboard -
+Pending Checklist** (per-doer pending count, click-through to that doer's list, "Update
+Remark" writes to `PcFollowUp`).
+
+**Google Sheets date cells come back inconsistently** — some rows parse fine with
+`Date.parse`, others come back as a locale `"DD/MM/YYYY HH:mm:ss"` plain-text string that
+`Date.parse` either can't read (NaN) or silently misreads as US month-first. An unparseable
+row was being fail-safed to "always due", which fired on every locale-format row and leaked
+future-dated tasks into the pending list. `checklist.ts`'s `parsePlannedDate()` parses
+day-first explicitly instead of trusting `Date.parse`'s guessing — reuse it (or the same
+pattern) anywhere else this app reads a Planned/date-ish cell back from Sheets.
 
 ## Known gotchas
 
