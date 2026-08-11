@@ -125,27 +125,56 @@ checklistRouter.post("/tasks", async (req, res, next) => {
   }
 });
 
-/** The recurrence engine bulk-generates every instance for a task's whole recurrence range
- * up front (e.g. a Daily task gets a Master Accounts row per working day out to financial
- * year end, all at once) — so "pending" can't just mean "Status blank", or a doer's queue
- * would be flooded with tasks scheduled weeks/months ahead that aren't due yet. Pending =
- * Status blank AND Planned <= now (due today or overdue) — future-dated instances stay
- * hidden until their own day arrives. A row with no parseable Planned date is treated as
- * due (shows up) rather than silently hidden. */
+/** Google Sheets returns date/datetime cell values as plain text, but NOT always in one
+ * consistent format — some rows come back as an ISO-ish string `Date.parse` can read fine
+ * ("2026-01-09T10:56:00"), others as a locale-formatted "DD/MM/YYYY HH:mm:ss" plain string
+ * (this spreadsheet's own locale is en-GB, day-first) that `Date.parse` either can't read at
+ * all (returns NaN) or — worse — silently misreads as MM/DD (JS assumes US month-first for
+ * ambiguous slash dates), which would flip e.g. 13/10 into a parse failure but 09/01 into
+ * "September 1st" instead of the real "9th January". A row that isDueNow() couldn't parse
+ * was being treated as "always due" as a fail-safe, which is exactly how November/December/
+ * future-dated rows leaked into the pending list — the fail-safe fired on every row in the
+ * locale format, not just genuinely blank ones. Explicit day-first parsing fixes both bugs
+ * at once instead of trusting Date.parse's ambiguous guessing. */
+function parsePlannedDate(planned: string): number | null {
+  if (!planned) return null;
+
+  const dayFirst = planned.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?$/i
+  );
+  if (dayFirst) {
+    const [, dd, mm, yyyy, hRaw, min, sec, ampm] = dayFirst;
+    let hour = Number(hRaw);
+    if (ampm) {
+      const isPm = ampm.toLowerCase() === "pm";
+      if (isPm && hour < 12) hour += 12;
+      if (!isPm && hour === 12) hour = 0;
+    }
+    const ms = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, Number(min), Number(sec ?? 0)).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+
+  const parsed = Date.parse(planned);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/** Pending = Status blank AND Planned <= now (due today or overdue) — the recurrence engine
+ * bulk-generates every instance for a task's whole range up front, so "pending" can't just
+ * mean "no status yet" or a doer's queue would flood with tasks scheduled weeks ahead. A row
+ * with no parseable Planned date is treated as due (shows up) rather than silently hidden —
+ * but see parsePlannedDate() above for why "unparseable" must be judged correctly first. */
 function isDueNow(planned: string): boolean {
-  if (!planned) return true;
-  const plannedMs = Date.parse(planned);
-  if (Number.isNaN(plannedMs)) return true;
+  const plannedMs = parsePlannedDate(planned);
+  if (plannedMs === null) return true;
   return plannedMs <= Date.now();
 }
 
 /** Formats a "days/hours overdue" style string from Planned -> now, matching the old
  * AppSheet "Delay Duration" virtual column (=NOW()-[Planned]) shown on the CHECKLIST
- * Account pending view. Blank once the task instance has no Planned date at all. */
+ * Account pending view. Blank once the task instance has no parseable Planned date. */
 function delayDuration(planned: string): string {
-  if (!planned) return "";
-  const plannedMs = Date.parse(planned);
-  if (Number.isNaN(plannedMs)) return "";
+  const plannedMs = parsePlannedDate(planned);
+  if (plannedMs === null) return "";
   const diffMs = Date.now() - plannedMs;
   if (diffMs <= 0) return "On Time";
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
