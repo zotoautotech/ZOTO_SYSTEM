@@ -154,25 +154,32 @@ function delayDuration(planned: string): string {
   return `${days}d ${hours % 24}h`;
 }
 
-/** GET /checklist/tasks/mine?status=COMPLETED — the logged-in doer's own task instances from
- * Master Accounts, filtered by their Email (never a client-side filter). Pending = Status
- * blank; Completed = Status set (Done/Rejected/leave types). FULL_NAME and DELAY_DURATION
- * are synthesized here — they're virtual/formula columns in the old AppSheet schema (Full
- * Name = lookup from Doer List by Email, Delay Duration = NOW()-Planned), never physical
- * Master Accounts columns, matching the old app's "CHECKLIST Account" pending view exactly
- * (ColumnOrder: Full Name, Task, Delay Duration, Planned, Task Frequency — its own
- * "Pending Status" entry is a dead reference, no such Master Accounts column exists). */
+/** GET /checklist/tasks/mine?status=COMPLETED — the DEPARTMENT'S whole task-instance queue
+ * from Master Accounts, not filtered to just the logged-in user. Confirmed directly against
+ * the old AppSheet reference (previewed as both an admin email and a regular doer email —
+ * both saw the exact same full list) that "CHECKLIST Account" is a shared department-wide
+ * board, not a personal inbox: the old Show_If only gated whether the *menu item* appeared
+ * (department match or an admin-email allowlist), never which *rows* a viewer could see.
+ * Endpoint path kept as "mine" to avoid a wider rename; the name no longer reflects a
+ * per-user filter. Pending = Status blank + due now (Planned <= today, see isDueNow — the
+ * recurrence engine bulk-generates weeks/months of future rows up front, so "pending" can't
+ * just mean "no status yet"); Completed = Status set (Done/Rejected/leave types), no date
+ * filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're virtual/formula
+ * columns in the old schema (Full Name = lookup from Doer List by Email, Delay Duration =
+ * NOW()-Planned) — looked up per row now since rows span every doer, not the caller alone. */
 checklistRouter.get("/tasks/mine", async (req, res, next) => {
   try {
-    const employeeId = req.user!.employeeId.trim();
     const wantCompleted = req.query.status === "COMPLETED";
-    const fullName = await getDoerDisplayName(employeeId);
+    const nameLookup = await buildDoerNameLookup();
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => r.EMAIL?.trim() === employeeId)
       .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && isDueNow(r.PLANNED)))
-      .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
+      .map((r): SheetRow => ({
+        ...r,
+        FULL_NAME: nameLookup.get(r.EMAIL?.trim() ?? "") ?? r.EMAIL ?? "",
+        DELAY_DURATION: delayDuration(r.PLANNED),
+      }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
     res.json({ tasks: rows });

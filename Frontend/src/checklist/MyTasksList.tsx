@@ -8,13 +8,17 @@ import { openAttachment } from "../lib/attachments";
 import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 
-/** The doer's own Checklist task queue (Accounts department, for now) — one row per task
- * instance from Master Accounts, filtered server-side to the logged-in doer's own Email.
- * Same list pattern as PdiList.tsx: Completed toggle, DataTable desktop / card list mobile.
- * Admin-only "Assigned Checklist"/"Dashboard" links live in the sidebar (Layout.tsx), not
- * here — indented under the Checklist nav item, shown only while inside this app. Punching
- * a new task also only happens from Assigned Checklist's own "+ Add" now (matching the old
- * app: doers complete tasks here, admins assign them there) — this page has no punch form. */
+/** The department's shared task queue (Accounts department, for now) — one row per task
+ * instance from Master Accounts, NOT filtered to the logged-in user. Confirmed directly
+ * against the old AppSheet reference (previewed as both an admin email and a regular doer
+ * email — both saw the identical full list) that this is a shared department-wide board,
+ * not a personal "my tasks" inbox; anyone with Checklist access sees and can complete any
+ * row here, not just their own. Same list pattern as PdiList.tsx otherwise: Completed
+ * toggle, DataTable desktop / card list mobile. Admin-only "Assigned Checklist"/"Dashboard"
+ * links live in the sidebar (Layout.tsx), not here — indented under the Checklist nav item,
+ * shown only while inside this app. Punching a new task also only happens from Assigned
+ * Checklist's own "+ Add" now (matching the old app: doers complete tasks here, admins
+ * assign them there) — this page has no punch form. */
 export function MyTasksList() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
