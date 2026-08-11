@@ -2,28 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOrder } from "../../lib/ordersApi";
-import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatCurrency } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 
-function pick(row: GoodsRow | undefined, ...keys: string[]): string {
-  if (!row) return "";
-  for (const k of keys) {
-    const v = row[k];
-    if (v) return v;
-  }
-  return "";
-}
-
 const COLUMNS = [
-  { label: "Part No.", width: 120 },
-  { label: "Old Part No.", width: 130 },
-  { label: "Part Description", width: 220 },
-  { label: "Segment", width: 140 },
-  { label: "Category", width: 140 },
-  { label: "Sub Category", width: 160 },
-  { label: "Paint", width: 140 },
-  { label: "Standard Packing", width: 150 },
   { label: "Part Name", width: 220 },
   { label: "Qty", width: 80 },
   { label: "UOM", width: 80 },
@@ -80,16 +62,10 @@ export function OrderItemsView() {
     enabled: !!orderId,
   });
 
-  const { data: goods = [] } = useQuery({
-    queryKey: ["goods"],
-    queryFn: listGoods,
-  });
-
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Order not found</p>;
 
   const { items } = data;
-  const goodsByFgId = new Map(goods.map((g) => [g["FG ID"], g]));
 
   const cell: React.CSSProperties = {
     padding: "10px 14px",
@@ -157,7 +133,6 @@ export function OrderItemsView() {
           </thead>
           <tbody>
             {items.map((it) => {
-              const g = goodsByFgId.get(it.FG_ID);
               return (
                 <tr
                   key={it.ITEM_ID}
@@ -166,15 +141,7 @@ export function OrderItemsView() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-page)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td style={{ ...cell, paddingLeft: firstColPad }}>{it.PART_NO}</td>
-                  <td style={cell}>{pick(g, "Old Part No.", "OLD PART NO.", "Old Part No")}</td>
-                  <td style={cell}>{pick(g, "Part Description", "Description", "PART DESCRIPTION")}</td>
-                  <td style={cell}>{it.SEGMENT}</td>
-                  <td style={cell}>{it.CATEGORY}</td>
-                  <td style={cell}>{pick(g, "Sub Category", "SUB CATEGORY")}</td>
-                  <td style={cell}>{pick(g, "Paint", "PAINT")}</td>
-                  <td style={cell}>{pick(g, "Standard Packing", "Standard", "STANDARD PACKING")}</td>
-                  <td style={{ ...cell, fontWeight: 500 }}>{it.PART_NAME}</td>
+                  <td style={{ ...cell, paddingLeft: firstColPad, fontWeight: 500 }}>{it.PART_NAME}</td>
                   <td style={cell}>{it.QTY}</td>
                   <td style={cell}>{it.UOM}</td>
                   {!hideFinancials && (
