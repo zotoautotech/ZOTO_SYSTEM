@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
 import { FloatingActionButton } from "../components/FloatingActionButton";
@@ -7,16 +6,17 @@ import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
-import { checkIsChecklistAdmin, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 import { TaskPunchForm } from "./TaskPunchForm";
 
 /** The doer's own Checklist task queue (Accounts department, for now) — one row per task
  * instance from Master Accounts, filtered server-side to the logged-in doer's own Email.
- * Same list pattern as PdiList.tsx: Completed toggle, DataTable desktop / card list mobile. */
+ * Same list pattern as PdiList.tsx: Completed toggle, DataTable desktop / card list mobile.
+ * Admin-only "Assigned Checklist"/"Dashboard" links live in the sidebar (Layout.tsx), not
+ * here — indented under the Checklist nav item, shown only while inside this app. */
 export function MyTasksList() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
@@ -28,12 +28,6 @@ export function MyTasksList() {
     placeholderData: keepPreviousData,
   });
 
-  // Admin-only nav (Assigned Checklist / Dashboard) — gated server-side too, this just
-  // decides whether to show the buttons at all.
-  const { data: isAdmin = false } = useQuery({
-    queryKey: ["checklist", "admin", "check"],
-    queryFn: checkIsChecklistAdmin,
-  });
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["checklist", "mine"] });
@@ -79,16 +73,6 @@ export function MyTasksList() {
 
   useSetHeaderActions(
     <div style={{ display: "flex", gap: 8 }}>
-      {isAdmin && !isMobile && (
-        <>
-          <button className="btn" onClick={() => navigate("/checklist/assigned")}>
-            Assigned Checklist
-          </button>
-          <button className="btn" onClick={() => navigate("/checklist/dashboard")}>
-            Dashboard
-          </button>
-        </>
-      )}
       <button
         className="btn btn-primary"
         onClick={() => setShowCompleted((current) => !current)}

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useIsFetching } from "@tanstack/react-query";
+import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 import { useSearch } from "../lib/search";
 import { useSync } from "../lib/sync";
 import { useHeaderActions } from "../lib/headerActions";
 import { useIsCompact, useIsMobile } from "../lib/responsive";
+import { checkIsChecklistAdmin } from "../checklist/lib/checklistApi";
 
 function HomeIcon() {
   return (
@@ -131,6 +132,15 @@ export function Layout() {
   const isFetching = useIsFetching() > 0;
   const location = useLocation();
   const navigate = useNavigate();
+  // Only relevant inside the Checklist app itself — gates the two admin-only sub-links
+  // (Assigned Checklist / Dashboard) shown below the Checklist nav item. Still enforced
+  // server-side regardless; this only decides whether the links are shown at all.
+  const isInChecklist = location.pathname.startsWith("/checklist");
+  const { data: isChecklistAdmin = false } = useQuery({
+    queryKey: ["checklist", "admin", "check"],
+    queryFn: checkIsChecklistAdmin,
+    enabled: isInChecklist,
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
@@ -198,8 +208,18 @@ export function Layout() {
   // only while pathSegments[0] actually matches one of APP_SECTIONS's keys, so the sidebar
   // never lists an app you aren't currently inside.
   const currentSection = APP_SECTIONS[pathSegments[0]];
-  const navItems = currentSection
-    ? [HOME_NAV_ITEM, { to: currentSection.to, icon: AppSectionIcon, label: currentSection.label, end: false }]
+  const navItems: { to: string; icon: () => React.ReactElement; label: string; end: boolean; indent?: boolean }[] = currentSection
+    ? [
+        HOME_NAV_ITEM,
+        { to: currentSection.to, icon: AppSectionIcon, label: currentSection.label, end: false },
+        // Admin-only sub-links, indented under Checklist — only while actually inside it.
+        ...(isInChecklist && isChecklistAdmin
+          ? [
+              { to: "/checklist/assigned", icon: AppSectionIcon, label: "Assigned Checklist", end: false, indent: true },
+              { to: "/checklist/dashboard", icon: AppSectionIcon, label: "Dashboard", end: false, indent: true },
+            ]
+          : []),
+      ]
     : [HOME_NAV_ITEM];
   const crumbs: { label: string; to: string }[] =
     location.pathname === "/"
@@ -387,9 +407,14 @@ export function Layout() {
               to={item.to}
               end={item.end}
               title={item.label}
-              style={({ isActive }) => navItemStyle(effectivelyCollapsed, isActive)}
+              style={({ isActive }) => ({
+                ...navItemStyle(effectivelyCollapsed, isActive),
+                ...(item.indent && !effectivelyCollapsed
+                  ? { paddingLeft: 40, fontSize: 13 }
+                  : undefined),
+              })}
             >
-              <Icon />
+              {!item.indent && <Icon />}
               {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
             </NavLink>
           );
