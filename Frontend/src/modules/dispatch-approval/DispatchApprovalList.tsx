@@ -17,9 +17,9 @@ import { useIsMobile } from "../../lib/responsive";
 
 /** Queue of orders confirmed in SO Confirmation, now awaiting Dispatch Approval. The pending
  * view is item-level (SO Confirmation Time/Customer/Part Name/Order Qty/Available Stock/
- * Short/Excess Quantity — one row per item, matching the old CRR reference table) since
- * Available Stock/Short/Excess Quantity are per-item; Completed stays the order-level table
- * (same pattern as Sale Order/SO Confirmation) since those columns don't apply there. */
+ * Balance/Short/Excess Quantity — one row per item, matching the old CRR reference table)
+ * since these are all per-item; Completed stays the order-level table (same pattern as Sale
+ * Order/SO Confirmation) since those columns don't apply there. */
 export function DispatchApprovalList() {
   const navigate = useNavigate();
   const { query } = useSearch();
@@ -90,6 +90,7 @@ export function DispatchApprovalList() {
     { key: "orderQty", header: "Order Quantity", render: (row) => (row.ORDER_QTY ? `${row.ORDER_QTY} ${row.UOM || ""}`.trim() : "—") },
     // Decided by the doer when they actually submit the approval, not known beforehand.
     { key: "availableStock", header: "Available Stock Quantity", render: () => "—" },
+    { key: "balanceQty", header: "Balance Quantity", render: () => "—" },
     { key: "shortQty", header: "Short Quantity", render: () => "—" },
     { key: "excessQty", header: "Excess Quantity", render: () => "—" },
   ];

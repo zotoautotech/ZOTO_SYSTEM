@@ -1882,7 +1882,10 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
     // also decided. Carries this item's own Disp Conf Item ID onto the placeholder, matching
     // the live PDI tab's own linking column.
     if (body.outcome === "Dispatch Today") {
-      await createPlaceholderPdi(order, item, req.user!.employeeId, dispConfItemId);
+      // Carry only the approved quantity forward, not the item's full order quantity — a
+      // partial approval (e.g. 100 of 125) means just the 100 is what's actually cleared to
+      // move on; the remaining 25 stays a short quantity for the doer to dispatch separately.
+      await createPlaceholderPdi(order, item, req.user!.employeeId, dispConfItemId, body.approvedQty);
     }
 
     // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item

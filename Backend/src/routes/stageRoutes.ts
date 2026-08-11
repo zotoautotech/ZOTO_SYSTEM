@@ -42,7 +42,18 @@ const PDI_TAB_HEADERS = [
  * elsewhere (live PDI tab has its own "Disp Conf Item ID" column right after ITEM_ID, dumped
  * directly off the live sheet rather than assumed, matching this project's usual discipline).
  */
-export async function createPlaceholderPdi(order: SheetRow, item: SheetRow, employeeId: string, dispConfItemId: string) {
+/** `approvedQty` is the quantity the Dispatch Approval doer actually signed off on — pass
+ * it whenever the caller has one (a "Dispatch Today" decision can approve less than the
+ * item's full order quantity, e.g. 100 of 125, with the remaining 25 held back as a short
+ * quantity to dispatch separately later). Falls back to the item's own full QTY only when
+ * no approved figure is available, so older/other call sites keep their previous behavior. */
+export async function createPlaceholderPdi(
+  order: SheetRow,
+  item: SheetRow,
+  employeeId: string,
+  dispConfItemId: string,
+  approvedQty?: number
+) {
   await ensureSheetTab(env.sheets.transactions, "PDI", PDI_TAB_HEADERS);
   const existing = (await readTable(env.sheets.transactions, "PDI")).find(
     (r) => r.ORDER_ID === order.ORDER_ID && r.ITEM_ID === item.ITEM_ID
@@ -62,7 +73,7 @@ export async function createPlaceholderPdi(order: SheetRow, item: SheetRow, empl
     Category: item.CATEGORY ?? "",
     "Part Name": item.PART_NAME ?? "",
     "Part No.": item.PART_NO ?? "",
-    Quantity: item.QTY ?? "",
+    Quantity: approvedQty !== undefined ? String(approvedQty) : item.QTY ?? "",
     Unit: item.UOM ?? "",
     "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
     "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
