@@ -239,11 +239,15 @@ export function Layout() {
   // noise, not a navigable step the doer needs.
   const isItemLevelModulePage =
     (pathSegments[1] === "dispatch-approval" || pathSegments[1] === "pdi") && pathSegments[3] === "items";
+  const CHECKLIST_SEGMENT_LABELS: Record<string, string> = {
+    assigned: "Assigned Checklist",
+    dashboard: "Dashboard - Pending Checklist",
+  };
   pathSegments.forEach((seg, i) => {
     if (seg === "modules" || seg === "home" || seg === "checklist") return;
     if (isItemLevelModulePage && (i === 2 || i === 3)) return;
     crumbs.push({
-      label: seg === "items" ? "Order Punch Items View" : seg.replace(/-/g, " "),
+      label: seg === "items" ? "Order Punch Items View" : CHECKLIST_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " "),
       to: "/" + pathSegments.slice(0, i + 1).join("/"),
     });
   });

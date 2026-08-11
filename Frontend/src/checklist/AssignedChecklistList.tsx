@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
 import { DataTable, type Column } from "../components/DataTable";
 import { useSetHeaderActions } from "../lib/headerActions";
+import { useSearch } from "../lib/search";
 import { useIsMobile } from "../lib/responsive";
 import { listAssignedChecklist, type AssignedTaskRecord } from "./lib/checklistApi";
 import { TaskPunchForm } from "./TaskPunchForm";
@@ -16,6 +17,7 @@ import { TaskPunchForm } from "./TaskPunchForm";
 export function AssignedChecklistList() {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  const { query } = useSearch();
   const [activeDoer, setActiveDoer] = useState<string | null>(null);
   const [showPunchForm, setShowPunchForm] = useState(false);
 
@@ -35,7 +37,14 @@ export function AssignedChecklistList() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
 
-  const filteredTasks = activeDoer ? tasks.filter((t) => (t.FULL_NAME || "(empty)") === activeDoer) : tasks;
+  const q = query.trim().toLowerCase();
+  const filteredTasks = tasks
+    .filter((t) => (activeDoer ? (t.FULL_NAME || "(empty)") === activeDoer : true))
+    .filter((t) =>
+      q
+        ? [t.TASK, t.FULL_NAME, t.DOER, t.FREQUENCY].some((v) => (v ?? "").toLowerCase().includes(q))
+        : true
+    );
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["checklist", "admin", "assigned"] });
