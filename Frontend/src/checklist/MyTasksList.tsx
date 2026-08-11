@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
 import { FloatingActionButton } from "../components/FloatingActionButton";
@@ -6,7 +7,7 @@ import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
-import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { checkIsChecklistAdmin, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 import { TaskPunchForm } from "./TaskPunchForm";
 
@@ -15,6 +16,7 @@ import { TaskPunchForm } from "./TaskPunchForm";
  * Same list pattern as PdiList.tsx: Completed toggle, DataTable desktop / card list mobile. */
 export function MyTasksList() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
@@ -24,6 +26,13 @@ export function MyTasksList() {
     queryKey: ["checklist", "mine", showCompleted],
     queryFn: () => listMyTasks(showCompleted ? "COMPLETED" : undefined),
     placeholderData: keepPreviousData,
+  });
+
+  // Admin-only nav (Assigned Checklist / Dashboard) — gated server-side too, this just
+  // decides whether to show the buttons at all.
+  const { data: isAdmin = false } = useQuery({
+    queryKey: ["checklist", "admin", "check"],
+    queryFn: checkIsChecklistAdmin,
   });
 
   function refresh() {
@@ -70,6 +79,16 @@ export function MyTasksList() {
 
   useSetHeaderActions(
     <div style={{ display: "flex", gap: 8 }}>
+      {isAdmin && !isMobile && (
+        <>
+          <button className="btn" onClick={() => navigate("/checklist/assigned")}>
+            Assigned Checklist
+          </button>
+          <button className="btn" onClick={() => navigate("/checklist/dashboard")}>
+            Dashboard
+          </button>
+        </>
+      )}
       <button
         className="btn btn-primary"
         onClick={() => setShowCompleted((current) => !current)}
