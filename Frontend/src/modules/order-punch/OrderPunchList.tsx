@@ -130,7 +130,7 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
   const columns: Column<OrderRecord>[] = [
     { key: "status", header: "Status", render: (o) => <StatusBadge status={o.STATUS} /> },
     { key: "timestamp", header: "Timestamp", render: (o) => formatTimestamp(o.CREATED_AT) },
-    { key: "orderType", header: "Order Type", render: (o) => o.ORDER_TYPE },
+    { key: "assignedPerson", header: "Assigned Person", render: (o) => o.SALE_STAFF_NAME || "—" },
     {
       key: "paymentType",
       header: "Payment Type",
