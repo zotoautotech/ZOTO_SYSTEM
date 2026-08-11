@@ -47,7 +47,7 @@ export function StageQueueList({ stage }: { stage: StageDef }) {
   const columns: Column<OrderRecord>[] = [
     { key: "status", header: "Status", render: (order) => <StatusBadge status={order.STATUS || "PENDING"} /> },
     { key: "timestamp", header: "Timestamp", render: (order) => formatTimestamp(order.CREATED_AT) },
-    { key: "orderType", header: "Order Type", render: (order) => order.ORDER_TYPE || "—" },
+    { key: "assignedPerson", header: "Assigned Person", render: (order) => order.SALE_STAFF_NAME || "—" },
     { key: "customer", header: "Customer Name", render: (order) => order.CUSTOMER_NAME || "—" },
     { key: "gstin", header: "Buyer GSTIN No.", render: (order) => order.BUYER_GSTIN || "—" },
     { key: "total", header: "Total Amount", render: (order) => `₹${Number(order.TOTAL_AMOUNT || 0).toLocaleString("en-IN")}` },

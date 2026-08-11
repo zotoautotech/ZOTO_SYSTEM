@@ -60,7 +60,7 @@ export function SoConfirmationList() {
     { key: "timestamp", header: "Timestamp", render: (order) => formatTimestamp(order.CREATED_AT) },
     { key: "soNo", header: "Sale Order No.", render: (order) => order.SO_NO || "—" },
     { key: "soDate", header: "Sale Order Date", render: (order) => order.SO_DATE || "—" },
-    { key: "orderType", header: "Order Type", render: (order) => order.ORDER_TYPE || "—" },
+    { key: "assignedPerson", header: "Assigned Person", render: (order) => order.SALE_STAFF_NAME || "—" },
     { key: "payment", header: "Payment Type", render: (order) => order.PAYMENT_TYPE || "—" },
     { key: "customer", header: "Customer Name", render: (order) => order.CUSTOMER_NAME || "—" },
     { key: "gstin", header: "Buyer GSTIN No.", render: (order) => order.BUYER_GSTIN || "—" },
