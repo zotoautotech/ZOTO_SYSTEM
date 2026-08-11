@@ -16,11 +16,12 @@ export function DoerPendingList() {
   const isMobile = useIsMobile();
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: rawTasks = [], isLoading } = useQuery({
     queryKey: ["checklist", "admin", "pending", doerId],
     queryFn: () => listPendingForDoer(doerId!),
     enabled: !!doerId,
   });
+  const tasks = rawTasks.filter((t) => t.TASK?.trim());
 
   const columns: Column<ChecklistTaskRecord>[] = [
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },

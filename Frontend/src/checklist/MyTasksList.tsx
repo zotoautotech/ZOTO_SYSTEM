@@ -25,11 +25,14 @@ export function MyTasksList() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: rawTasks = [], isLoading } = useQuery({
     queryKey: ["checklist", "mine", showCompleted],
     queryFn: () => listMyTasks(showCompleted ? "COMPLETED" : undefined),
     placeholderData: keepPreviousData,
   });
+  // Hides stray blank rows (empty Task/no data at all) — Sheets sometimes has trailing
+  // blank rows or rows left over from bulk edits that shouldn't render as real tasks.
+  const tasks = rawTasks.filter((t) => t.TASK?.trim());
 
 
   function refresh() {

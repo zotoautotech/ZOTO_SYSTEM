@@ -18,13 +18,13 @@ function pick(row: GoodsRow | undefined, ...keys: string[]): string {
 const COLUMNS = [
   { label: "Part No.", width: 120 },
   { label: "Old Part No.", width: 130 },
-  { label: "Part Name", width: 220 },
   { label: "Part Description", width: 220 },
   { label: "Segment", width: 140 },
   { label: "Category", width: 140 },
   { label: "Sub Category", width: 160 },
   { label: "Paint", width: 140 },
   { label: "Standard Packing", width: 150 },
+  { label: "Part Name", width: 220 },
   { label: "Qty", width: 80 },
   { label: "UOM", width: 80 },
   { label: "Price", width: 100 },
@@ -168,13 +168,13 @@ export function OrderItemsView() {
                 >
                   <td style={{ ...cell, paddingLeft: firstColPad }}>{it.PART_NO}</td>
                   <td style={cell}>{pick(g, "Old Part No.", "OLD PART NO.", "Old Part No")}</td>
-                  <td style={{ ...cell, fontWeight: 500 }}>{it.PART_NAME}</td>
                   <td style={cell}>{pick(g, "Part Description", "Description", "PART DESCRIPTION")}</td>
                   <td style={cell}>{it.SEGMENT}</td>
                   <td style={cell}>{it.CATEGORY}</td>
                   <td style={cell}>{pick(g, "Sub Category", "SUB CATEGORY")}</td>
                   <td style={cell}>{pick(g, "Paint", "PAINT")}</td>
                   <td style={cell}>{pick(g, "Standard Packing", "Standard", "STANDARD PACKING")}</td>
+                  <td style={{ ...cell, fontWeight: 500 }}>{it.PART_NAME}</td>
                   <td style={cell}>{it.QTY}</td>
                   <td style={cell}>{it.UOM}</td>
                   {!hideFinancials && (
