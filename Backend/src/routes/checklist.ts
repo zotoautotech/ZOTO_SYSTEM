@@ -125,6 +125,20 @@ checklistRouter.post("/tasks", async (req, res, next) => {
   }
 });
 
+/** The recurrence engine bulk-generates every instance for a task's whole recurrence range
+ * up front (e.g. a Daily task gets a Master Accounts row per working day out to financial
+ * year end, all at once) — so "pending" can't just mean "Status blank", or a doer's queue
+ * would be flooded with tasks scheduled weeks/months ahead that aren't due yet. Pending =
+ * Status blank AND Planned <= now (due today or overdue) — future-dated instances stay
+ * hidden until their own day arrives. A row with no parseable Planned date is treated as
+ * due (shows up) rather than silently hidden. */
+function isDueNow(planned: string): boolean {
+  if (!planned) return true;
+  const plannedMs = Date.parse(planned);
+  if (Number.isNaN(plannedMs)) return true;
+  return plannedMs <= Date.now();
+}
+
 /** Formats a "days/hours overdue" style string from Planned -> now, matching the old
  * AppSheet "Delay Duration" virtual column (=NOW()-[Planned]) shown on the CHECKLIST
  * Account pending view. Blank once the task instance has no Planned date at all. */
@@ -157,7 +171,7 @@ checklistRouter.get("/tasks/mine", async (req, res, next) => {
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
       .filter((r) => r.EMAIL?.trim() === employeeId)
-      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim()))
+      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && isDueNow(r.PLANNED)))
       .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
@@ -293,7 +307,7 @@ checklistRouter.get("/admin/pending/:doerId", requireChecklistAdmin, async (req,
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => r.EMAIL?.trim() === doerId && !r.STATUS?.trim())
+      .filter((r) => r.EMAIL?.trim() === doerId && !r.STATUS?.trim() && isDueNow(r.PLANNED))
       .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));

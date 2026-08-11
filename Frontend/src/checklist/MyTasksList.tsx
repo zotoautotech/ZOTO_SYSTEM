@@ -1,26 +1,25 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
-import { FloatingActionButton } from "../components/FloatingActionButton";
 import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
 import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
-import { TaskPunchForm } from "./TaskPunchForm";
 
 /** The doer's own Checklist task queue (Accounts department, for now) — one row per task
  * instance from Master Accounts, filtered server-side to the logged-in doer's own Email.
  * Same list pattern as PdiList.tsx: Completed toggle, DataTable desktop / card list mobile.
  * Admin-only "Assigned Checklist"/"Dashboard" links live in the sidebar (Layout.tsx), not
- * here — indented under the Checklist nav item, shown only while inside this app. */
+ * here — indented under the Checklist nav item, shown only while inside this app. Punching
+ * a new task also only happens from Assigned Checklist's own "+ Add" now (matching the old
+ * app: doers complete tasks here, admins assign them there) — this page has no punch form. */
 export function MyTasksList() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
-  const [showPunchForm, setShowPunchForm] = useState(false);
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["checklist", "mine", showCompleted],
@@ -83,11 +82,6 @@ export function MyTasksList() {
         </svg>
         {showCompleted ? "Showing Completed" : "Completed…"}
       </button>
-      {!isMobile && (
-        <button className="btn btn-primary" onClick={() => setShowPunchForm(true)}>
-          + Give Task
-        </button>
-      )}
     </div>
   );
 
@@ -132,24 +126,12 @@ export function MyTasksList() {
         />
       )}
 
-      {isMobile && <FloatingActionButton onClick={() => setShowPunchForm(true)} ariaLabel="Give Task" />}
-
       {activeTask && (
         <TaskCompleteForm
           task={activeTask}
           onClose={() => setActiveTask(null)}
           onSaved={() => {
             setActiveTask(null);
-            refresh();
-          }}
-        />
-      )}
-
-      {showPunchForm && (
-        <TaskPunchForm
-          onClose={() => setShowPunchForm(false)}
-          onSaved={() => {
-            setShowPunchForm(false);
             refresh();
           }}
         />
