@@ -216,7 +216,7 @@ export function Layout() {
         ...(isInChecklist && isChecklistAdmin
           ? [
               { to: "/checklist/assigned", icon: AppSectionIcon, label: "Assigned Checklist", end: false, indent: true },
-              { to: "/checklist/dashboard", icon: AppSectionIcon, label: "Dashboard", end: false, indent: true },
+              { to: "/checklist/dashboard", icon: AppSectionIcon, label: "Dashboard - Pending Checklist", end: false, indent: true },
             ]
           : []),
       ]
