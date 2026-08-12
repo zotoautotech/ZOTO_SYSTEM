@@ -226,6 +226,9 @@ function registerPdiItemsRoute(router: Router) {
             CREATED_AT: r["Timestamp"] || "",
             ORDER_ID: r["ORDER_ID"] || "",
             ITEM_ID: r["ITEM_ID"] || "",
+            // The round this PDI row belongs to — Transport keys attachment on this so a
+            // second round of the same item stays eligible after the first has shipped.
+            DISP_CONF_ITEM_ID: r["Disp Conf Item ID"] || "",
             PART_NAME: r["Part Name"] || "",
             CUSTOMER_NAME: r["Customer Name"] || "",
             BUYER_GSTIN: r["Buyer GSTIN No."] || "",
@@ -255,6 +258,7 @@ function registerPdiItemsRoute(router: Router) {
         CREATED_AT: r["Timestamp"] || "",
         ORDER_ID: r["ORDER_ID"] || "",
         ITEM_ID: r["ITEM_ID"] || "",
+        DISP_CONF_ITEM_ID: r["Disp Conf Item ID"] || "",
         PART_NAME: r["Part Name"] || "",
         CUSTOMER_NAME: r["Customer Name"] || "",
         BUYER_GSTIN: r["Buyer GSTIN No."] || "",

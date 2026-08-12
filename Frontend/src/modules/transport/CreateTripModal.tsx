@@ -12,6 +12,8 @@ import { listPdiItems, type OrderRecord } from "../../lib/ordersApi";
 
 interface PickedItem {
   itemId: string;
+  /** Which approved Dispatch Approval round this pick is. */
+  dispConfItemId: string;
   partName: string;
   qty: number;
   unit: string;
@@ -142,6 +144,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
               const boxQty = Number(r.BOX_QUANTITY || 0);
               return {
                 itemId: r.ITEM_ID,
+                dispConfItemId: r.DISP_CONF_ITEM_ID,
                 partName: r.PART_NAME,
                 qty: Number(r.QTY),
                 unit: r.UOM || "NOS",
@@ -224,7 +227,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
         transportId,
         queuedOrders.map((q) => ({
           orderId: q.orderId,
-          items: q.items.map((it) => ({ itemId: it.itemId, qty: it.qty, loadBoxes: it.loadBoxes })),
+          items: q.items.map((it) => ({ itemId: it.itemId, qty: it.qty, loadBoxes: it.loadBoxes, dispConfItemId: it.dispConfItemId })),
           preferredDeliveryMode: q.preferredDeliveryMode,
           freightPaidBy: q.freightPaidBy,
           freightPaidAt: q.freightPaidAt,

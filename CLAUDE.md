@@ -951,13 +951,24 @@ can legitimately have several PDI rows. Consequences to preserve:
 - "Item done" = **every** PDI row for it is `PDI Completed`, or it has zero rows (its whole
   quantity went Short/Excess so no PDI was ever needed) — never "at least one row done".
 
-**Not yet extended past PDI.** Transport onward (`Transport_Products`, Stock Release, Tax
-Invoice, Dispatch, LR, Delivery) still treats one order item as one indivisible unit — a
-second round reaching Transport would not yet get its own independent trip/invoice/LR run.
-`tripRoutes.ts`'s `eligible-items` also still reads quantity straight off `ORDER_ITEMS`
-(full order qty), so a partially-approved item shows its reduced quantity through PDI and
-then reverts to the full number at Transport. Finishing this means teaching the trip family
-to key on `Disp Conf Item ID` (the per-round identity) instead of `ITEM_ID`.
+**Transport is now per-round too.** `Transport_Products` gained a `Disp Conf Item ID`
+column (added via the API; the tab grid had to be widened from 41 to 42 columns first —
+`values.update` fails with "exceeds grid limits" otherwise). `unattachedPdiRounds()` in
+`tripRoutes.ts` is the single source for what Transport can pick up: every PDI row whose
+Status is `PDI Completed` and whose round id is not already on a `Transport_Products` row.
+- **No ORDER_PUNCH.STATUS gate.** `eligible-orders`/`eligible-items` deliberately do NOT
+  filter on `PRE TRANSPORT COMPLETED` — that status only lands once EVERY item is fully
+  decided AND PDI'd, which held a finished 20 SET hostage to an undecided 10 on the same
+  item. A round that has cleared PDI travels on its own.
+- `attachOrders` iterates the PICKS, not the order's items — the same item can appear twice
+  (one row per round, each with its own quantity) and writes each round's `Disp Conf Item
+  ID` onto its `Transport_Products` row. Keying a Map by `itemId` would collapse them.
+- Rows attached before that column existed carry no round id, so `unattachedPdiRounds()`
+  falls back to `ORDER_ID`+`ITEM_ID` for those only — without it, already-shipped legacy
+  items would reappear as pending.
+
+Stock Release / Tax Invoice / Dispatch / LR / Delivery still cascade at trip level, which is
+correct (they act on a whole vehicle), but they inherit whichever rounds the trip carries.
 
 ## Editing a punched order
 

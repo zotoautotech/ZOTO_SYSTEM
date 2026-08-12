@@ -353,6 +353,9 @@ export interface PdiItemRow {
   CREATED_AT: string;
   ORDER_ID: string;
   ITEM_ID: string;
+  /** The Dispatch Approval round this PDI row belongs to — an item split across rounds
+   * has one PDI row per round, each with its own quantity. */
+  DISP_CONF_ITEM_ID: string;
   PART_NAME: string;
   CUSTOMER_NAME: string;
   BUYER_GSTIN: string;

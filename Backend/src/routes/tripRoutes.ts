@@ -130,11 +130,50 @@ async function getTransportRow(transportId: string) {
   return rows.find((r) => r.Transport_ID === transportId);
 }
 
-/** Orders ready to be attached to a trip. */
+/**
+ * Every approved+PDI'd ROUND that hasn't been put on a trip yet.
+ *
+ * This is the unit Transport actually works with. Dispatch Approval can decide an item's
+ * order quantity across several rounds (30 ordered, 20 approved today, 10 still open), and
+ * each approved round gets its own PDI row keyed by its "Disp Conf Item ID". A round that
+ * has cleared PDI is ready to travel **on its own** — it must not wait for its siblings, or
+ * for the rest of its own item's quantity, to be decided. Gating on the order-level
+ * ORDER_PUNCH.STATUS ("PRE TRANSPORT COMPLETED", only set once EVERY item is fully decided
+ * and PDI'd) is what used to hold a finished 20 SET hostage to an undecided 10.
+ *
+ * "Already on a trip" is matched by Disp Conf Item ID against Transport_Products, so the
+ * same item's second round stays eligible after its first round has shipped.
+ */
+async function unattachedPdiRounds(): Promise<SheetRow[]> {
+  const [pdiRows, productRows] = await Promise.all([
+    readTable(env.sheets.transactions, "PDI"),
+    readTable(env.sheets.transactions, "Transport_Products"),
+  ]);
+  const attachedRoundIds = new Set(productRows.map((r) => r["Disp Conf Item ID"]).filter(Boolean));
+  // Rows attached BEFORE this column existed carry no round id. Treating those as
+  // "unattached" would resurrect already-shipped items into the pending queue, so fall back
+  // to the old ORDER_ID+ITEM_ID identity for them only.
+  const legacyAttachedItemKeys = new Set(
+    productRows.filter((r) => !r["Disp Conf Item ID"]).map((r) => `${r.ORDER_ID}::${r.ITEM_ID}`)
+  );
+  return pdiRows.filter(
+    (r) =>
+      r.Status === "PDI Completed" &&
+      !attachedRoundIds.has(r["Disp Conf Item ID"]) &&
+      !legacyAttachedItemKeys.has(`${r.ORDER_ID}::${r.ITEM_ID}`)
+  );
+}
+
+/** Orders with at least one approved+PDI'd round still waiting for a vehicle. */
 tripsRouter.get("/eligible-orders", anyOrderModule, async (_req, res, next) => {
   try {
-    const punchRows = await revertOrphanedTransportAssigned((await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet));
-    res.json(punchRows.filter((r) => r.STATUS === "PRE TRANSPORT COMPLETED"));
+    const [punchRowsRaw, rounds] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.map(punchFromSheet)),
+      unattachedPdiRounds(),
+    ]);
+    const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw);
+    const orderIdsWithRounds = new Set(rounds.map((r) => r.ORDER_ID));
+    res.json(punchRows.filter((r) => orderIdsWithRounds.has(r.ORDER_ID)));
   } catch (err) {
     next(err);
   }
@@ -174,22 +213,17 @@ tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
       return;
     }
 
-    // Reads the PDI tab's own COMPLETED rows rather than ORDER_ITEMS. Dispatch Approval can
-    // approve part of an item's order quantity (10 of 12) across several rounds, and each
-    // approved round gets its own PDI row carrying only that round's quantity — so PDI is
-    // the only source that knows what's actually cleared to travel. Going via ORDER_ITEMS
-    // instead showed the item's FULL order quantity (12, not the approved 10) and, worse,
-    // listed items that were never approved or PDI'd at all just because a sibling item
-    // pushed the order's STATUS forward.
-    const [punchRowsRaw, pdiRows] = await Promise.all([
-      readTable(env.sheets.transactions, ORDER_TAB),
-      readTable(env.sheets.transactions, "PDI"),
+    // One row per approved+PDI'd ROUND still waiting for a vehicle — see unattachedPdiRounds
+    // above for why this is deliberately NOT gated on the order-level STATUS. A finished
+    // 20 SET travels now even though the item's other 10 SET is still undecided upstream.
+    const [punchRowsRaw, rounds] = await Promise.all([
+      readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.map(punchFromSheet)),
+      unattachedPdiRounds(),
     ]);
-    const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw.map(punchFromSheet));
-    const orders = punchRows.filter((o) => o.STATUS === "PRE TRANSPORT COMPLETED");
-    const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
-    const rows = pdiRows
-      .filter((r) => orderById.has(r.ORDER_ID) && r.Status === "PDI Completed")
+    const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw);
+    const orderById = new Map(punchRows.map((o) => [o.ORDER_ID, o]));
+    const rows = rounds
+      .filter((r) => orderById.has(r.ORDER_ID))
       .map((r) => {
         const order = orderById.get(r.ORDER_ID)!;
         return {
@@ -398,7 +432,11 @@ const attachOrdersSchema = z.object({
         // flow) — when given, only these items are loaded onto this trip, at the doer's
         // chosen quantity rather than the item's full order quantity. Omitted (or an order
         // with no items array at all) keeps the old whole-order-at-full-quantity behavior.
-        items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive(), loadBoxes: z.number().optional() })).optional(),
+        items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive(), loadBoxes: z.number().optional(),
+          // Which approved Dispatch Approval round this pick represents. Carried onto
+          // Transport_Products so a later round of the SAME item stays eligible after
+          // this one has shipped.
+          dispConfItemId: z.string().optional() })).optional(),
         // The Transport Form's own Logistic Details tab — editable per order, not just
         // copied from the order's own preferred fields (matching the old CRR reference).
         preferredDeliveryMode: z.string().optional(),
@@ -465,13 +503,19 @@ tripsRouter.post("/:transportId/orders", requireModule("transport"), async (req,
       });
 
       const orderItems = allItems.filter((it) => it.ORDER_ID === entry.orderId).map(itemFromSheet);
-      const pickByItemId = new Map(entry.items?.map((p) => [p.itemId, p]));
-      const items = entry.items ? orderItems.filter((it) => pickByItemId.has(it.ITEM_ID)) : orderItems;
-      const pdIds = await nextIds("TPTPD", "Transport_Products", "Transport_Pd_ID", Math.max(items.length, 1));
-      for (const [j, item] of items.entries()) {
-        const pick = pickByItemId.get(item.ITEM_ID);
-        const orderQty = Number(item.QTY || 0);
-        const loadQty = pick?.qty ?? orderQty;
+      // One entry per PICK, not per order item — an item split across two Dispatch Approval
+      // rounds can legitimately appear twice here, each with its own quantity and its own
+      // Disp Conf Item ID. Keying a Map by itemId would silently collapse those into one.
+      const picks = entry.items ?? orderItems.map((it) => ({ itemId: it.ITEM_ID, qty: Number(it.QTY || 0), loadBoxes: undefined as number | undefined, dispConfItemId: undefined as string | undefined }));
+      const itemById = new Map(orderItems.map((it) => [it.ITEM_ID, it]));
+      const pdIds = await nextIds("TPTPD", "Transport_Products", "Transport_Pd_ID", Math.max(picks.length, 1));
+      for (const [j, pick] of picks.entries()) {
+        const item = itemById.get(pick.itemId);
+        if (!item) continue;
+        // This round's own approved quantity is what travels — NOT the item's full order
+        // quantity, which may still have undecided balance sitting upstream.
+        const orderQty = pick.qty;
+        const loadQty = pick.qty;
         await appendRow(env.sheets.transactions, "Transport_Products", {
           Timestamp: now,
           Useremail: req.user!.employeeId,
@@ -480,6 +524,7 @@ tripsRouter.post("/:transportId/orders", requireModule("transport"), async (req,
           Transport_ID: req.params.transportId,
           Transport_SO_ID: transportSoId,
           Transport_Pd_ID: pdIds[j],
+          "Disp Conf Item ID": pick.dispConfItemId ?? "",
           ...orderSnapshotToSheet(order),
           // Same gap as Transport_SO above — Vehicle Details landed blank without this.
           ...vehicleSnapshotToSheet(transport),
