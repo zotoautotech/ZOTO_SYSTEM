@@ -5,6 +5,7 @@ import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow
 import { nextId, nextIds } from "../services/ids.js";
 import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
 import { getPermissions } from "../services/permissions.js";
+import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
@@ -388,78 +389,6 @@ async function revertOrphanedSoConfirmation(rows: SheetRow[]): Promise<SheetRow[
   }
 
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
-}
-
-/**
- * A Dispatch Approval item can now be decided across MULTIPLE rounds — e.g. an order for
- * 12 SET gets 10 approved today ("Dispatch Today", Approved Quantity 10), the remaining 2
- * stays undecided, and a later submission decides that remaining 2 separately (its own
- * "Dispatch Today"/"Short Quantity"/"Excess Quantity" outcome, its own new Dispatch Items
- * Approval row). This sums every REAL decision row for an item (not just the latest) to get
- * how much of the order quantity has actually been accounted for so far:
- * - "Dispatch Today" contributes its Approved Quantity.
- * - "Short Quantity" contributes its Short Quantity — a short is still a decision that
- *   accounts for that portion of the order (it's not coming), not an open balance.
- * - "Excess Quantity" closes the ENTIRE remaining balance to zero regardless of its own
- *   figure — dispatching an excess amount necessarily covers everything that was still
- *   outstanding, plus more.
- * - "Dispatch Extended" contributes nothing — it's a hold on the CURRENT remaining balance,
- *   not a decision about any quantity.
- * `hasRealDecision` distinguishes "genuinely undecided" (still shows the blank/original
- * state) from "partially decided, balance remains" for status-label purposes.
- */
-interface DispatchDecisionSummary {
-  decidedQty: number;
-  closesBalance: boolean; // true once an Excess Quantity round has fired for this item
-  hasRealDecision: boolean;
-  latestOutcome: string;
-  latestNextExtendedDate: string;
-}
-
-function summarizeDispatchDecisions(rows: SheetRow[]): Map<string, DispatchDecisionSummary> {
-  const byItem = new Map<string, SheetRow[]>();
-  for (const r of rows) {
-    if (!byItem.has(r.ITEM_ID)) byItem.set(r.ITEM_ID, []);
-    byItem.get(r.ITEM_ID)!.push(r);
-  }
-  const result = new Map<string, DispatchDecisionSummary>();
-  for (const [itemId, itemRows] of byItem) {
-    const sorted = [...itemRows].sort((a, b) => (a.Timestamp || "").localeCompare(b.Timestamp || ""));
-    const latest = sorted[sorted.length - 1];
-    let decidedQty = 0;
-    let closesBalance = false;
-    let hasRealDecision = false;
-    for (const r of itemRows) {
-      const outcome = r["Dispatch Approval"] || "";
-      if (outcome === "Dispatch Today") {
-        decidedQty += Number(r["Approved Quantity"] || 0);
-        hasRealDecision = true;
-      } else if (outcome === "Short Quantity") {
-        decidedQty += Number(r["Short Quantity"] || 0);
-        hasRealDecision = true;
-      } else if (outcome === "Excess Quantity") {
-        closesBalance = true;
-        hasRealDecision = true;
-      }
-    }
-    result.set(itemId, {
-      decidedQty,
-      closesBalance,
-      hasRealDecision,
-      latestOutcome: latest?.["Dispatch Approval"] || "",
-      latestNextExtendedDate: latest?.["Next Extended Date"] || "",
-    });
-  }
-  return result;
-}
-
-/** Remaining un-decided quantity for an item — 0 once every SET on the order has been
- * accounted for across however many Dispatch Approval rounds (or an Excess Quantity round
- * has fired, which always closes it). Never negative. */
-function dispatchBalance(orderQty: number, summary: DispatchDecisionSummary | undefined): number {
-  if (!summary) return orderQty;
-  if (summary.closesBalance) return 0;
-  return Math.max(0, orderQty - summary.decidedQty);
 }
 
 /** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" where at least one

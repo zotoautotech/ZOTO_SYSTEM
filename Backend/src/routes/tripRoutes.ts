@@ -170,28 +170,37 @@ tripsRouter.get("/eligible-items", async (req, res, next) => {
       return;
     }
 
-    const [punchRowsRaw, itemRows] = await Promise.all([
+    // Reads the PDI tab's own COMPLETED rows rather than ORDER_ITEMS. Dispatch Approval can
+    // approve part of an item's order quantity (10 of 12) across several rounds, and each
+    // approved round gets its own PDI row carrying only that round's quantity — so PDI is
+    // the only source that knows what's actually cleared to travel. Going via ORDER_ITEMS
+    // instead showed the item's FULL order quantity (12, not the approved 10) and, worse,
+    // listed items that were never approved or PDI'd at all just because a sibling item
+    // pushed the order's STATUS forward.
+    const [punchRowsRaw, pdiRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
-      readTable(env.sheets.transactions, "ORDER_ITEMS"),
+      readTable(env.sheets.transactions, "PDI"),
     ]);
     const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw.map(punchFromSheet));
     const orders = punchRows.filter((o) => o.STATUS === "PRE TRANSPORT COMPLETED");
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
-    const rows = itemRows
-      .filter((i) => orderById.has(i.ORDER_ID))
-      .map(itemFromSheet)
-      .map((item) => {
-        const order = orderById.get(item.ORDER_ID)!;
+    const rows = pdiRows
+      .filter((r) => orderById.has(r.ORDER_ID) && r.Status === "PDI Completed")
+      .map((r) => {
+        const order = orderById.get(r.ORDER_ID)!;
         return {
           CREATED_AT: order.CREATED_AT || "",
           ORDER_ID: order.ORDER_ID,
-          ITEM_ID: item.ITEM_ID,
+          ITEM_ID: r.ITEM_ID || "",
+          // The per-round identity — the same item can appear more than once here, one row
+          // per approved Dispatch Approval round, each with its own quantity.
+          DISP_CONF_ITEM_ID: r["Disp Conf Item ID"] || "",
           CUST_ID: order.CUST_ID || "",
           CUSTOMER_NAME: order.CUSTOMER_NAME || "",
-          PART_NO: item.PART_NO || "",
-          PART_NAME: item.PART_NAME || "",
-          QTY: item.QTY || "",
-          UOM: item.UOM || "",
+          PART_NO: r["Part No."] || "",
+          PART_NAME: r["Part Name"] || "",
+          QTY: r.Quantity || "",
+          UOM: r.Unit || "",
           STATUS_LABEL: "Transport Pending",
         };
       });

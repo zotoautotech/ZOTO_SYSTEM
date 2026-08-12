@@ -7,6 +7,7 @@ import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 import { itemFromSheet } from "./itemMap.js";
 import { orderSnapshotToSheet } from "./tripMap.js";
 import { dispatchApprovalFromSheet } from "./soConfirmationMap.js";
+import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { STAGES, type StageConfig } from "./stageConfig.js";
 
 const ORDER_TAB = "ORDER_PUNCH";
@@ -135,40 +136,46 @@ function buildBodySchema(stage: StageConfig) {
  * ahead of its actual PDI rows, e.g. a doer deleted a row straight from the sheet), this also
  * advances the opposite gap: an order sitting at prevStatus whose items are now ALL done. */
 async function revertOrphanedPdi(pdiStage: StageConfig) {
-  const [punchRows, pdiRows, itemRows] = await Promise.all([
+  const [punchRows, pdiRows, itemRows, dispatchRows] = await Promise.all([
     readTable(env.sheets.transactions, ORDER_TAB),
     readTable(env.sheets.transactions, pdiStage.tab),
     readTable(env.sheets.transactions, "ORDER_ITEMS"),
+    readTable(env.sheets.transactions, "Dispatch Items Approval"),
   ]);
   const orders = punchRows.map(punchFromSheet);
   const ordersAtPdiComplete = orders.filter((o) => o.STATUS === pdiStage.nextStatus);
   const ordersAtPdiPending = orders.filter((o) => o.STATUS === pdiStage.prevStatus);
   if (ordersAtPdiComplete.length === 0 && ordersAtPdiPending.length === 0) return;
 
-  // An item can now have several independent PDI rows (one per Dispatch Approval round —
-  // see createPlaceholderPdi/orders.ts) — "done" means EVERY row for that item is Status
-  // "PDI Completed" (not just "at least one"), or the item never needed a PDI row at all
-  // (e.g. its whole order quantity was decided as Short/Excess Quantity in Dispatch
-  // Approval, with no "Dispatch Today" round ever creating a placeholder here — zero rows
-  // is trivially done, not "missing"). Blank "PDI Pending" placeholders don't count as done.
   const pdiRowsByItemId = new Map<string, SheetRow[]>();
   for (const r of pdiRows) {
     if (!pdiRowsByItemId.has(r.ITEM_ID)) pdiRowsByItemId.set(r.ITEM_ID, []);
     pdiRowsByItemId.get(r.ITEM_ID)!.push(r);
   }
-  function itemPdiDone(itemId: string): boolean {
-    const rows = pdiRowsByItemId.get(itemId) ?? [];
-    return rows.length === 0 || rows.every((r) => r.Status === PDI_STATUS_COMPLETED);
-  }
-  const itemIdsByOrderId = new Map<string, string[]>();
+  const dispatchSummaryByItemId = summarizeDispatchDecisions(dispatchRows);
+  const itemsByOrderId = new Map<string, { itemId: string; qty: number }[]>();
   for (const r of itemRows) {
-    if (!itemIdsByOrderId.has(r.ORDER_ID)) itemIdsByOrderId.set(r.ORDER_ID, []);
-    itemIdsByOrderId.get(r.ORDER_ID)!.push(r.ITEM_ID);
+    if (!itemsByOrderId.has(r.ORDER_ID)) itemsByOrderId.set(r.ORDER_ID, []);
+    itemsByOrderId.get(r.ORDER_ID)!.push({ itemId: r.ITEM_ID, qty: Number(itemFromSheet(r).QTY || 0) });
+  }
+
+  // An item can have several independent PDI rows (one per Dispatch Approval round — see
+  // createPlaceholderPdi/orders.ts), so "done" means EVERY row for it is "PDI Completed",
+  // not just "at least one". Zero PDI rows only counts as done when the item is genuinely
+  // finished at Dispatch Approval (balance 0 — its whole quantity went Short/Excess, so no
+  // "Dispatch Today" round ever created a placeholder here). An item still carrying
+  // dispatch balance ALSO has zero PDI rows but is very much not done — treating that as
+  // done let an undecided sibling item ride along and pushed the whole order into Transport
+  // early, which is exactly the bug this guard exists to prevent.
+  function itemPdiDone(itemId: string, orderQty: number): boolean {
+    const rows = pdiRowsByItemId.get(itemId) ?? [];
+    if (dispatchBalance(orderQty, dispatchSummaryByItemId.get(itemId)) > 0) return false;
+    return rows.length === 0 || rows.every((r) => r.Status === PDI_STATUS_COMPLETED);
   }
 
   for (const order of ordersAtPdiComplete) {
-    const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
-    if (orderItemIds.every(itemPdiDone)) continue;
+    const orderItems = itemsByOrderId.get(order.ORDER_ID) ?? [];
+    if (orderItems.every(({ itemId, qty }) => itemPdiDone(itemId, qty))) continue;
 
     await updateRow(
       env.sheets.transactions,
@@ -180,9 +187,9 @@ async function revertOrphanedPdi(pdiStage: StageConfig) {
   }
 
   for (const order of ordersAtPdiPending) {
-    const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
-    if (orderItemIds.length === 0) continue;
-    if (!orderItemIds.every(itemPdiDone)) continue;
+    const orderItems = itemsByOrderId.get(order.ORDER_ID) ?? [];
+    if (orderItems.length === 0) continue;
+    if (!orderItems.every(({ itemId, qty }) => itemPdiDone(itemId, qty))) continue;
 
     await updateRow(
       env.sheets.transactions,
@@ -323,10 +330,11 @@ function registerPdiSubmitRoute(router: Router) {
         fieldValues[field.header] = value === undefined ? "" : String(value);
       }
 
-      const [punchRows, items, existingPdiRows] = await Promise.all([
+      const [punchRows, items, existingPdiRows, dispatchRows] = await Promise.all([
         readTable(env.sheets.transactions, ORDER_TAB),
         readTable(env.sheets.transactions, "ORDER_ITEMS"),
         readTable(env.sheets.transactions, pdiStage.tab),
+        readTable(env.sheets.transactions, "Dispatch Items Approval"),
       ]);
       const punch = punchRows.find((row) => row.ORDER_ID === req.params.orderId);
       if (!punch) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
@@ -386,11 +394,13 @@ function registerPdiSubmitRoute(router: Router) {
       }
 
       // An item can have several PDI rows (one per Dispatch Approval round) — it's only truly
-      // done once EVERY row for it is completed, not merely "at least one." An item with zero
-      // PDI rows at all (its whole order quantity was decided as Short/Excess in Dispatch
-      // Approval, never needing a "Dispatch Today" placeholder) is trivially done — there was
-      // nothing to PDI in the first place. existingPdiRows was read before this submission's
-      // own write, so the row just saved is folded in explicitly.
+      // done once EVERY row for it is completed, not merely "at least one." Zero PDI rows
+      // only counts as done when the item is genuinely finished at Dispatch Approval too
+      // (balance 0 — its whole quantity went Short/Excess, so no "Dispatch Today" round ever
+      // created a placeholder). An item still carrying dispatch balance also has zero PDI
+      // rows but isn't done at all; without that guard, PDI-ing one item would drag an
+      // undecided sibling straight into Transport. existingPdiRows was read before this
+      // submission's own write, so the row just saved is folded in explicitly.
       const pdiRowsByItemId = new Map<string, SheetRow[]>();
       for (const r of existingPdiRows) {
         if (r.ORDER_ID !== req.params.orderId) continue;
@@ -405,7 +415,9 @@ function registerPdiSubmitRoute(router: Router) {
         thisItemRows.push({ Status: PDI_STATUS_COMPLETED } as SheetRow);
       }
       pdiRowsByItemId.set(req.params.itemId, thisItemRows);
+      const dispatchSummaryByItemId = summarizeDispatchDecisions(dispatchRows);
       const allItemsDone = orderItems.every((i) => {
+        if (dispatchBalance(Number(i.QTY || 0), dispatchSummaryByItemId.get(i.ITEM_ID)) > 0) return false;
         const rows = pdiRowsByItemId.get(i.ITEM_ID) ?? [];
         return rows.length === 0 || rows.every((r) => r.Status === PDI_STATUS_COMPLETED);
       });
