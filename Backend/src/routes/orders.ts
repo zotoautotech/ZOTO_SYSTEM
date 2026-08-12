@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
-import { requireAuth, requireCanDelete, requireModule } from "../middleware/auth.js";
+import { requireAuth, requireCanDelete, requireModule, requireAnyModule, ORDER_FAMILY_MODULES } from "../middleware/auth.js";
 import { getPermissions } from "../services/permissions.js";
 import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
@@ -20,7 +20,14 @@ function saleOrderItemFromSheet(row: SheetRow): SheetRow {
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
-ordersRouter.use(requireModule("punch-order"));
+// NO blanket requireModule here. Every route under /orders used to sit behind
+// requireModule("punch-order"), which meant a doer whose only module was PDI (or Stock
+// Release) got "No access to this module" when saving their OWN stage's form — the guard
+// asked for Order Punch regardless of which stage the route actually served. Each route
+// now declares its own module below: stage-specific WRITES require that stage's key, while
+// the shared order READS accept any order-family module (a PDI item detail page still has
+// to be able to fetch its order). See middleware/auth.ts's requireAnyModule.
+const anyOrderModule = requireAnyModule(ORDER_FAMILY_MODULES);
 
 // The transactions sheet's order-header tab was renamed ORDERS -> ORDER_PUNCH and its
 // columns given human-readable names; punchToSheet/punchFromSheet translate between the
@@ -432,7 +439,7 @@ async function revertOrphanedDispatchApproval(rows: SheetRow[]): Promise<SheetRo
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
-ordersRouter.get("/", async (req, res, next) => {
+ordersRouter.get("/", anyOrderModule, async (req, res, next) => {
   try {
     const { stage, status } = req.query as { stage?: string; status?: string };
     let rows = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
@@ -458,7 +465,7 @@ ordersRouter.get("/", async (req, res, next) => {
  * Confirmed from Cancelled — both set it to "COMPLETED" (see the Confirmed/Cancelled branch
  * below); only `ORDER_PUNCH.STATUS` does ("DISPATCH APPROVAL" vs "CANCELLED"), so it's joined
  * in here as `ORDER_PUNCH_STATUS` for the list view's Status column/row styling. */
-ordersRouter.get("/sale-orders", async (_req, res, next) => {
+ordersRouter.get("/sale-orders", requireModule("so-confirmation"), async (_req, res, next) => {
   try {
     // Revert-on-delete needs a fresh ORDER_PUNCH read — reused below instead of reading
     // ORDER_PUNCH a second time, since revertOrphanedSoConfirmation already returns the
@@ -490,7 +497,7 @@ const BEFORE_DISPATCH_APPROVAL_COMPLETED = new Set(["", "PENDING", "PENDING SALE
 /** Confirmed orders become the pending queue for Dispatch Approval. Reads ORDER_PUNCH (not
  * SALE_ORDERS) — SALE_ORDERS has no Approval_Status/Status columns of its own to filter on,
  * ORDER_PUNCH.STATUS is what /:id/so-confirmation actually sets to "DISPATCH APPROVAL". */
-ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
+ordersRouter.get("/dispatch-approvals", requireModule("dispatch-approval"), async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };
     let punchRows = (await readTable(env.sheets.transactions, ORDER_TAB, { refresh: true })).map(punchFromSheet);
@@ -514,7 +521,7 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
  * included here since they're only decided when the doer actually submits the approval, not
  * before — Balance Quantity IS knowable beforehand though (it's just order qty minus
  * whatever's already been decided across earlier rounds), so it's computed and shown. */
-ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
+ordersRouter.get("/dispatch-approvals/items", requireModule("dispatch-approval"), async (_req, res, next) => {
   try {
     const [punchRowsRaw, itemRows, dispatchRows] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB, { refresh: true }),
@@ -564,7 +571,7 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
  * CRR reference's PRE-PD-CONF item view): Quantity Details' Approved/Short/Excess/Balance Qty
  * come from the item's own latest "Dispatch Items Approval" log row (if any decision has been
  * made yet), and the Follow-ups table is the full history of those log rows for this item. */
-ordersRouter.get("/:orderId/items/:itemId/dispatch-approval-log", async (req, res, next) => {
+ordersRouter.get("/:orderId/items/:itemId/dispatch-approval-log", requireModule("dispatch-approval"), async (req, res, next) => {
   try {
     const { orderId, itemId } = req.params;
     const rows = (await readTable(env.sheets.transactions, "Dispatch Items Approval"))
@@ -581,7 +588,7 @@ ordersRouter.get("/:orderId/items/:itemId/dispatch-approval-log", async (req, re
 });
 
 /** Most recent order for a customer, used to autofill "Shipping = Same as Previous Order". */
-ordersRouter.get("/latest", async (req, res, next) => {
+ordersRouter.get("/latest", anyOrderModule, async (req, res, next) => {
   try {
     const { custId } = req.query as { custId?: string };
     if (!custId) {
@@ -605,7 +612,7 @@ ordersRouter.get("/latest", async (req, res, next) => {
 // matches routes in registration order and "/:id" would otherwise swallow e.g. GET "/pdi".
 registerStageRoutes(ordersRouter);
 
-ordersRouter.get("/:id", async (req, res, next) => {
+ordersRouter.get("/:id", anyOrderModule, async (req, res, next) => {
   try {
     const [orders, items, dispatchPlan] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB),
@@ -631,7 +638,7 @@ ordersRouter.get("/:id", async (req, res, next) => {
 });
 
 /** Returns the SALE_ORDERS row for an order (once its Sale Order form has been saved), or null. */
-ordersRouter.get("/:id/sale-order", async (req, res, next) => {
+ordersRouter.get("/:id/sale-order", anyOrderModule, async (req, res, next) => {
   try {
     const rows = await readTable(env.sheets.transactions, "SALE_ORDERS");
     const row = rows.find((r) => r.ORDER_ID === req.params.id);
@@ -644,7 +651,7 @@ ordersRouter.get("/:id/sale-order", async (req, res, next) => {
 const deleteOrdersSchema = z.object({ orderIds: z.array(z.string().min(1)).min(1) });
 
 /** Permanently deletes the given orders and their line items / dispatch plan rows. */
-ordersRouter.delete("/", requireCanDelete, async (req, res, next) => {
+ordersRouter.delete("/", requireModule("punch-order"), requireCanDelete, async (req, res, next) => {
   try {
     const { orderIds } = deleteOrdersSchema.parse(req.body);
     await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", orderIds);
@@ -774,7 +781,7 @@ async function blockedByCustomerAssignment(employeeId: string, userName: string,
   return null;
 }
 
-ordersRouter.post("/", async (req, res, next) => {
+ordersRouter.post("/", requireModule("punch-order"), async (req, res, next) => {
   try {
     const body = createOrderSchema.parse(req.body);
     const now = new Date().toISOString();
@@ -867,7 +874,7 @@ ordersRouter.post("/", async (req, res, next) => {
  * diffed, matching the same replace strategy the Changes flow already uses. DISPATCH_PLAN
  * rows are rebuilt too, since they reference item IDs that this renumbering invalidates.
  */
-ordersRouter.put("/:id", async (req, res, next) => {
+ordersRouter.put("/:id", requireModule("punch-order"), async (req, res, next) => {
   try {
     const body = createOrderSchema.parse(req.body);
     const now = new Date().toISOString();
@@ -1071,7 +1078,7 @@ async function createPlaceholderSaleOrder(orderId: string, employeeId: string): 
  * whether the doer entered a flat Rs amount or a percentage), recalculates each item's GST and
  * the order's totals, logs one Order Punch Discount row per item, and pushes the order into
  * the Sale Order stage's pending queue. */
-ordersRouter.post("/:id/discount", async (req, res, next) => {
+ordersRouter.post("/:id/discount", requireModule("sale-order"), async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
     if (body.applicable && body.scope === "Invoice") {
@@ -1351,7 +1358,7 @@ async function createPlaceholderSoConfirmation(
  * Attachment/Remarks blank — this fills those in via updateRow instead of appending a second
  * row (falls back to a fresh append if somehow no placeholder exists yet), then also creates
  * a placeholder SO_Confirmation + SO_Confirmation_Items row the same way, for the next stage. */
-ordersRouter.post("/:id/sale-order-form", async (req, res, next) => {
+ordersRouter.post("/:id/sale-order-form", requireModule("sale-order"), async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
     const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
@@ -1577,7 +1584,7 @@ async function createPlaceholderDispatchItemsApproval(
 
 /** Saves the SO Confirmation decision. Confirmed orders advance to Dispatch Approval;
  * cancelled orders finish in this queue; requested changes update both source rows and stay pending. */
-ordersRouter.post("/:id/so-confirmation", async (req, res, next) => {
+ordersRouter.post("/:id/so-confirmation", requireModule("so-confirmation"), async (req, res, next) => {
   try {
     const body = soConfirmationSchema.parse(req.body);
     const [punchRows, saleRows] = await Promise.all([
@@ -1763,7 +1770,7 @@ const dispatchApprovalSchema = z.object({
  * placeholder row in place (unchanged single-decision behavior). The order's own STATUS only
  * advances to "DISPATCH APPROVAL COMPLETED" once every item's running balance reaches zero
  * across however many rounds it took. */
-ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, next) => {
+ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", requireModule("dispatch-approval"), async (req, res, next) => {
   try {
     const body = dispatchApprovalSchema.parse(req.body);
     const [punchRows, items, existingDispatchRows] = await Promise.all([
@@ -1910,7 +1917,7 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
 
 /** Advances an order to the next pipeline stage. Note: ORDER_PUNCH has no stage column, so
  * this reflects the change via STATUS only until the pipeline tabs are wired (phase 2). */
-ordersRouter.post("/:id/stage", async (req, res, next) => {
+ordersRouter.post("/:id/stage", anyOrderModule, async (req, res, next) => {
   try {
     const schema = z.object({ toStage: z.string(), remarks: z.string().optional() });
     const { toStage, remarks } = schema.parse(req.body);

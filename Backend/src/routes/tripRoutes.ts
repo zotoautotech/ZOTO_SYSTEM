@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, appendRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
-import { requireAuth, requireModule } from "../middleware/auth.js";
+import { requireAuth, requireModule, requireAnyModule, ORDER_FAMILY_MODULES } from "../middleware/auth.js";
 import { punchFromSheet, punchToSheet } from "./orderPunchMap.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 import { ORDER_SNAPSHOT_MAP, orderSnapshotToSheet, vehicleSnapshotToSheet } from "./tripMap.js";
@@ -18,7 +18,11 @@ import { getSellerFields } from "./orders.js";
 
 export const tripsRouter = Router();
 tripsRouter.use(requireAuth);
-tripsRouter.use(requireModule("transport"));
+// NO blanket requireModule here — every trip route used to require "transport", so a doer
+// whose only module was Stock Release could not save their own stage's form (same bug that
+// hit PDI-only doers on the orders router). Shared reads accept any order-family module;
+// each stage's WRITE requires that stage's own key.
+const anyOrderModule = requireAnyModule(ORDER_FAMILY_MODULES);
 
 const ORDER_TAB = "ORDER_PUNCH";
 
@@ -127,7 +131,7 @@ async function getTransportRow(transportId: string) {
 }
 
 /** Orders ready to be attached to a trip. */
-tripsRouter.get("/eligible-orders", async (_req, res, next) => {
+tripsRouter.get("/eligible-orders", anyOrderModule, async (_req, res, next) => {
   try {
     const punchRows = await revertOrphanedTransportAssigned((await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet));
     res.json(punchRows.filter((r) => r.STATUS === "PRE TRANSPORT COMPLETED"));
@@ -149,7 +153,7 @@ tripsRouter.get("/eligible-orders", async (_req, res, next) => {
  * etc.) still keeps its own Transport_Products row, so it won't silently vanish from this
  * Completed view the way a live-status equality filter would (the exact bug class already
  * hit once on Dispatch Approval's own Completed filter, see orders.ts). */
-tripsRouter.get("/eligible-items", async (req, res, next) => {
+tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
   try {
     const { status } = req.query as { status?: string };
 
@@ -210,7 +214,7 @@ tripsRouter.get("/eligible-items", async (req, res, next) => {
   }
 });
 
-tripsRouter.get("/", async (req, res, next) => {
+tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
   try {
     const { status, excludeIfInTab, includeIfInTab } = req.query as {
       status?: string;
@@ -273,7 +277,7 @@ const STAGE_ROW_TABS = new Set([
  * handful it displays per stage. Registered BEFORE "/:transportId" so "stage-rows" isn't
  * swallowed as a transport id — the same route-ordering hazard called out in CLAUDE.md.
  */
-tripsRouter.get("/stage-rows", async (req, res, next) => {
+tripsRouter.get("/stage-rows", anyOrderModule, async (req, res, next) => {
   try {
     const { tab } = req.query as { tab?: string };
     if (!tab || !STAGE_ROW_TABS.has(tab)) {
@@ -285,7 +289,7 @@ tripsRouter.get("/stage-rows", async (req, res, next) => {
   }
 });
 
-tripsRouter.get("/:transportId", async (req, res, next) => {
+tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);
     if (!transport) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Trip not found" } });
@@ -354,7 +358,7 @@ const createTripSchema = z.object({
   description: z.string().optional().default(""),
 });
 
-tripsRouter.post("/", async (req, res, next) => {
+tripsRouter.post("/", requireModule("transport"), async (req, res, next) => {
   try {
     const body = createTripSchema.parse(req.body);
     const transportId = await nextId("TPTR", "TRANSPORT", "Transport_ID");
@@ -405,7 +409,7 @@ const attachOrdersSchema = z.object({
     .min(1),
 });
 
-tripsRouter.post("/:transportId/orders", async (req, res, next) => {
+tripsRouter.post("/:transportId/orders", requireModule("transport"), async (req, res, next) => {
   try {
     const { orders: orderEntries } = attachOrdersSchema.parse(req.body);
     const orderIds = orderEntries.map((o) => o.orderId);
@@ -669,7 +673,7 @@ async function createPlaceholderTaxInvoice(transportId: string, transport: Sheet
   }
 }
 
-tripsRouter.post("/:transportId/reached", async (req, res, next) => {
+tripsRouter.post("/:transportId/reached", requireModule("transport-reached"), async (req, res, next) => {
   try {
     const schema = z.object({
       reached: z.string().min(1),
@@ -757,7 +761,7 @@ tripsRouter.post("/:transportId/reached", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
+tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), async (req, res, next) => {
   try {
     const schema = z.object({
       releaseType: z.string().optional().default("OUT"),
@@ -851,7 +855,7 @@ tripsRouter.post("/:transportId/stock-release", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
+tripsRouter.post("/:transportId/tax-invoice", requireModule("tax-invoice"), async (req, res, next) => {
   try {
     const schema = z.object({
       taxInvoiceNo: z.string().min(1),
@@ -1011,7 +1015,7 @@ tripsRouter.post("/:transportId/tax-invoice", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/pre-dispatch", async (req, res, next) => {
+tripsRouter.post("/:transportId/pre-dispatch", requireModule("dispatch"), async (req, res, next) => {
   try {
     const body = remarksSchema.parse(req.body);
     const transport = await getTransportRow(req.params.transportId);
@@ -1041,7 +1045,7 @@ tripsRouter.post("/:transportId/pre-dispatch", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/vehicle-dispatch", async (req, res, next) => {
+tripsRouter.post("/:transportId/vehicle-dispatch", requireModule("dispatch"), async (req, res, next) => {
   try {
     const schema = z.object({
       dispatched: z.string().min(1),
@@ -1159,7 +1163,7 @@ async function createPlaceholderDelivery(
   });
 }
 
-tripsRouter.post("/:transportId/dispatch", async (req, res, next) => {
+tripsRouter.post("/:transportId/dispatch", requireModule("dispatch"), async (req, res, next) => {
   try {
     const schema = z.object({
       gatePassAttachmentUrl: z.string().optional().default(""),
@@ -1213,7 +1217,7 @@ tripsRouter.post("/:transportId/dispatch", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/lr", async (req, res, next) => {
+tripsRouter.post("/:transportId/lr", requireModule("collect-lr"), async (req, res, next) => {
   try {
     const schema = z.object({
       lrNo: z.string().min(1),
@@ -1274,7 +1278,7 @@ tripsRouter.post("/:transportId/lr", async (req, res, next) => {
   }
 });
 
-tripsRouter.post("/:transportId/delivery", async (req, res, next) => {
+tripsRouter.post("/:transportId/delivery", requireModule("delivery"), async (req, res, next) => {
   try {
     const schema = z.object({
       delivered: z.string().min(1),

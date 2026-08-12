@@ -291,6 +291,22 @@ via Settings (`POST /auth/change-password`, requires the current password, write
 back to their `Employee Id` row's `Password` cell — nobody else's row can be targeted since
 the row is matched on the JWT's own `employeeId`, not a request param).
 
+**Module permissions are per-route, never per-router.** `ordersRouter` used to carry a
+blanket `requireModule("punch-order")` and `tripsRouter` a blanket
+`requireModule("transport")`. Because PDI's routes are mounted on `ordersRouter` and Stock
+Release's on `tripsRouter`, a doer whose only module was PDI (or Stock Release) got
+"No access to this module" when saving their OWN stage's form — the guard asked for a module
+they were never meant to need. The frontend gates navigation on the real module list, so
+they could reach the form and only failed at Save, which made it look like a form bug.
+Each route now declares its own guard:
+- Stage-specific WRITES use `requireModule(<that stage's key>)` — `pdi` on the PDI routes,
+  `stock-release` on stock-release, `dispatch-approval`, `tax-invoice`, `collect-lr`, etc.
+- Shared order READS (`GET /orders`, `/orders/:id`, trip lists/details) use
+  `requireAnyModule(ORDER_FAMILY_MODULES)` — a PDI-only doer's item detail page still has to
+  fetch its order, so gating those on one specific module is what caused the lockout.
+**Never reintroduce a router-level `requireModule`** — adding a new stage route means adding
+its own guard, not relying on the router's.
+
 ## Google Sheets (source of truth)
 
 Four spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,

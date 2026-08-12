@@ -47,6 +47,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
  * re-login needed. A missing Employee Id row means access was revoked entirely.
  */
 export function requireModule(moduleKey: string) {
+  return requireAnyModule([moduleKey]);
+}
+
+/**
+ * Gates a route by "has AT LEAST ONE of these modules". Most routes want the single-key
+ * `requireModule`, but the order-family routes are shared across stages: a PDI-only doer
+ * still has to be able to READ an order (their item detail page calls GET /orders/:id), and
+ * a Stock Release doer likewise. Gating those shared reads on one specific module is exactly
+ * what locked PDI-only and Stock-Release-only users out of the app entirely — the whole
+ * /orders router used to sit behind requireModule("punch-order"), so anyone without Order
+ * Punch got "No access to this module" when saving their own stage's form.
+ */
+export function requireAnyModule(moduleKeys: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
@@ -56,7 +69,7 @@ export function requireModule(moduleKey: string) {
       if (!perms) {
         return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
       }
-      if (perms.modules !== "ALL" && !perms.modules.includes(moduleKey)) {
+      if (perms.modules !== "ALL" && !moduleKeys.some((k) => (perms.modules as string[]).includes(k))) {
         return res.status(403).json({ error: { code: "FORBIDDEN", message: "No access to this module" } });
       }
       // Refresh req.user with the live values so downstream handlers see current permissions.
@@ -67,6 +80,24 @@ export function requireModule(moduleKey: string) {
     }
   };
 }
+
+/** Every module whose screens live under the /orders router — the set allowed to perform
+ * the shared order READS (list, detail, items). Stage-specific WRITES still require their
+ * own single module key. Keep in sync with Frontend/src/lib/modules.ts + tripStages.ts. */
+export const ORDER_FAMILY_MODULES = [
+  "punch-order",
+  "sale-order",
+  "so-confirmation",
+  "dispatch-approval",
+  "pdi",
+  "transport",
+  "transport-reached",
+  "stock-release",
+  "tax-invoice",
+  "dispatch",
+  "collect-lr",
+  "delivery",
+];
 
 /**
  * Gates a destructive route by USERS.CAN_DELETE — also read live from the sheet.

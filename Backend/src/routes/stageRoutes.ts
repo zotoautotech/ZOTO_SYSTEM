@@ -9,6 +9,7 @@ import { orderSnapshotToSheet } from "./tripMap.js";
 import { dispatchApprovalFromSheet } from "./soConfirmationMap.js";
 import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { STAGES, type StageConfig } from "./stageConfig.js";
+import { requireModule } from "../middleware/auth.js";
 
 const ORDER_TAB = "ORDER_PUNCH";
 
@@ -205,7 +206,10 @@ function registerPdiItemsRoute(router: Router) {
   const pdiStage = STAGES.find((s) => s.key === "pdi");
   if (!pdiStage) return;
 
-  router.get("/pdi/items", async (req, res, next) => {
+  // This stage's own module gate. These routes are mounted on ordersRouter, which no
+  // longer has a blanket requireModule("punch-order") — that was what stopped a PDI-only
+  // doer from ever saving a PDI form.
+  router.get("/pdi/items", requireModule("pdi"), async (req, res, next) => {
     try {
       const { status } = req.query as { status?: string };
 
@@ -317,7 +321,7 @@ function registerPdiSubmitRoute(router: Router) {
   if (!pdiStage) return;
   const schema = buildBodySchema(pdiStage);
 
-  router.post("/:orderId/items/:itemId/pdi", async (req, res, next) => {
+  router.post("/:orderId/items/:itemId/pdi", requireModule("pdi"), async (req, res, next) => {
     try {
       const body = schema.parse(req.body);
       const now = new Date().toISOString();
