@@ -260,11 +260,18 @@ export interface DispatchApprovalItemRow {
   CUSTOMER_NAME: string;
   PART_NAME: string;
   ORDER_QTY: string;
+  /** Undecided quantity remaining on this item, across however many Dispatch Approval
+   * rounds have happened so far — equals ORDER_QTY the first time, shrinks with each
+   * partial round, and this row disappears from the pending list once it hits 0. */
+  BALANCE_QTY: string;
   UOM: string;
   /** True when this item's latest decision is "Dispatch Extended" (a hold, not a real
    * decision) — still shows in the pending queue, unlike a real decision. */
   DISPATCH_EXTENDED: boolean;
   NEXT_EXTENDED_DATE: string;
+  /** At least one real decision round has already happened but balance remains (the "12
+   * ordered, 10 approved, 2 still pending" case) — vs. genuinely untouched. */
+  PARTIALLY_DECIDED: boolean;
 }
 
 /** Item-level rows (one per item, not per order) for the pending Dispatch Approval table. */
@@ -289,7 +296,7 @@ export interface DispatchApprovalPayload {
 
 /** Per-item — approving one item never advances the rest of the order's items. */
 export async function submitDispatchApproval(orderId: string, itemId: string, payload: DispatchApprovalPayload) {
-  const res = await api.post<{ orderId: string; itemId: string; orderCompleted: boolean }>(
+  const res = await api.post<{ orderId: string; itemId: string; orderCompleted: boolean; remainingBalance: number }>(
     `/orders/${orderId}/items/${itemId}/dispatch-approval`,
     payload
   );

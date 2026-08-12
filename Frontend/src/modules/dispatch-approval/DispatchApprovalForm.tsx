@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
 import { TextField } from "../../components/form/TextField";
 import { FormModal } from "../../components/form/FormModal";
@@ -10,6 +11,13 @@ import { UOM_OPTIONS } from "../../lib/modules";
 interface Props {
   orderId: string;
   itemId: string;
+  // How much of this item's order quantity is still undecided, from every earlier Dispatch
+  // Approval round (0 the first time an item is ever decided — full order quantity). Caps
+  // Approved/Short Quantity so a doer can't decide more than what's actually left; the
+  // server enforces this too, this is just earlier feedback. Excess Quantity is deliberately
+  // exempt — it's explicitly "more than was ordered."
+  remainingBalance: number;
+  unitLabel: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -34,7 +42,7 @@ const DISPATCH_APPROVAL_OPTIONS = [
  * Unit is a real UOM dropdown (same CRR DD-backed list + "SET" default as the Order Punch
  * item editor's UOM select), not manually typed.
  */
-export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Props) {
+export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLabel, onClose, onSaved }: Props) {
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
   const [shortQty, setShortQty] = useState("");
@@ -60,19 +68,27 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
   }, [uomList.join("|")]);
 
   const balanceQtyNum = Number(balanceDispatchQty) || 0;
-  const qtyError = (value: string, label: string) => {
+  // Two different "balance" concepts, deliberately kept separate: balanceQtyNum is a
+  // manually-typed stock/inventory figure (no IMS connected yet, same as Available Stock
+  // Quantity), while remainingBalance is the real, server-computed order-quantity balance
+  // left across earlier Dispatch Approval rounds — Excess Quantity is exempt from it since
+  // it's explicitly "more than was ordered," not bounded by what's outstanding.
+  const qtyError = (value: string, label: string, capToOrderBalance: boolean) => {
     const n = Number(value);
     if (!value || Number.isNaN(n) || n <= 0) return "Invalid Quantity.";
     if (balanceQtyNum > 0 && n > balanceQtyNum) return `You can't ${label} more than Balance quantity.`;
+    if (capToOrderBalance && remainingBalance > 0 && n > remainingBalance) {
+      return `Only ${remainingBalance} ${unitLabel} is still outstanding on this item.`;
+    }
     return "";
   };
 
   function canSave() {
     if (!outcome || !remarks.trim()) return false;
-    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch");
+    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch", true);
     if (outcome === "Dispatch Extended") return !!nextExtendedDate;
-    if (outcome === "Short Quantity") return !qtyError(shortQty, "Short");
-    if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess");
+    if (outcome === "Short Quantity") return !qtyError(shortQty, "Short", true);
+    if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess", false);
     return false;
   }
 
@@ -94,8 +110,9 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
         unit: unit || undefined,
       });
       onSaved();
-    } catch {
-      setError("Could not save — please try again.");
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ?? "Could not save — please try again.");
       setSaving(false);
     }
   }
@@ -103,6 +120,11 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
   return (
     <FormModal title="Dispatch Items Approval Form" onClose={onClose} size="standard" sectionLabel="Dispatch Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
+          {remainingBalance > 0 && (
+            <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 16px" }}>
+              {remainingBalance} {unitLabel} still outstanding on this item.
+            </p>
+          )}
           <SearchableSelect
             label="Dispatch Approval"
             required
@@ -137,7 +159,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
               type="number"
               value={approvedQty}
               onChange={(e) => setApprovedQty(e.target.value)}
-              error={approvedQty ? qtyError(approvedQty, "Dispatch") : undefined}
+              error={approvedQty ? qtyError(approvedQty, "Dispatch", true) : undefined}
             />
           )}
           {outcome === "Short Quantity" && (
@@ -147,7 +169,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
               type="number"
               value={shortQty}
               onChange={(e) => setShortQty(e.target.value)}
-              error={shortQty ? qtyError(shortQty, "Short") : undefined}
+              error={shortQty ? qtyError(shortQty, "Short", true) : undefined}
             />
           )}
           {outcome === "Excess Quantity" && (
@@ -157,7 +179,7 @@ export function DispatchApprovalForm({ orderId, itemId, onClose, onSaved }: Prop
               type="number"
               value={excessQty}
               onChange={(e) => setExcessQty(e.target.value)}
-              error={excessQty ? qtyError(excessQty, "Excess") : undefined}
+              error={excessQty ? qtyError(excessQty, "Excess", false) : undefined}
             />
           )}
 

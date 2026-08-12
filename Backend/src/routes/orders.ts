@@ -390,34 +390,76 @@ async function revertOrphanedSoConfirmation(rows: SheetRow[]): Promise<SheetRow[
   return rows.map((r) => revertedById.get(r.ORDER_ID) ?? r);
 }
 
-/** "Dispatch Extended" is a hold, not a decision — the doer picked it because the item isn't
- * ready to dispatch yet and gave a Next Extended Date to revisit, not because dispatch was
- * actually approved/short/excess. So an item whose LATEST "Dispatch Items Approval" row is
- * "Dispatch Extended" must keep showing in the pending queue (and must not count toward the
- * order's own "every item decided" advancement to DISPATCH APPROVAL COMPLETED) exactly as if
- * no decision had been made yet — only once a later resubmission picks a real outcome does it
- * count as decided. Reads raw rows (literal "ITEM_ID"/"Timestamp"/"Dispatch Approval" sheet
- * headers — ITEM_ID/ORDER_ID happen to map 1:1 so raw access is safe there, unlike CREATED_AT/
- * DISPATCH_APPROVAL which don't). */
-function latestDispatchDecisionByItemId(rows: SheetRow[]): Map<string, { outcome: string; nextExtendedDate: string }> {
-  const latestByItem = new Map<string, SheetRow>();
+/**
+ * A Dispatch Approval item can now be decided across MULTIPLE rounds — e.g. an order for
+ * 12 SET gets 10 approved today ("Dispatch Today", Approved Quantity 10), the remaining 2
+ * stays undecided, and a later submission decides that remaining 2 separately (its own
+ * "Dispatch Today"/"Short Quantity"/"Excess Quantity" outcome, its own new Dispatch Items
+ * Approval row). This sums every REAL decision row for an item (not just the latest) to get
+ * how much of the order quantity has actually been accounted for so far:
+ * - "Dispatch Today" contributes its Approved Quantity.
+ * - "Short Quantity" contributes its Short Quantity — a short is still a decision that
+ *   accounts for that portion of the order (it's not coming), not an open balance.
+ * - "Excess Quantity" closes the ENTIRE remaining balance to zero regardless of its own
+ *   figure — dispatching an excess amount necessarily covers everything that was still
+ *   outstanding, plus more.
+ * - "Dispatch Extended" contributes nothing — it's a hold on the CURRENT remaining balance,
+ *   not a decision about any quantity.
+ * `hasRealDecision` distinguishes "genuinely undecided" (still shows the blank/original
+ * state) from "partially decided, balance remains" for status-label purposes.
+ */
+interface DispatchDecisionSummary {
+  decidedQty: number;
+  closesBalance: boolean; // true once an Excess Quantity round has fired for this item
+  hasRealDecision: boolean;
+  latestOutcome: string;
+  latestNextExtendedDate: string;
+}
+
+function summarizeDispatchDecisions(rows: SheetRow[]): Map<string, DispatchDecisionSummary> {
+  const byItem = new Map<string, SheetRow[]>();
   for (const r of rows) {
-    const existing = latestByItem.get(r.ITEM_ID);
-    if (!existing || (r.Timestamp || "") > (existing.Timestamp || "")) {
-      latestByItem.set(r.ITEM_ID, r);
-    }
+    if (!byItem.has(r.ITEM_ID)) byItem.set(r.ITEM_ID, []);
+    byItem.get(r.ITEM_ID)!.push(r);
   }
-  const result = new Map<string, { outcome: string; nextExtendedDate: string }>();
-  for (const [itemId, row] of latestByItem) {
-    result.set(itemId, { outcome: row["Dispatch Approval"] || "", nextExtendedDate: row["Next Extended Date"] || "" });
+  const result = new Map<string, DispatchDecisionSummary>();
+  for (const [itemId, itemRows] of byItem) {
+    const sorted = [...itemRows].sort((a, b) => (a.Timestamp || "").localeCompare(b.Timestamp || ""));
+    const latest = sorted[sorted.length - 1];
+    let decidedQty = 0;
+    let closesBalance = false;
+    let hasRealDecision = false;
+    for (const r of itemRows) {
+      const outcome = r["Dispatch Approval"] || "";
+      if (outcome === "Dispatch Today") {
+        decidedQty += Number(r["Approved Quantity"] || 0);
+        hasRealDecision = true;
+      } else if (outcome === "Short Quantity") {
+        decidedQty += Number(r["Short Quantity"] || 0);
+        hasRealDecision = true;
+      } else if (outcome === "Excess Quantity") {
+        closesBalance = true;
+        hasRealDecision = true;
+      }
+    }
+    result.set(itemId, {
+      decidedQty,
+      closesBalance,
+      hasRealDecision,
+      latestOutcome: latest?.["Dispatch Approval"] || "",
+      latestNextExtendedDate: latest?.["Next Extended Date"] || "",
+    });
   }
   return result;
 }
 
-function isDispatchItemDecided(decision: { outcome: string } | undefined): boolean {
-  // Blank outcome = the placeholder row created at SO Confirmation time (see
-  // createPlaceholderDispatchItemsApproval) — not a real decision yet, same as Extended.
-  return !!decision && decision.outcome !== "" && decision.outcome !== "Dispatch Extended";
+/** Remaining un-decided quantity for an item — 0 once every SET on the order has been
+ * accounted for across however many Dispatch Approval rounds (or an Excess Quantity round
+ * has fired, which always closes it). Never negative. */
+function dispatchBalance(orderQty: number, summary: DispatchDecisionSummary | undefined): number {
+  if (!summary) return orderQty;
+  if (summary.closesBalance) return 0;
+  return Math.max(0, orderQty - summary.decidedQty);
 }
 
 /** One stage later still: an order at STATUS "DISPATCH APPROVAL COMPLETED" where at least one
@@ -432,28 +474,23 @@ function isDispatchItemDecided(decision: { outcome: string } | undefined): boole
 async function revertOrphanedDispatchApproval(rows: SheetRow[]): Promise<SheetRow[]> {
   if (!rows.some((r) => r.STATUS === "DISPATCH APPROVAL COMPLETED")) return rows;
 
-  const [dispatchRows, itemRows] = await Promise.all([
+  const [dispatchRows, rawItemRows] = await Promise.all([
     readTable(env.sheets.transactions, "Dispatch Items Approval", { refresh: true }),
     readTable(env.sheets.transactions, "ORDER_ITEMS", { refresh: true }),
   ]);
-  const latestDecisionByItemId = latestDispatchDecisionByItemId(dispatchRows);
-  const decidedItemIdsByOrderId = new Map<string, Set<string>>();
-  for (const r of dispatchRows) {
-    if (!isDispatchItemDecided(latestDecisionByItemId.get(r.ITEM_ID))) continue;
-    if (!decidedItemIdsByOrderId.has(r.ORDER_ID)) decidedItemIdsByOrderId.set(r.ORDER_ID, new Set());
-    decidedItemIdsByOrderId.get(r.ORDER_ID)!.add(r.ITEM_ID);
-  }
-  const itemIdsByOrderId = new Map<string, string[]>();
-  for (const r of itemRows) {
-    if (!itemIdsByOrderId.has(r.ORDER_ID)) itemIdsByOrderId.set(r.ORDER_ID, []);
-    itemIdsByOrderId.get(r.ORDER_ID)!.push(r.ITEM_ID);
+  const summaryByItemId = summarizeDispatchDecisions(dispatchRows);
+  // "Undecided" now means real balance remains, not merely "no row exists" — an item can
+  // have several rows (one per round) and still have balance left over.
+  const itemsByOrderId = new Map<string, { itemId: string; qty: number }[]>();
+  for (const r of rawItemRows) {
+    if (!itemsByOrderId.has(r.ORDER_ID)) itemsByOrderId.set(r.ORDER_ID, []);
+    itemsByOrderId.get(r.ORDER_ID)!.push({ itemId: r.ITEM_ID, qty: Number(itemFromSheet(r).QTY || 0) });
   }
 
   const orphaned = rows.filter((r) => {
     if (r.STATUS !== "DISPATCH APPROVAL COMPLETED") return false;
-    const orderItemIds = itemIdsByOrderId.get(r.ORDER_ID) ?? [];
-    const decided = decidedItemIdsByOrderId.get(r.ORDER_ID) ?? new Set();
-    return !orderItemIds.every((id) => decided.has(id));
+    const orderItems = itemsByOrderId.get(r.ORDER_ID) ?? [];
+    return orderItems.some(({ itemId, qty }) => dispatchBalance(qty, summaryByItemId.get(itemId)) > 0);
   });
   if (orphaned.length === 0) return rows;
 
@@ -543,9 +580,11 @@ ordersRouter.get("/dispatch-approvals", async (req, res, next) => {
 });
 
 /** Item-level rows for the pending Dispatch Approval queue's table (SO Confirmation Time,
- * Customer Name, Part Name, Order Quantity — one row per item, not per order, matching the
- * old CRR reference view). Available Stock/Short/Excess Quantity aren't included here since
- * they're only decided when the doer actually submits the approval, not before. */
+ * Customer Name, Part Name, Order Quantity, Balance Quantity — one row per item, not per
+ * order, matching the old CRR reference view). Available Stock/Short/Excess Quantity aren't
+ * included here since they're only decided when the doer actually submits the approval, not
+ * before — Balance Quantity IS knowable beforehand though (it's just order qty minus
+ * whatever's already been decided across earlier rounds), so it's computed and shown. */
 ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
   try {
     const [punchRowsRaw, itemRows, dispatchRows] = await Promise.all([
@@ -557,18 +596,19 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
     const orders = punchRows.filter((o) => o.STATUS === "DISPATCH APPROVAL");
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
     // Dispatch Approval is per-item — an order can sit at STATUS "DISPATCH APPROVAL" with
-    // some of its items already individually decided (order only flips to COMPLETED once
-    // every item has a row), so those already-decided items must not show as pending too.
-    // "Dispatch Extended" is a hold, not a decision (see latestDispatchDecisionByItemId) — an
-    // item whose latest row is Extended stays in this pending list, carrying its own Next
-    // Extended Date so the frontend can flag the row once that date arrives.
-    const latestDecisionByItemId = latestDispatchDecisionByItemId(dispatchRows);
+    // some of its items already fully decided (order only flips to COMPLETED once every
+    // item's balance is fully closed), so those must not show as pending too. An item can
+    // now be decided across multiple rounds (partial approvals) — it stays in this pending
+    // list, with a shrinking Balance Quantity, until its balance actually reaches zero.
+    const summaryByItemId = summarizeDispatchDecisions(dispatchRows);
     const rows = itemRows
-      .filter((i) => orderById.has(i.ORDER_ID) && !isDispatchItemDecided(latestDecisionByItemId.get(i.ITEM_ID)))
       .map(itemFromSheet)
+      .filter((item) => orderById.has(item.ORDER_ID) && dispatchBalance(Number(item.QTY || 0), summaryByItemId.get(item.ITEM_ID)) > 0)
       .map((item) => {
         const order = orderById.get(item.ORDER_ID)!;
-        const decision = latestDecisionByItemId.get(item.ITEM_ID);
+        const summary = summaryByItemId.get(item.ITEM_ID);
+        const orderQty = Number(item.QTY || 0);
+        const balanceQty = dispatchBalance(orderQty, summary);
         return {
           ORDER_ID: order.ORDER_ID,
           ITEM_ID: item.ITEM_ID,
@@ -576,9 +616,13 @@ ordersRouter.get("/dispatch-approvals/items", async (_req, res, next) => {
           CUSTOMER_NAME: order.CUSTOMER_NAME || "",
           PART_NAME: item.PART_NAME || "",
           ORDER_QTY: item.QTY || "",
+          BALANCE_QTY: String(balanceQty),
           UOM: item.UOM || "",
-          DISPATCH_EXTENDED: decision?.outcome === "Dispatch Extended",
-          NEXT_EXTENDED_DATE: decision?.nextExtendedDate || "",
+          DISPATCH_EXTENDED: summary?.latestOutcome === "Dispatch Extended",
+          NEXT_EXTENDED_DATE: summary?.latestNextExtendedDate || "",
+          // A round has already happened but balance remains — the "12 ordered, 10
+          // approved, 2 still pending" case — vs. genuinely untouched (nothing decided yet).
+          PARTIALLY_DECIDED: !!summary?.hasRealDecision && balanceQty < orderQty,
         };
       });
     res.json(rows);
@@ -1779,10 +1823,17 @@ const dispatchApprovalSchema = z.object({
 
 /** Saves the Dispatch Approval decision for ONE item only (per-item, not per-order — a
  * customer's other items on the same order are untouched and stay in the pending queue
- * until each is individually decided). Appends a single "Dispatch Items Approval" row for
- * this item, then checks whether every item on the order now has its own row; only once ALL
- * of them do does the order's own STATUS advance to "DISPATCH APPROVAL COMPLETED" (feeding
- * PDI eligibility) — approving one item never cascades the whole order forward. */
+ * until each is individually decided).
+ *
+ * An item's order quantity can now be decided across MULTIPLE rounds — e.g. 10 of 12
+ * approved today, the remaining 2 decided later in a separate submission. Each round that
+ * actually decides something (Dispatch Today/Short Quantity/Excess Quantity) appends its
+ * OWN new "Dispatch Items Approval" row (own Disp Conf Item ID, own PDI placeholder) rather
+ * than overwriting the previous round's — only the very first round, or a chain of
+ * "Dispatch Extended" holds before any real decision, still updates the SO-Confirmation-time
+ * placeholder row in place (unchanged single-decision behavior). The order's own STATUS only
+ * advances to "DISPATCH APPROVAL COMPLETED" once every item's running balance reaches zero
+ * across however many rounds it took. */
 ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, next) => {
   try {
     const body = dispatchApprovalSchema.parse(req.body);
@@ -1800,6 +1851,30 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
     const item = orderItems.find((i) => i.ITEM_ID === req.params.itemId);
     if (!item) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Item not found on this order" } });
+    }
+
+    const orderQty = Number(item.QTY || 0);
+    const rowsForOrder = existingDispatchRows.filter((r) => r.ORDER_ID === req.params.orderId);
+    const priorSummary = summarizeDispatchDecisions(rowsForOrder).get(req.params.itemId);
+    const priorBalance = dispatchBalance(orderQty, priorSummary);
+    if (priorBalance <= 0) {
+      return res.status(409).json({
+        error: { code: "ALREADY_DECIDED", message: "This item's full order quantity has already been decided across earlier rounds." },
+      });
+    }
+    // A round's own quantity can't exceed what's actually still outstanding — Excess
+    // Quantity is exempt since it's explicitly "more than was ordered," not bounded by it.
+    const roundQty =
+      body.outcome === "Dispatch Today" ? body.approvedQty
+      : body.outcome === "Short Quantity" ? body.shortQty
+      : undefined;
+    if (roundQty !== undefined && roundQty > priorBalance) {
+      return res.status(400).json({
+        error: {
+          code: "EXCEEDS_BALANCE",
+          message: `Only ${priorBalance} ${item.UOM || ""} is still outstanding on this item — can't decide ${roundQty}.`.trim(),
+        },
+      });
     }
 
     const now = new Date().toISOString();
@@ -1854,20 +1929,17 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
         : body.outcome,
     });
 
-    // Fills in the placeholder row createPlaceholderDispatchItemsApproval() already created
-    // for this item at SO Confirmation time (blank Dispatch Approval, Status "Dispatch
-    // Approval Pending") — updates it in place by its own Disp Conf Item ID, same convention
-    // as SO_Confirmation's own logSoConfirmation(), rather than appending a second row (which
-    // used to leave the original placeholder sitting there forever with SALE_ORDER_ID/Conf_ID/
-    // Conf Item ID/Buyer Details all still blank, while the real decision landed in an
-    // unlinked new row missing those same reference fields). Falls back to appending fresh if
-    // somehow no placeholder exists yet (e.g. an order confirmed before this convention
-    // existed). A doer can still submit more than one decision over time (e.g. Extended, then
-    // later a real outcome) — every resubmission just updates this same row further.
-    const existingRow = existingDispatchRows.find((r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId);
+    // The very first round for this item (still just the blank SO-Confirmation-time
+    // placeholder, or a chain of "Dispatch Extended" holds before any real decision) updates
+    // that one row in place — unchanged from the original single-decision behavior. Once a
+    // REAL decision (Dispatch Today/Short/Excess) has already happened at least once for this
+    // item, every further round — including another real decision against the remaining
+    // balance, or a fresh hold on it — appends its OWN new row instead, so each round stays
+    // independently auditable and (for Dispatch Today) gets its own PDI placeholder.
+    const existingRowForItem = existingDispatchRows.find((r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId);
     let dispConfItemId: string;
-    if (existingRow) {
-      dispConfItemId = existingRow["Disp Conf Item ID"];
+    if (existingRowForItem && !priorSummary?.hasRealDecision) {
+      dispConfItemId = existingRowForItem["Disp Conf Item ID"];
       await updateRow(env.sheets.transactions, "Dispatch Items Approval", "Disp Conf Item ID", dispConfItemId, fields);
     } else {
       const [dispatchId] = await nextIds("DA", "Dispatch Items Approval", "Disp Conf Item ID", 1);
@@ -1875,27 +1947,21 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       await appendRow(env.sheets.transactions, "Dispatch Items Approval", { ...fields, [DISPATCH_APPROVAL_MAP.DISPATCH_ID]: dispatchId });
     }
 
-    // As soon as this item is actually approved (not Extended/Short/Excess — those are holds
-    // or exceptions, not a go-ahead), create its PDI placeholder immediately — same "one stage
-    // earlier" convention as the Dispatch Items Approval placeholder itself, so the item shows
-    // up in the PDI queue right away instead of only once every sibling item on the order is
-    // also decided. Carries this item's own Disp Conf Item ID onto the placeholder, matching
-    // the live PDI tab's own linking column.
+    // As soon as this round is actually approved (not Extended/Short/Excess — those are holds
+    // or exceptions, not a go-ahead), create ITS OWN PDI placeholder immediately — same "one
+    // stage earlier" convention as the Dispatch Items Approval placeholder itself, so this
+    // round shows up in the PDI queue right away instead of only once every sibling item (or
+    // every other round of this same item) is also decided. Carries this round's own Disp
+    // Conf Item ID, matching the live PDI tab's own linking column, and only this round's own
+    // approved quantity — not the item's full order quantity, and not any other round's.
     if (body.outcome === "Dispatch Today") {
-      // Carry only the approved quantity forward, not the item's full order quantity — a
-      // partial approval (e.g. 100 of 125) means just the 100 is what's actually cleared to
-      // move on; the remaining 25 stays a short quantity for the doer to dispatch separately.
       await createPlaceholderPdi(order, item, req.user!.employeeId, dispConfItemId, body.approvedQty);
     }
 
-    // "Dispatch Extended" is a hold, not a decision — doesn't count toward "every item
-    // decided" (see latestDispatchDecisionByItemId). existingDispatchRows was read before
-    // this submission's own append, so the just-picked outcome is folded in explicitly.
-    const latestDecisionByItemId = latestDispatchDecisionByItemId(
-      existingDispatchRows.filter((r) => r.ORDER_ID === req.params.orderId)
-    );
-    latestDecisionByItemId.set(req.params.itemId, { outcome: body.outcome, nextExtendedDate: body.nextExtendedDate ?? "" });
-    const allItemsDecided = orderItems.every((i) => isDispatchItemDecided(latestDecisionByItemId.get(i.ITEM_ID)));
+    // Recompute every item's balance on the order with this round folded in (fields is
+    // already shaped as a raw sheet row, safe to feed straight into the same summarizer).
+    const updatedSummaryByItemId = summarizeDispatchDecisions([...rowsForOrder, fields]);
+    const allItemsDecided = orderItems.every((i) => dispatchBalance(Number(i.QTY || 0), updatedSummaryByItemId.get(i.ITEM_ID)) <= 0);
     if (allItemsDecided) {
       await updateRow(
         env.sheets.transactions,
@@ -1906,7 +1972,8 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", async (req, res, 
       );
     }
 
-    res.json({ orderId: req.params.orderId, itemId: req.params.itemId, orderCompleted: allItemsDecided });
+    const remainingBalance = dispatchBalance(orderQty, updatedSummaryByItemId.get(req.params.itemId));
+    res.json({ orderId: req.params.orderId, itemId: req.params.itemId, orderCompleted: allItemsDecided, remainingBalance });
   } catch (err) {
     next(err);
   }

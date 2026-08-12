@@ -55,9 +55,11 @@ export async function createPlaceholderPdi(
   approvedQty?: number
 ) {
   await ensureSheetTab(env.sheets.transactions, "PDI", PDI_TAB_HEADERS);
-  const existing = (await readTable(env.sheets.transactions, "PDI")).find(
-    (r) => r.ORDER_ID === order.ORDER_ID && r.ITEM_ID === item.ITEM_ID
-  );
+  // Keyed by this round's own Disp Conf Item ID, not just ORDER_ID+ITEM_ID — an item can now
+  // have several independent PDI rows (one per Dispatch Approval round), so "does a row
+  // already exist for THIS round" is the right no-op check, not "does the item have any row
+  // at all" (which would wrongly skip creating the second round's placeholder).
+  const existing = (await readTable(env.sheets.transactions, "PDI")).find((r) => r["Disp Conf Item ID"] === dispConfItemId);
   if (existing) return;
 
   const [pdiId] = await nextIds("PDI", "PDI", "PDI ID", 1);
@@ -143,16 +145,20 @@ async function revertOrphanedPdi(pdiStage: StageConfig) {
   const ordersAtPdiPending = orders.filter((o) => o.STATUS === pdiStage.prevStatus);
   if (ordersAtPdiComplete.length === 0 && ordersAtPdiPending.length === 0) return;
 
-  // Placeholder rows now exist as soon as an item's Dispatch Approval decision is made (see
-  // createPlaceholderPdi above), well before the item's own PDI form is submitted — only a
-  // row whose own Status is "PDI Completed" (not the blank "PDI Pending" placeholder) counts
-  // as actually done here, same "row existence isn't enough" pattern already used for
-  // SALE_ORDERS/SO_Confirmation's own placeholder-vs-filled-in checks.
-  const pdiItemIdsByOrderId = new Map<string, Set<string>>();
+  // An item can now have several independent PDI rows (one per Dispatch Approval round —
+  // see createPlaceholderPdi/orders.ts) — "done" means EVERY row for that item is Status
+  // "PDI Completed" (not just "at least one"), or the item never needed a PDI row at all
+  // (e.g. its whole order quantity was decided as Short/Excess Quantity in Dispatch
+  // Approval, with no "Dispatch Today" round ever creating a placeholder here — zero rows
+  // is trivially done, not "missing"). Blank "PDI Pending" placeholders don't count as done.
+  const pdiRowsByItemId = new Map<string, SheetRow[]>();
   for (const r of pdiRows) {
-    if (r.Status !== PDI_STATUS_COMPLETED) continue;
-    if (!pdiItemIdsByOrderId.has(r.ORDER_ID)) pdiItemIdsByOrderId.set(r.ORDER_ID, new Set());
-    pdiItemIdsByOrderId.get(r.ORDER_ID)!.add(r.ITEM_ID);
+    if (!pdiRowsByItemId.has(r.ITEM_ID)) pdiRowsByItemId.set(r.ITEM_ID, []);
+    pdiRowsByItemId.get(r.ITEM_ID)!.push(r);
+  }
+  function itemPdiDone(itemId: string): boolean {
+    const rows = pdiRowsByItemId.get(itemId) ?? [];
+    return rows.length === 0 || rows.every((r) => r.Status === PDI_STATUS_COMPLETED);
   }
   const itemIdsByOrderId = new Map<string, string[]>();
   for (const r of itemRows) {
@@ -162,8 +168,7 @@ async function revertOrphanedPdi(pdiStage: StageConfig) {
 
   for (const order of ordersAtPdiComplete) {
     const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
-    const pdiItemIds = pdiItemIdsByOrderId.get(order.ORDER_ID) ?? new Set();
-    if (orderItemIds.every((id) => pdiItemIds.has(id))) continue;
+    if (orderItemIds.every(itemPdiDone)) continue;
 
     await updateRow(
       env.sheets.transactions,
@@ -177,8 +182,7 @@ async function revertOrphanedPdi(pdiStage: StageConfig) {
   for (const order of ordersAtPdiPending) {
     const orderItemIds = itemIdsByOrderId.get(order.ORDER_ID) ?? [];
     if (orderItemIds.length === 0) continue;
-    const pdiItemIds = pdiItemIdsByOrderId.get(order.ORDER_ID) ?? new Set();
-    if (!orderItemIds.every((id) => pdiItemIds.has(id))) continue;
+    if (!orderItemIds.every(itemPdiDone)) continue;
 
     await updateRow(
       env.sheets.transactions,
@@ -339,8 +343,6 @@ function registerPdiSubmitRoute(router: Router) {
         Category: item.CATEGORY ?? "",
         "Part Name": item.PART_NAME ?? "",
         "Part No.": item.PART_NO ?? "",
-        Quantity: item.QTY ?? "",
-        Unit: item.UOM ?? "",
         "Special Instructions": item.SPECIAL_INSTRUCTIONS ?? "",
         "Packing Requirements": item.PACKING_REQUIREMENTS ?? "",
         "Additional Notes": item.NOTES ?? "",
@@ -349,14 +351,26 @@ function registerPdiSubmitRoute(router: Router) {
         // generic "Timestamp" every tab carries — this is the one the detail view surfaces.
         "PDI UPDATE TIME": now,
         Status: PDI_STATUS_COMPLETED,
+        // Quantity/Unit are deliberately NOT set here — updateRow's merge-by-header would
+        // otherwise overwrite the placeholder's already-correct approved quantity (which can
+        // be less than the item's full order quantity, e.g. 10 of 12 approved in Dispatch
+        // Approval) back to the full item.QTY. They're only set explicitly below, on the
+        // fresh-append fallback path for a legacy item that never got a placeholder at all.
       };
 
-      // Fills in the placeholder row createPlaceholderPdi() already created for this item at
+      // Fills in the placeholder row createPlaceholderPdi() already created for this round at
       // Dispatch Approval time — updates it in place by its own PDI ID, same update-in-place
       // convention as Dispatch Items Approval's own submit handler in orders.ts, rather than
-      // appending a second row. Falls back to appending fresh if somehow no placeholder exists
-      // yet (e.g. an item approved before this convention existed).
-      const existingRow = existingPdiRows.find((r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId);
+      // appending a second row. An item can have several PDI rows now (one per Dispatch
+      // Approval round) — only ever fill in a still-PENDING one, oldest first (existingPdiRows
+      // is read in sheet/insertion order, so .find() naturally picks the earliest still-open
+      // round); matching a row regardless of its Status risked silently overwriting an
+      // already-completed round's data with this submission's. Falls back to appending fresh
+      // (with Quantity/Unit set from the item's own full QTY) if somehow no open placeholder
+      // exists yet — e.g. an item approved before this convention existed.
+      const existingRow = existingPdiRows.find(
+        (r) => r.ORDER_ID === req.params.orderId && r.ITEM_ID === req.params.itemId && r.Status === PDI_STATUS_PENDING
+      );
       if (existingRow) {
         await updateRow(env.sheets.transactions, pdiStage.tab, pdiStage.idColumn, existingRow[pdiStage.idColumn], fields);
       } else {
@@ -365,15 +379,36 @@ function registerPdiSubmitRoute(router: Router) {
           ORDER_ID: req.params.orderId,
           ITEM_ID: item.ITEM_ID,
           [pdiStage.idColumn]: stageId,
+          Quantity: item.QTY ?? "",
+          Unit: item.UOM ?? "",
           ...fields,
         });
       }
 
-      const doneItemIds = new Set([
-        req.params.itemId,
-        ...existingPdiRows.filter((r) => r.ORDER_ID === req.params.orderId && r.Status === PDI_STATUS_COMPLETED).map((r) => r.ITEM_ID),
-      ]);
-      const allItemsDone = orderItems.every((i) => doneItemIds.has(i.ITEM_ID));
+      // An item can have several PDI rows (one per Dispatch Approval round) — it's only truly
+      // done once EVERY row for it is completed, not merely "at least one." An item with zero
+      // PDI rows at all (its whole order quantity was decided as Short/Excess in Dispatch
+      // Approval, never needing a "Dispatch Today" placeholder) is trivially done — there was
+      // nothing to PDI in the first place. existingPdiRows was read before this submission's
+      // own write, so the row just saved is folded in explicitly.
+      const pdiRowsByItemId = new Map<string, SheetRow[]>();
+      for (const r of existingPdiRows) {
+        if (r.ORDER_ID !== req.params.orderId) continue;
+        if (!pdiRowsByItemId.has(r.ITEM_ID)) pdiRowsByItemId.set(r.ITEM_ID, []);
+        pdiRowsByItemId.get(r.ITEM_ID)!.push(r);
+      }
+      const thisItemRows = pdiRowsByItemId.get(req.params.itemId) ?? [];
+      if (existingRow) {
+        const idx = thisItemRows.findIndex((r) => r[pdiStage.idColumn] === existingRow[pdiStage.idColumn]);
+        if (idx !== -1) thisItemRows[idx] = { ...thisItemRows[idx], Status: PDI_STATUS_COMPLETED };
+      } else {
+        thisItemRows.push({ Status: PDI_STATUS_COMPLETED } as SheetRow);
+      }
+      pdiRowsByItemId.set(req.params.itemId, thisItemRows);
+      const allItemsDone = orderItems.every((i) => {
+        const rows = pdiRowsByItemId.get(i.ITEM_ID) ?? [];
+        return rows.length === 0 || rows.every((r) => r.Status === PDI_STATUS_COMPLETED);
+      });
       if (allItemsDone) {
         await updateRow(
           env.sheets.transactions,

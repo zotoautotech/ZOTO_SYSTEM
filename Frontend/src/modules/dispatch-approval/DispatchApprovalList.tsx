@@ -16,10 +16,16 @@ import { useSetHeaderActions } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
 
 /** Queue of orders confirmed in SO Confirmation, now awaiting Dispatch Approval. The pending
- * view is item-level (SO Confirmation Time/Customer/Part Name/Order Qty/Available Stock/
- * Balance/Short/Excess Quantity — one row per item, matching the old CRR reference table)
- * since these are all per-item; Completed stays the order-level table (same pattern as Sale
- * Order/SO Confirmation) since those columns don't apply there. */
+ * view is item-level (Status/SO Confirmation Time/Customer/Part Name/Order Qty/Available
+ * Stock/Balance/Short/Excess Quantity — one row per item, matching the old CRR reference
+ * table) since these are all per-item; Completed stays the order-level table (same pattern
+ * as Sale Order/SO Confirmation) since those columns don't apply there.
+ *
+ * An item's order quantity can be decided across multiple rounds (e.g. 10 of 12 approved
+ * today, the remaining 2 decided later) — Balance Order Quantity shrinks with each round and
+ * the row only drops out of this pending list once it reaches 0. Status shows "Pending Order
+ * Quantity" once at least one round has happened but balance remains, so it reads
+ * differently from a genuinely untouched item. */
 export function DispatchApprovalList() {
   const navigate = useNavigate();
   const { query } = useSearch();
@@ -84,13 +90,25 @@ export function DispatchApprovalList() {
   }
 
   const itemColumns: Column<DispatchApprovalItemRow>[] = [
+    {
+      key: "status",
+      header: "Status",
+      // Distinguishes "12 ordered, 10 already approved, 2 still pending" from a genuinely
+      // untouched item — the row itself stays in this pending list either way (it only
+      // drops off once Balance Quantity hits 0), this just flags that a round already
+      // happened. Extended takes priority in display since it's the more actionable state.
+      render: (row) =>
+        row.DISPATCH_EXTENDED ? "Dispatch Extended" : row.PARTIALLY_DECIDED ? "Pending Order Quantity" : "Pending",
+    },
     { key: "soConfTime", header: "SO Confirmation Time", render: (row) => (row.SO_CONFIRMATION_TIME ? formatTimestamp(row.SO_CONFIRMATION_TIME) : "—") },
     { key: "customer", header: "Customer Name", render: (row) => row.CUSTOMER_NAME || "—" },
     { key: "partName", header: "Part Name", render: (row) => row.PART_NAME || "—" },
     { key: "orderQty", header: "Order Quantity", render: (row) => (row.ORDER_QTY ? `${row.ORDER_QTY} ${row.UOM || ""}`.trim() : "—") },
-    // Decided by the doer when they actually submit the approval, not known beforehand.
+    // Decided by the doer when they actually submit the approval, not known beforehand —
+    // unlike Balance Quantity, which IS knowable ahead of time (order qty minus whatever
+    // earlier rounds already decided).
     { key: "availableStock", header: "Available Stock Quantity", render: () => "—" },
-    { key: "balanceQty", header: "Balance Quantity", render: () => "—" },
+    { key: "balanceQty", header: "Balance Order Quantity", render: (row) => (row.BALANCE_QTY ? `${row.BALANCE_QTY} ${row.UOM || ""}`.trim() : "—") },
     { key: "shortQty", header: "Short Quantity", render: () => "—" },
     { key: "excessQty", header: "Excess Quantity", render: () => "—" },
   ];
@@ -151,6 +169,7 @@ export function DispatchApprovalList() {
                   <div style={{ marginTop: 8 }}>{row.PART_NAME || "—"}</div>
                   <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
                     {row.ORDER_ID} · Qty {row.ORDER_QTY || "—"} {row.UOM}
+                    {row.PARTIALLY_DECIDED && ` · Balance ${row.BALANCE_QTY} ${row.UOM}`}
                   </div>
                 </button>
               ))}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getOrder, listItemDispatchApprovalLog } from "../../lib/ordersApi";
+import { getOrder, listItemDispatchApprovalLog, type DispatchApprovalLogRow } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatTimestamp } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
@@ -37,6 +37,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+/** Mirrors orders.ts's summarizeDispatchDecisions/dispatchBalance — an item's order quantity
+ * can be decided across multiple rounds (12 ordered, 10 approved today, 2 later), so the
+ * remaining balance is the order quantity minus every REAL decision round's own quantity so
+ * far (Dispatch Today's Approved Quantity, Short Quantity's own figure), or 0 outright once
+ * an Excess Quantity round has fired (dispatching more than ordered necessarily covers
+ * everything outstanding). "Dispatch Extended" rounds are holds, not decisions — they don't
+ * reduce the balance. */
+function remainingBalanceFromLog(orderQty: number, log: DispatchApprovalLogRow[]): number {
+  let decidedQty = 0;
+  for (const row of log) {
+    if (row.DISPATCH_APPROVAL === "Dispatch Today") decidedQty += Number(row.APPROVED_QTY || 0);
+    else if (row.DISPATCH_APPROVAL === "Short Quantity") decidedQty += Number(row.SHORT_QTY || 0);
+    else if (row.DISPATCH_APPROVAL === "Excess Quantity") return 0;
+  }
+  return Math.max(0, orderQty - decidedQty);
 }
 
 /**
@@ -86,6 +103,8 @@ export function DispatchApprovalItemDetail() {
   const plannedDates = (data.dispatchPlan as Record<string, string>[]).filter((d) => d.ITEM_ID === itemId);
   const plannedTotal = plannedDates.reduce((sum, d) => sum + (Number(d.PLANNED_QTY) || 0), 0);
   const latest = log[log.length - 1];
+  const orderQty = Number(item.QTY || 0);
+  const remainingBalance = remainingBalanceFromLog(orderQty, log);
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -117,10 +136,12 @@ export function DispatchApprovalItemDetail() {
 
           {/* Dispatch Approval is per-item now — the order can still say "DISPATCH APPROVAL"
               while this specific item already has its own decision (other items on the same
-              order just haven't been decided yet), so also check this item's own log. A
-              "Dispatch Extended" latest decision is a hold, not a real decision — the form
-              stays actionable so the doer can revisit it once the extended date arrives. */}
-          {order.STATUS === "DISPATCH APPROVAL" && (log.length === 0 || latest?.DISPATCH_APPROVAL === "Dispatch Extended") && (
+              order just haven't been decided yet), so also check this item's own remaining
+              balance. An item's order quantity can be decided across multiple rounds (12
+              ordered, 10 approved today, 2 later) — the form stays actionable as long as any
+              balance remains, not just while the log is empty or the latest round was a
+              "Dispatch Extended" hold. */}
+          {order.STATUS === "DISPATCH APPROVAL" && remainingBalance > 0 && (
             <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
               <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowForm(true)}>
                 <path d="M9 11l3 3L22 4" />
@@ -140,7 +161,7 @@ export function DispatchApprovalItemDetail() {
           </Section>
 
           {latest && (
-            <Section title="Dispatch Details">
+            <Section title={log.length > 1 ? "Dispatch Details (Latest Round)" : "Dispatch Details"}>
               <Field label="Dispatch Approval" value={latest.DISPATCH_APPROVAL} />
               <Field label="Next Extended Date" value={latest.NEXT_EXTENDED_DATE} />
               <Field label="Dispatch Remarks" value={latest.DISPATCH_REMARKS} />
@@ -214,6 +235,10 @@ export function DispatchApprovalItemDetail() {
             <Field label="FG Stock in Assembly Line" value="—" />
             <Field label="FG Stock Booked" value="—" />
             <Field label="FG Stock in Total" value="—" />
+            {/* Balance Order Quantity is the real, computed-from-every-round remaining
+                balance (0 once fully decided) — Balance Dispatch Quantity below it is a
+                separate, manually-typed stock figure the doer enters on the form itself. */}
+            <Field label="Balance Order Quantity" value={String(remainingBalance)} />
             <Field label="Balance Dispatch Quantity" value={latest?.BALANCE_DISPATCH_QTY} />
             <Field label="Dispatch Approved Quantity" value={latest?.APPROVED_QTY} />
             <Field label="Short Quantity" value={latest?.SHORT_QTY} />
@@ -221,9 +246,45 @@ export function DispatchApprovalItemDetail() {
             <Field label="Unit" value={item.UOM} />
           </Section>
 
-          {/* Follow-ups history table removed — it duplicated the same Dispatch Approval/
-              Next Extended Date/Dispatch Remarks fields already shown in "Dispatch Details"
-              above for the common single-decision case. */}
+          {/* Shown only once there's genuinely more than one round to distinguish — the
+              common single-decision case already has everything in "Dispatch Details" above,
+              same reasoning this table was originally removed for. Once an item can be
+              decided across multiple rounds, though, that single "latest" summary can't show
+              the earlier rounds at all, so the full history matters again. */}
+          {log.length > 1 && (
+            <Section title="Dispatch Approval Follow-ups">
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {["Timestamp", "Outcome", "Qty", "Remarks"].map((h) => (
+                        <th key={h} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid var(--color-border)" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {log.map((row, i) => {
+                      const qty =
+                        row.DISPATCH_APPROVAL === "Dispatch Today" ? row.APPROVED_QTY
+                        : row.DISPATCH_APPROVAL === "Short Quantity" ? row.SHORT_QTY
+                        : row.DISPATCH_APPROVAL === "Excess Quantity" ? row.EXCESS_QTY
+                        : "";
+                      return (
+                        <tr key={`${row.CREATED_AT}-${i}`}>
+                          <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--color-border)" }}>{formatTimestamp(row.CREATED_AT)}</td>
+                          <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--color-border)" }}>{row.DISPATCH_APPROVAL || "—"}</td>
+                          <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--color-border)" }}>{qty ? `${qty} ${item.UOM}` : "—"}</td>
+                          <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--color-border)", whiteSpace: "normal" }}>{row.DISPATCH_REMARKS || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
         </div>
       </div>
 
@@ -231,6 +292,8 @@ export function DispatchApprovalItemDetail() {
         <DispatchApprovalForm
           orderId={orderId!}
           itemId={itemId!}
+          remainingBalance={remainingBalance}
+          unitLabel={item.UOM || ""}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false);

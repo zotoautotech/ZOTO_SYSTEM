@@ -874,6 +874,54 @@ trip and exposed via `openAttachment()` (same "View attachment" pattern as every
 attachment in this app) on `TripDetail.tsx`'s Vehicle Details section — no new viewer UI was
 needed since it's just a normal PDF fileId by that point.
 
+## Split / partial dispatch (multi-round Dispatch Approval)
+
+An item's order quantity can be decided across **several Dispatch Approval rounds** — e.g.
+12 SET ordered, 10 approved today, the remaining 2 decided later — rather than one decision
+closing the item forever. Core helpers live in `orders.ts`: `summarizeDispatchDecisions()`
+(sums every round per item) and `dispatchBalance()` (order qty − decided, floored at 0).
+These **replaced** the old `latestDispatchDecisionByItemId()`/`isDispatchItemDecided()`
+latest-row-wins pair — don't reintroduce a "latest row decides everything" check anywhere.
+
+- Each round contributes: **Dispatch Today** → its Approved Quantity; **Short Quantity** →
+  its own figure (a short still *accounts* for that portion — it isn't an open balance);
+  **Excess Quantity** → closes the whole remaining balance to 0 outright; **Dispatch
+  Extended** → contributes nothing (a hold on the current balance, not a decision).
+- **Row-per-round**: the first round still fills in the SO-Confirmation-time placeholder in
+  place (unchanged single-decision behavior); once a *real* decision exists, every later
+  round **appends its own new `Dispatch Items Approval` row** with its own `Disp Conf Item
+  ID`. `hasRealDecision` is what distinguishes the two paths.
+- Server rejects a round exceeding the outstanding balance (`EXCEEDS_BALANCE`, 400) or one
+  submitted against a fully-decided item (`ALREADY_DECIDED`, 409). The form mirrors both as
+  live validation — Excess Quantity is deliberately exempt from the cap.
+- `ORDER_PUNCH.STATUS` only reaches `DISPATCH APPROVAL COMPLETED` once **every** item's
+  balance hits 0, not merely once every item has a row.
+- The pending queue keeps showing an item (with a shrinking **Balance Order Quantity**)
+  until its balance is 0; Status reads `"Pending Order Quantity"` once a round has happened
+  but balance remains, vs plain `"Pending"` when untouched.
+
+**PDI is per-round, not per-item, as a result.** `createPlaceholderPdi()` fires once per
+"Dispatch Today" round, carrying **only that round's approved quantity** (not the item's
+full order quantity) and keyed on that round's own `Disp Conf Item ID` — so the same item
+can legitimately have several PDI rows. Consequences to preserve:
+- The placeholder no-op check keys on `Disp Conf Item ID`, **not** `ORDER_ID`+`ITEM_ID`
+  (that would wrongly skip the second round's placeholder).
+- PDI's submit route only ever fills a still-`PDI Pending` row (oldest first) — matching
+  regardless of Status risked overwriting an already-completed round's data.
+- It deliberately does **not** write `Quantity`/`Unit` on the update path, since
+  `updateRow`'s merge-by-header would overwrite the placeholder's correct approved quantity
+  back to the item's full `QTY`. Those are only set on the fresh-append legacy fallback.
+- "Item done" = **every** PDI row for it is `PDI Completed`, or it has zero rows (its whole
+  quantity went Short/Excess so no PDI was ever needed) — never "at least one row done".
+
+**Not yet extended past PDI.** Transport onward (`Transport_Products`, Stock Release, Tax
+Invoice, Dispatch, LR, Delivery) still treats one order item as one indivisible unit — a
+second round reaching Transport would not yet get its own independent trip/invoice/LR run.
+`tripRoutes.ts`'s `eligible-items` also still reads quantity straight off `ORDER_ITEMS`
+(full order qty), so a partially-approved item shows its reduced quantity through PDI and
+then reverts to the full number at Transport. Finishing this means teaching the trip family
+to key on `Disp Conf Item ID` (the per-round identity) instead of `ITEM_ID`.
+
 ## Editing a punched order
 
 `PUT /orders/:id` reopens an already-punched order in the same 4-tab punch form
