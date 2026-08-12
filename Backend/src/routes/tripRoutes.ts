@@ -250,6 +250,41 @@ tripsRouter.get("/", async (req, res, next) => {
   }
 });
 
+/** Every trip-stage tab that a stage queue is allowed to read its own COMPLETED rows from.
+ * An allowlist rather than taking an arbitrary tab name off the query string — this endpoint
+ * would otherwise let a caller dump any tab in the spreadsheet. */
+const STAGE_ROW_TABS = new Set([
+  "Transport_Reached",
+  "STOCK_RELEASE",
+  "TAX_INVOICE",
+  "Dispatch",
+  "LR",
+  "DELIVERY",
+]);
+
+/**
+ * A stage's OWN completed rows, straight off its own sheet tab — so each stage's Completed
+ * view can show the fields that stage actually records (Stock Release's Release Quantity,
+ * Tax Invoice's Invoice No./E-Way Bill, LR's LR No./Charges, Delivery's Receiving
+ * Attachment…) instead of the same generic trip columns everywhere.
+ *
+ * Deliberately returns raw sheet rows: these six tabs have wildly different column sets
+ * (18 to 95 columns) with no shared internal field-name map, and the frontend picks the
+ * handful it displays per stage. Registered BEFORE "/:transportId" so "stage-rows" isn't
+ * swallowed as a transport id — the same route-ordering hazard called out in CLAUDE.md.
+ */
+tripsRouter.get("/stage-rows", async (req, res, next) => {
+  try {
+    const { tab } = req.query as { tab?: string };
+    if (!tab || !STAGE_ROW_TABS.has(tab)) {
+      return res.status(400).json({ error: { code: "BAD_REQUEST", message: "Unknown or missing stage tab" } });
+    }
+    res.json(await readTable(env.sheets.transactions, tab));
+  } catch (err) {
+    next(err);
+  }
+});
+
 tripsRouter.get("/:transportId", async (req, res, next) => {
   try {
     const transport = await getTransportRow(req.params.transportId);

@@ -5,7 +5,8 @@ import { DataTable, type Column } from "../DataTable";
 import { StatusBadge } from "../StatusBadge";
 import { CustomerFilterPanel } from "../CustomerFilterPanel";
 import { formatTimestamp } from "../../lib/format";
-import { listTrips, type TripRecord } from "../../lib/tripsApi";
+import { listTrips, listStageRows, type TripRecord } from "../../lib/tripsApi";
+import type { StageColumn } from "../../lib/tripStages";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
@@ -22,6 +23,8 @@ export function TripQueueList({
   prevStatus,
   nextStatus,
   completionTab,
+  stageTab,
+  completedColumns,
   onCreateNew,
 }: {
   moduleKey: string;
@@ -30,6 +33,10 @@ export function TripQueueList({
   nextStatus?: string;
   /** Set only for Stock Release / Tax Invoice — see tripStages.ts for why. */
   completionTab?: string;
+  /** This stage's own sheet tab. When given (with completedColumns), the Completed toggle
+   * shows THIS stage's own recorded rows instead of the generic trip table. */
+  stageTab?: string;
+  completedColumns?: StageColumn[];
   onCreateNew?: () => void;
 }) {
   const navigate = useNavigate();
@@ -37,7 +44,12 @@ export function TripQueueList({
   const { query } = useSearch();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
-  const { data: trips = [], isLoading } = useQuery({
+  // Each stage's Completed view reads its OWN tab (Stock Release's released parts, Tax
+  // Invoice's invoice numbers, LR's LR No./charges…) rather than showing the same generic
+  // trip columns at every stage. The pending view stays trip-level — that's genuinely what
+  // is pending: a trip awaiting this stage's form.
+  const ownCompletedView = showCompleted && !!stageTab && !!completedColumns?.length;
+  const { data: trips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ["trips", moduleKey, showCompleted],
     queryFn: () =>
       completionTab
@@ -46,7 +58,14 @@ export function TripQueueList({
           : listTrips(prevStatus, { excludeIfInTab: completionTab })
         : listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
     placeholderData: keepPreviousData,
+    enabled: !ownCompletedView,
   });
+  const { data: stageRows = [], isLoading: stageRowsLoading } = useQuery({
+    queryKey: ["stageRows", stageTab],
+    queryFn: () => listStageRows(stageTab!),
+    enabled: ownCompletedView,
+  });
+  const isLoading = ownCompletedView ? stageRowsLoading : tripsLoading;
 
   const sendThroughOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -110,17 +129,50 @@ export function TripQueueList({
   // `calc(100vh - 128px)` height (flex row's default `align-items: stretch`), turning it into
   // a giant blank-looking pink column and squeezing the DataTable pane to nothing. Stacking
   // instead of a row on mobile fixes both.
+  // This stage's own Completed view: its own tab's rows, its own columns. Rows still link
+  // back to their trip where one is identifiable — Stock Release rows carry ORDER_ID/ITEM_ID
+  // rather than Transport_ID (it's the one item-level tab of the six), and LR/Delivery key
+  // off Dispatch ID, so a row is only clickable when it actually has a Transport_ID.
+  const stageColumns: Column<Record<string, string>>[] = [
+    { key: "timestamp", header: "Timestamp", render: (r) => formatTimestamp(r.Timestamp) },
+    ...(completedColumns ?? []).map((c) => ({
+      key: c.field,
+      header: c.header,
+      render: (r: Record<string, string>) => r[c.field] || "—",
+    })),
+  ];
+  const filteredStageRows = normalizedQuery
+    ? stageRows.filter((r) =>
+        stageColumns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(normalizedQuery))
+      )
+    : stageRows;
+
   return (
     <div style={isMobile ? undefined : { display: "flex", minHeight: "calc(100vh - 128px)" }}>
-      <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
-      <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
-        <DataTable
-          columns={columns}
-          rows={filtered}
-          getRowKey={(t) => t.Transport_ID}
-          onRowClick={(t) => navigate(`/modules/${moduleKey}/${t.Transport_ID}`)}
-          emptyMessage={emptyMessage}
-        />
+      {!ownCompletedView && (
+        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+      )}
+      <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: ownCompletedView ? undefined : "1px solid var(--color-border)" }}>
+        {ownCompletedView ? (
+          <DataTable
+            columns={stageColumns}
+            rows={filteredStageRows}
+            /* These tabs have no single consistent id column across all six (Stock Release
+               is item-level, LR/Delivery key off Dispatch ID), so fall back through the
+               plausible ones before the timestamp. */
+            getRowKey={(r) => r.Stock_Pd_ID || r["LR ID"] || r["Delivery ID"] || r["Dispatch ID"] || r.Invoice_ID || r.Transport_Reach_ID || r.Transport_ID || r.Timestamp}
+            onRowClick={(r) => r.Transport_ID && navigate(`/modules/${moduleKey}/${r.Transport_ID}`)}
+            emptyMessage={emptyMessage}
+          />
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            getRowKey={(t) => t.Transport_ID}
+            onRowClick={(t) => navigate(`/modules/${moduleKey}/${t.Transport_ID}`)}
+            emptyMessage={emptyMessage}
+          />
+        )}
       </div>
     </div>
   );

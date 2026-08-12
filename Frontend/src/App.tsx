@@ -98,7 +98,17 @@ export default function App() {
           <Route
             key={`${stage.key}-list`}
             path={`modules/${stage.key}`}
-            element={<TripQueueList moduleKey={stage.key} label={stage.label} prevStatus={stage.prevStatus} nextStatus={stage.nextStatus} completionTab={stage.completionTab} />}
+            element={
+              <TripQueueList
+                moduleKey={stage.key}
+                label={stage.label}
+                prevStatus={stage.prevStatus}
+                nextStatus={stage.nextStatus}
+                completionTab={stage.completionTab}
+                stageTab={stage.tab}
+                completedColumns={stage.completedColumns}
+              />
+            }
           />,
           <Route key={`${stage.key}-detail`} path={`modules/${stage.key}/:transportId`} element={<TripDetail />} />,
           <Route key={`${stage.key}-dispatches`} path={`modules/${stage.key}/:transportId/dispatches`} element={<TripSubTableView kind="dispatches" />} />,

@@ -1,3 +1,12 @@
+/** One column on a stage's own Completed view. `header` is the label shown; `field` is the
+ * LITERAL sheet header on that stage's own tab (these six tabs have no internal field-name
+ * map — see GET /transport-trips/stage-rows). Verified against the live tabs' actual
+ * headers rather than assumed, per this project's usual discipline. */
+export interface StageColumn {
+  header: string;
+  field: string;
+}
+
 export interface TripStageDef {
   /** Also the URL segment and module key (matches Frontend/src/lib/modules.ts). */
   key: string;
@@ -19,6 +28,11 @@ export interface TripStageDef {
    * unaffected — the trip's Status only actually advances there once BOTH branches are done
    * (see tripRoutes.ts's stock-release/tax-invoice handlers). */
   completionTab?: string;
+  /** This stage's own sheet tab, read by its Completed view via GET /transport-trips/stage-rows. */
+  tab: string;
+  /** The columns THIS stage records itself — what makes each stage's Completed view its own
+   * rather than the same generic trip table repeated six times. */
+  completedColumns: StageColumn[];
 }
 
 /**
@@ -27,12 +41,113 @@ export interface TripStageDef {
  * (trip creation + attaching orders) has its own screen, not a stage in this chain.
  */
 export const TRIP_STAGES: TripStageDef[] = [
-  { key: "transport-reached", label: "Transport Reached", prevStatus: "OPEN", nextStatus: "REACHED", action: "reached" },
-  { key: "stock-release", label: "Stock Release", prevStatus: "REACHED", nextStatus: "TAX INVOICE COMPLETED", action: "stock-release", completionTab: "STOCK_RELEASE" },
-  { key: "tax-invoice", label: "Tax Invoice", prevStatus: "REACHED", nextStatus: "TAX INVOICE COMPLETED", action: "tax-invoice", completionTab: "TAX_INVOICE" },
-  { key: "dispatch", label: "Dispatch", prevStatus: "TAX INVOICE COMPLETED", nextStatus: "DISPATCHED", action: "dispatch" },
-  { key: "collect-lr", label: "Collect LR", prevStatus: "DISPATCHED", nextStatus: "LR COLLECTED", action: "lr" },
-  { key: "delivery", label: "Delivery", prevStatus: "LR COLLECTED", nextStatus: "DELIVERED", action: "delivery" },
+  {
+    key: "transport-reached",
+    label: "Transport Reached",
+    prevStatus: "OPEN",
+    nextStatus: "REACHED",
+    action: "reached",
+    tab: "Transport_Reached",
+    completedColumns: [
+      { header: "Transport ID", field: "Transport_ID" },
+      { header: "Transport Reached", field: "Transport Reached" },
+      { header: "Same Vehicle", field: "Same Vehicle" },
+      { header: "Expected DateTime", field: "Expected DateTime" },
+      { header: "Vehicle No.", field: "Vehicle No." },
+      { header: "Driver Name", field: "Driver Name" },
+      { header: "Reason", field: "Reason" },
+    ],
+  },
+  {
+    key: "stock-release",
+    label: "Stock Release",
+    prevStatus: "REACHED",
+    nextStatus: "TAX INVOICE COMPLETED",
+    action: "stock-release",
+    completionTab: "STOCK_RELEASE",
+    tab: "STOCK_RELEASE",
+    // The only item-level stage tab of the six — one row per released item, so its
+    // Completed view is a parts list rather than a trip list.
+    completedColumns: [
+      { header: "Part Name", field: "Part Name" },
+      { header: "Part No.", field: "Part No." },
+      { header: "Quantity", field: "Quantity" },
+      { header: "Unit", field: "Unit" },
+      { header: "Release Quantity", field: "Release Quantity" },
+      { header: "Type", field: "Type" },
+      { header: "From", field: "From" },
+      { header: "Vehicle No.", field: "Vehicle No." },
+    ],
+  },
+  {
+    key: "tax-invoice",
+    label: "Tax Invoice",
+    prevStatus: "REACHED",
+    nextStatus: "TAX INVOICE COMPLETED",
+    action: "tax-invoice",
+    completionTab: "TAX_INVOICE",
+    tab: "TAX_INVOICE",
+    completedColumns: [
+      { header: "Customer Name", field: "Customer Name" },
+      { header: "Tax Invoice No.", field: "Tax Invoice No." },
+      { header: "Tax Invoice Date", field: "Tax Invoice Date" },
+      { header: "Total Amount", field: "Total Amount" },
+      { header: "E-Way Bill Applicable", field: "E-Way Bill Applicable" },
+      { header: "E-Way Bill No.", field: "E-Way Bill No." },
+      { header: "Vehicle No.", field: "Vehicle No." },
+    ],
+  },
+  {
+    key: "dispatch",
+    label: "Dispatch",
+    prevStatus: "TAX INVOICE COMPLETED",
+    nextStatus: "DISPATCHED",
+    action: "dispatch",
+    tab: "Dispatch",
+    completedColumns: [
+      { header: "Customer Name", field: "Customer Name" },
+      { header: "Dispatched", field: "Dispatched" },
+      { header: "Freight Charges", field: "Freight Charges" },
+      { header: "Other Charges", field: "Other Charges" },
+      { header: "Payment Status", field: "Payment Status" },
+      { header: "Vehicle No.", field: "Vehicle No." },
+      { header: "Next Dispatch DateTime", field: "Next Dispatch DateTime" },
+    ],
+  },
+  {
+    key: "collect-lr",
+    label: "Collect LR",
+    prevStatus: "DISPATCHED",
+    nextStatus: "LR COLLECTED",
+    action: "lr",
+    tab: "LR",
+    completedColumns: [
+      { header: "Customer Name", field: "Customer Name" },
+      { header: "LR No.", field: "LR No." },
+      { header: "LR Date", field: "LR Date" },
+      { header: "LR Charges", field: "LR Charges" },
+      { header: "Payment Status", field: "Payment Status" },
+      { header: "Transporter Name", field: "Transporter Name" },
+      { header: "LR Remarks", field: "LR Remarks" },
+    ],
+  },
+  {
+    key: "delivery",
+    label: "Delivery",
+    prevStatus: "LR COLLECTED",
+    nextStatus: "DELIVERED",
+    action: "delivery",
+    tab: "DELIVERY",
+    completedColumns: [
+      { header: "Customer Name", field: "Customer Name" },
+      { header: "Delivered", field: "Delivered" },
+      { header: "Expected Delivery Date", field: "Expected Delivery Date" },
+      { header: "Amount", field: "Amount" },
+      { header: "Freight Charges to Transporter", field: "Freight Charges to Transporter" },
+      { header: "Delivery Remarks", field: "Delivery Remarks" },
+      { header: "Reason", field: "Reason" },
+    ],
+  },
 ];
 
 export function getTripStage(key: string): TripStageDef | undefined {

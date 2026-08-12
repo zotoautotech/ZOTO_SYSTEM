@@ -17,6 +17,14 @@ export async function listTrips(
   return res.data;
 }
 
+/** A stage's own completed rows, straight off its own sheet tab — raw sheet-header keys,
+ * since these six tabs have very different column sets and no shared field-name map. The
+ * caller picks which columns to show via that stage's own `completedColumns`. */
+export async function listStageRows(tab: string) {
+  const res = await api.get<Record<string, string>[]>("/transport-trips/stage-rows", { params: { tab } });
+  return res.data;
+}
+
 export interface TripDispatchRow {
   orderId: string;
   transportSoId: string;

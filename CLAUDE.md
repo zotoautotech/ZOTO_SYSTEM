@@ -874,6 +874,27 @@ trip and exposed via `openAttachment()` (same "View attachment" pattern as every
 attachment in this app) on `TripDetail.tsx`'s Vehicle Details section — no new viewer UI was
 needed since it's just a normal PDF fileId by that point.
 
+## Per-stage Transport queue views
+
+Each of the 6 TRIP_STAGES now has its OWN Completed view showing the fields that stage
+actually records, instead of every stage repeating the same generic trip table:
+- `TripStageDef` carries `tab` (the stage's own sheet tab) + `completedColumns`
+  (`{header, field}` pairs where `field` is the LITERAL live sheet header — these six tabs
+  range from 18 to 95 columns and share no internal field-name map).
+- `GET /transport-trips/stage-rows?tab=X` returns that tab's raw rows. The tab name is
+  checked against a hardcoded allowlist (`STAGE_ROW_TABS`) — without it the endpoint would
+  dump any tab in the spreadsheet. Registered BEFORE `/:transportId` so "stage-rows" isn't
+  swallowed as a transport id.
+- `TripQueueList` renders the stage's own columns when Completed is toggled; the PENDING
+  view stays trip-level, which is genuinely what's pending (a trip awaiting that form).
+- `STOCK_RELEASE` is the only item-level tab of the six (ORDER_ID/ITEM_ID, no
+  Transport_ID), so its rows aren't clickable through to a trip; `LR`/`DELIVERY` key off
+  `Dispatch ID`. Row keys fall through several id columns for that reason.
+
+**Every one of the 44 declared `completedColumns` fields was verified to exist on its live
+tab** — re-run that check if the sheets are hand-edited, since a wrong string here renders a
+silent column of "—" rather than failing.
+
 ## Split / partial dispatch (multi-round Dispatch Approval)
 
 An item's order quantity can be decided across **several Dispatch Approval rounds** — e.g.
