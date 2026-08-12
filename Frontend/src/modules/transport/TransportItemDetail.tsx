@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getOrder } from "../../lib/ordersApi";
+import { getOrder, listPdiItems } from "../../lib/ordersApi";
 import { listGoods, type GoodsRow } from "../../lib/mastersApi";
 import { formatTimestamp } from "../../lib/format";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
@@ -60,6 +60,14 @@ export function TransportItemDetail() {
     queryFn: listGoods,
   });
 
+  // Dispatch Approval can approve part of an item's order quantity (10 of 12), and each
+  // approved round carries its own PDI row with just that quantity — so the quantity
+  // actually cleared to travel comes from PDI, not the item's full ORDER_ITEMS quantity.
+  const { data: completedPdiItems = [] } = useQuery({
+    queryKey: ["pdiItems", "COMPLETED"],
+    queryFn: () => listPdiItems("COMPLETED"),
+  });
+
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Order not found</p>;
 
@@ -68,6 +76,11 @@ export function TransportItemDetail() {
 
   const order = data.order;
   const g = goods.find((row) => row["FG ID"] === item.FG_ID);
+  // Sum every approved round for this item — an item split across two rounds travels as the
+  // total of what was actually approved, which is still ≤ its order quantity.
+  const pdiRows = completedPdiItems.filter((r) => r.ORDER_ID === orderId && r.ITEM_ID === itemId);
+  const approvedQty = pdiRows.reduce((n, r) => n + Number(r.QTY || 0), 0);
+  const loadQty = pdiRows.length > 0 ? String(approvedQty) : item.QTY;
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -115,7 +128,7 @@ export function TransportItemDetail() {
 
         <div style={{ flex: isCompact ? "1 1 100%" : 1, minWidth: 0 }}>
           <Section title="Load Limit Details">
-            <Field label="Quantity" value={item.QTY} />
+            <Field label="Quantity" value={loadQty} />
             <Field label="Unit" value={item.UOM} />
           </Section>
         </div>

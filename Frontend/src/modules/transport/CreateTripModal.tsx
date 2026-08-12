@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { ToggleGroup } from "../../components/form/ToggleGroup";
 import { SearchableSelect } from "../../components/form/SearchableSelect";
@@ -8,7 +8,7 @@ import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
-import { getOrder, listPdiItems, type OrderRecord } from "../../lib/ordersApi";
+import { listPdiItems, type OrderRecord } from "../../lib/ordersApi";
 
 interface PickedItem {
   itemId: string;
@@ -83,7 +83,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [error, setError] = useState("");
   const [queuedOrders, setQueuedOrders] = useState<QueuedSaleOrder[]>([]);
   const [loadingOrderId, setLoadingOrderId] = useState("");
-  const queryClient = useQueryClient();
 
   const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
   const transporterOptions = transportersToOptions(transporters);
@@ -122,10 +121,6 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
     setLoadingOrderId(order.ORDER_ID);
     setError("");
     try {
-      const detail = await queryClient.fetchQuery({
-        queryKey: ["order", order.ORDER_ID],
-        queryFn: () => getOrder(order.ORDER_ID),
-      });
       const freightPaidBy = order.FREIGHT_PAID_BY || "";
       setQueuedOrders((prev) => [
         ...prev,
@@ -133,18 +128,23 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           orderId: order.ORDER_ID,
           customerName: order.CUSTOMER_NAME || "",
           timestamp: new Date().toISOString(),
-          // Load Qty is the item's full Balance Qty to Dispatch. Zero/blank-quantity items are
-          // dropped rather than sent: attachOrders' schema requires a positive qty, so one bad
-          // item would 400 the whole trip instead of just itself.
-          items: detail.items
-            .filter((it) => Number(it.QTY || 0) > 0)
-            .map((it) => {
-              const boxQty = Number(completedPdiItems.find((r) => r.ITEM_ID === it.ITEM_ID)?.BOX_QUANTITY || 0);
+          // Sourced from this order's COMPLETED PDI rows, not ORDER_ITEMS. Dispatch Approval
+          // can approve part of an item's order quantity across several rounds (10 of 12),
+          // and each approved round has its own PDI row carrying just that quantity — so PDI
+          // is the only source that knows what's actually cleared to travel. Reading
+          // ORDER_ITEMS instead queued every item at its full order quantity, including
+          // items that were never approved at all (the "2 (22 qty)" for what should be one
+          // item at 10). Zero/blank-quantity rows are dropped rather than sent: attachOrders'
+          // schema requires a positive qty, so one bad item would 400 the whole trip.
+          items: completedPdiItems
+            .filter((r) => r.ORDER_ID === order.ORDER_ID && Number(r.QTY || 0) > 0)
+            .map((r) => {
+              const boxQty = Number(r.BOX_QUANTITY || 0);
               return {
-                itemId: it.ITEM_ID,
-                partName: it.PART_NAME,
-                qty: Number(it.QTY),
-                unit: it.UOM || "NOS",
+                itemId: r.ITEM_ID,
+                partName: r.PART_NAME,
+                qty: Number(r.QTY),
+                unit: r.UOM || "NOS",
                 loadBoxes: boxQty > 0 ? boxQty : undefined,
               };
             }),
