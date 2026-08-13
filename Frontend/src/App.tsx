@@ -27,6 +27,7 @@ import { TransportList } from "./modules/transport/TransportList";
 import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
 import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
+import { Dashboard } from "./modules/dashboard/Dashboard";
 import { MyTasksList } from "./checklist/MyTasksList";
 import { AssignedChecklistList } from "./checklist/AssignedChecklistList";
 import { DashboardList } from "./checklist/DashboardList";
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="checklist/dashboard" element={<DashboardList />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
+        <Route path="modules/dashboard" element={<Dashboard />} />
         <Route path="modules/punch-order" element={<OrderPunchList />} />
         <Route path="modules/sale-order" element={<OrderPunchList hideCreate />} />
         <Route path="modules/punch-order/new" element={<OrderPunchForm />} />

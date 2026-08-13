@@ -11,6 +11,13 @@
   --color-error: #d32f2f;
   --color-error-tint: #fdecea;
 
+  /* Dashboard chrome. The donut SEGMENT colours are deliberately NOT tokens — they live in
+     Dashboard.tsx as literals, because a chart segment recoloured by the theme would change
+     what the chart appears to say. Only the surrounding chrome adapts. */
+  --dash-empty: #d9d9d9;
+  --dash-icon: #9aa0a6;
+  --dash-grip: #c4c7cc;
+
   --radius: 10px;
   --rail-width: 208px;
   --topbar-height: 56px;
@@ -35,6 +42,10 @@
   --color-border: #2f3139;
   --color-error: #ef5350;
   --color-error-tint: rgba(239, 83, 80, 0.16);
+
+  --dash-empty: #343741;
+  --dash-icon: #7c8089;
+  --dash-grip: #3d4048;
 }
 
 * {

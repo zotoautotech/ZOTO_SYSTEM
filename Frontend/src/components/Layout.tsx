@@ -136,6 +136,7 @@ export function Layout() {
   // (Assigned Checklist / Dashboard) shown below the Checklist nav item. Still enforced
   // server-side regardless; this only decides whether the links are shown at all.
   const isInChecklist = location.pathname.startsWith("/checklist");
+  const isInSalesCrr = location.pathname.startsWith("/modules");
   const { data: isChecklistAdmin = false } = useQuery({
     queryKey: ["checklist", "admin", "check"],
     queryFn: checkIsChecklistAdmin,
@@ -212,6 +213,9 @@ export function Layout() {
     ? [
         HOME_NAV_ITEM,
         { to: currentSection.to, icon: AppSectionIcon, label: currentSection.label, end: false },
+        // Sales CRR's own KPI dashboard, indented under it — same contextual-sub-link
+        // pattern as Checklist's below, shown only while inside Sales CRR.
+        ...(isInSalesCrr ? [{ to: "/modules/dashboard", icon: AppSectionIcon, label: "Dashboard", end: false, indent: true }] : []),
         // Admin-only sub-links, indented under Checklist — only while actually inside it.
         ...(isInChecklist && isChecklistAdmin
           ? [
