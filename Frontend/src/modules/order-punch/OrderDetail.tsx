@@ -11,6 +11,19 @@ import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
 import { StageForm } from "../../components/stage/StageForm";
 import { getStage } from "../../lib/stages";
 import { QuickAction } from "../../components/FloatingActionButton";
+import { useAuth } from "../../lib/auth";
+
+/** Only Admin or Jyoti may fill the Sale Order Discount/Upload forms — everyone else with
+ * the Sale Order module (Abhishek Sharma, Kashish) can still view these orders, just not
+ * see these two form buttons. Mirrors the backend's `requireNamedUsers` gate on
+ * POST /orders/:id/discount and /:id/sale-order-form — this is UX only, the server check is
+ * the real gate. */
+const SALE_ORDER_FORM_ALLOWLIST = ["jyoti"];
+function canFillSaleOrderForms(user: { name: string; modules: string[] | "ALL" } | null): boolean {
+  if (!user) return false;
+  if (user.modules === "ALL") return true;
+  return SALE_ORDER_FORM_ALLOWLIST.includes(user.name.toLowerCase());
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -67,6 +80,8 @@ export function OrderDetail() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const isCompact = useIsCompact();
+  const { user } = useAuth();
+  const canFillSaleOrder = canFillSaleOrderForms(user);
   // Preserves whichever module list this was opened from (Punch Order vs. Sale Order —
   // both point at the same underlying order data) so back/expand links stay in that module.
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
@@ -243,7 +258,7 @@ export function OrderDetail() {
               so a negative check kept wrongly resurrecting these actions on orders that had
               long since moved on. Only these two exact pre-upload statuses are actionable;
               every other status (including SALE ORDER itself) is strictly view-only here. */}
-          {basePath === "/modules/sale-order" && (order.STATUS === "PENDING" || order.STATUS === "PENDING SALE ORDER") && (
+          {basePath === "/modules/sale-order" && canFillSaleOrder && (order.STATUS === "PENDING" || order.STATUS === "PENDING SALE ORDER") && (
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               {order.STATUS === "PENDING" ? (
                 <QuickAction label="Add Discounts on Sale Order…" onClick={() => setShowDiscountForm(true)}>

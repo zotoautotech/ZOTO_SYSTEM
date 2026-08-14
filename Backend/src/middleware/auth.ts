@@ -100,6 +100,40 @@ export const ORDER_FAMILY_MODULES = [
 ];
 
 /**
+ * Gates a route to a specific named allowlist of doers, Admin always included — for actions
+ * narrower than a whole module (e.g. Sale Order Discount/Upload forms, which the wider Sale
+ * Order module can VIEW but only certain doers may actually fill in). Matches on
+ * `USERS.Name` case-insensitively, same convention as customer-assignment matching
+ * elsewhere in this app — not Employee Id, since that's what doers/admins actually recognize
+ * each other by when editing the sheet. `perms.modules === "ALL"` (i.e. "Admin" in
+ * Permissions_Process) always passes regardless of the allowlist, matching every other
+ * Admin-bypasses-restriction rule in this app (customer assignment, etc.).
+ */
+export function requireNamedUsers(allowedNames: string[]) {
+  const lowerNames = allowedNames.map((n) => n.toLowerCase());
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token" } });
+    }
+    try {
+      const perms = await getPermissions(req.user.employeeId);
+      if (!perms) {
+        return res.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Account inactive or removed" } });
+      }
+      const isAdmin = perms.modules === "ALL";
+      const isAllowed = isAdmin || lowerNames.includes((req.user.name || "").toLowerCase());
+      if (!isAllowed) {
+        return res.status(403).json({ error: { code: "FORBIDDEN", message: "Not permitted to perform this action" } });
+      }
+      req.user = { ...req.user, ...perms };
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+/**
  * Gates a destructive route by USERS.CAN_DELETE — also read live from the sheet.
  * Fails closed (missing row/blank cell = no delete access) since it guards an
  * irreversible action.

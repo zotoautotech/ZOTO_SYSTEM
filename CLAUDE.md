@@ -307,6 +307,21 @@ Each route now declares its own guard:
 **Never reintroduce a router-level `requireModule`** — adding a new stage route means adding
 its own guard, not relying on the router's.
 
+**A route inside a module can be gated tighter than the module itself** via
+`requireNamedUsers(names)` (`Backend/src/middleware/auth.ts`) — stacked after `requireModule`
+on that one route only, not the whole module. First use: the Sale Order module's
+`Permissions_Process` grants Admin, Abhishek Sharma, Jyoti, and Kashish full **view** access
+to Punch/Sale Order orders, but only Admin or Jyoti may actually **submit** the Sale Order
+Discount form (`POST /orders/:id/discount`) or the Sale Order upload form
+(`POST /orders/:id/sale-order-form`) — everyone else in the module can open and read an order
+but the two form buttons don't apply. Matches on `USERS.Name` case-insensitively (same
+convention as customer-assignment matching elsewhere), Admin (`modules === "ALL"`) always
+bypasses the allowlist. `Frontend/src/modules/order-punch/OrderDetail.tsx`'s
+`canFillSaleOrderForms()` mirrors this to hide the two QuickActions for non-allowed doers —
+UX only, the backend check is the real gate. If a future stage needs the same "wider module
+view, narrower module write" split, add another `requireNamedUsers([...])` call rather than
+narrowing the module's own `Permissions_Process`-driven `requireModule` gate.
+
 ## Google Sheets (source of truth)
 
 Four spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,
