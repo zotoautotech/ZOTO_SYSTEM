@@ -70,6 +70,8 @@ export interface SaleOrderDocFields {
   billingState?: string;
   buyerGstin?: string;
   consigneeGstin?: string;
+  shippingAddressLine1?: string;
+  shippingAddressLine2?: string;
 }
 
 function cellText(cell: docs_v1.Schema$TableCell): string {
@@ -278,6 +280,8 @@ export async function generateSaleOrderPdf(
         ["billingState", "<<[Billing State]>>"],
         ["buyerGstin", "<<[Buyer GSTIN No.]>>"],
         ["consigneeGstin", "<<[Consignee GSTIN]>>"],
+        ["shippingAddressLine1", "<<[Shipping Address Line 1]>>"],
+        ["shippingAddressLine2", "<<[Shipping Address Line 2]>>"],
       ];
       for (const [key, token] of optionalTokens) {
         const v = fields[key];

@@ -1563,6 +1563,8 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           billingState: order.BILLING_STATE ?? "",
           buyerGstin: order.BUYER_GSTIN ?? "",
           consigneeGstin: order.CONSIGNEE_GSTIN ?? "",
+          shippingAddressLine1: order.SHIPPING_ADDRESS ?? "",
+          shippingAddressLine2: order.SHIPPING_ADDRESS_2 ?? "",
         },
         items.map((it) => ({
           partNo: String(it.PART_NO ?? ""),
