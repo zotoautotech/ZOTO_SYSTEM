@@ -35,6 +35,10 @@ export const env = {
   // Backend/src/services/gatePass.ts). Must be shared (at least Viewer) with
   // DRIVE_IMPERSONATE_USER below so drive.files.copy() can read it.
   dispatchGatePassTemplateDocId: process.env.DISPATCH_GATE_PASS_TEMPLATE_DOC_ID ?? "",
+  // The "Sale Order Template T1" Google Doc, copied + filled in per order by the Create Sale
+  // Order action (see Backend/src/services/saleOrderDoc.ts). Same sharing requirement as the
+  // gate pass template above — DRIVE_IMPERSONATE_USER needs at least Viewer on it.
+  saleOrderTemplateDocId: process.env.SALE_ORDER_TEMPLATE_DOC_ID ?? "",
   // Domain-wide delegation: the service account impersonates this Workspace user for Drive
   // uploads, so files are owned by them (using their quota) rather than the service account
   // itself, which has none. Requires this Client ID authorized in Workspace Admin Console

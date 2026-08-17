@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getOrder, getSaleOrder } from "../../lib/ordersApi";
+import { isAxiosError } from "axios";
+import { getOrder, getSaleOrder, createSaleOrder } from "../../lib/ordersApi";
 import { formatTimestamp, formatCurrency } from "../../lib/format";
 import { openAttachment } from "../../lib/attachments";
 import { useIsCompact, useIsMobile } from "../../lib/responsive";
 import { SaleOrderDiscountForm } from "./SaleOrderDiscountForm";
-import { SaleOrderUploadForm } from "./SaleOrderUploadForm";
 import { SoConfirmationForm } from "../so-confirmation/SoConfirmationForm";
 import { StageForm } from "../../components/stage/StageForm";
 import { getStage } from "../../lib/stages";
@@ -71,7 +71,7 @@ export function OrderDetail() {
   // both point at the same underlying order data) so back/expand links stay in that module.
   const basePath = `/modules/${location.pathname.split("/")[2]}`;
   const [showDiscountForm, setShowDiscountForm] = useState(false);
-  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [creatingSaleOrder, setCreatingSaleOrder] = useState(false);
   const [showSoConfirmationForm, setShowSoConfirmationForm] = useState(false);
   const [showStageForm, setShowStageForm] = useState(false);
   // The 8 stages after Dispatch Approval (PDI, Transport, Transport Reached, Stock
@@ -251,7 +251,33 @@ export function OrderDetail() {
                   <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
                 </QuickAction>
               ) : (
-                <QuickAction label="Upload Sale Order Form" onClick={() => setShowUploadForm(true)}>
+                <QuickAction
+                  label={creatingSaleOrder ? "Creating Sale Order…" : "Create Sale Order"}
+                  onClick={async () => {
+                    if (creatingSaleOrder) return;
+                    setCreatingSaleOrder(true);
+                    try {
+                      await createSaleOrder(orderId!);
+                      // refetchQueries (not invalidateQueries) so the list is already fresh by
+                      // the time it mounts a moment later — see main.tsx's note on this exact
+                      // race. Back to the Sale Order list (this order's own STATUS is now
+                      // "SALE ORDER", i.e. Completed Sale Order), not straight into SO
+                      // Confirmation — matches the Punch Order form's "return to the list,
+                      // don't jump ahead" pattern.
+                      await queryClient.refetchQueries({ queryKey: ["orders", "all"] });
+                      queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
+                      navigate(basePath);
+                    } catch (err) {
+                      const message = isAxiosError(err)
+                        ? (err.response?.data as { error?: { message?: string } } | undefined)?.error?.message ??
+                          err.message
+                        : "Could not create the Sale Order. Please try again.";
+                      window.alert(message);
+                    } finally {
+                      setCreatingSaleOrder(false);
+                    }
+                  }}
+                >
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
                   <path d="M14 2v6h6M9 13h6M9 17h6" />
                 </QuickAction>
@@ -393,24 +419,6 @@ export function OrderDetail() {
             setShowDiscountForm(false);
             queryClient.invalidateQueries({ queryKey: ["order", orderId] });
             queryClient.invalidateQueries({ queryKey: ["orders", "all"] });
-          }}
-        />
-      )}
-
-      {showUploadForm && (
-        <SaleOrderUploadForm
-          orderId={orderId!}
-          onClose={() => setShowUploadForm(false)}
-          onSaved={async () => {
-            setShowUploadForm(false);
-            // refetchQueries (not invalidateQueries) so the list is already fresh by the time
-            // it mounts a moment later — see main.tsx's note on this exact race. Back to the
-            // Sale Order list (this order's own STATUS is now "SALE ORDER", i.e. Completed),
-            // not straight into SO Confirmation — matches the Punch Order form's "return to
-            // the list, don't jump ahead" pattern.
-            await queryClient.refetchQueries({ queryKey: ["orders", "all"] });
-            queryClient.invalidateQueries({ queryKey: ["saleOrders"] });
-            navigate(basePath);
           }}
         />
       )}

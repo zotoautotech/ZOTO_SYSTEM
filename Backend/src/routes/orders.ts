@@ -10,6 +10,8 @@ import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } fr
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
+import { generateSaleOrderPdf } from "../services/saleOrderDoc.js";
+import { amountInWords } from "../services/amountWords.js";
 
 // itemFromSheet only knows ORDER_ITEMS' own columns, so reading SALE_ORDER_ITEMS through it
 // silently drops SALE_ORDER_ITEM_ID (a column that only exists on that tab) — read it back
@@ -1353,84 +1355,248 @@ async function createPlaceholderSoConfirmation(
   );
 }
 
-/** Saves the Sale Order form. `createPlaceholderSaleOrder()` (called from the discount route)
- * already created the SALE_ORDERS + SALE_ORDER_ITEMS rows with Sale Order No./Date/
- * Attachment/Remarks blank — this fills those in via updateRow instead of appending a second
- * row (falls back to a fresh append if somehow no placeholder exists yet), then also creates
- * a placeholder SO_Confirmation + SO_Confirmation_Items row the same way, for the next stage. */
+/**
+ * Completes the Sale Order stage for one order, given the four Sale Order fields.
+ * `createPlaceholderSaleOrder()` (called from the discount route) already created the
+ * SALE_ORDERS + SALE_ORDER_ITEMS rows with those fields blank — this fills them in via
+ * updateRow instead of appending a second row (falling back to a fresh append if somehow no
+ * placeholder exists), resyncs SALE_ORDER_ITEMS, advances ORDER_PUNCH.STATUS, and creates the
+ * SO_Confirmation placeholder for the next stage.
+ *
+ * Shared by BOTH the manual upload route and the one-click Create Sale Order route below, so
+ * the two can't drift — the only difference between them is where the four field values come
+ * from (doer-typed vs auto-generated).
+ */
+async function finalizeSaleOrder(
+  orderId: string,
+  employeeId: string,
+  fields: { soNo: string; soDate: string; soAttachmentUrl: string; soRemarks: string }
+): Promise<{ saleOrderId: string } | { error: { code: string; message: string } }> {
+  const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
+  const order = orders.find((o) => o.ORDER_ID === orderId);
+  if (!order) return { error: { code: "NOT_FOUND", message: "Order not found" } };
+
+  const now = new Date().toISOString();
+  const existingSaleOrder = (await readTable(env.sheets.transactions, "SALE_ORDERS")).find(
+    (r) => r.ORDER_ID === orderId
+  );
+  const saleOrderId = existingSaleOrder?.SALE_ORDER_ID ?? (await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID"));
+
+  const saleOrderFields = saleOrderToSheet({
+    ...order,
+    CREATED_AT: now,
+    CREATED_BY: employeeId,
+    ORDER_ID: orderId,
+    SALE_ORDER_ID: saleOrderId,
+    SO_NO: fields.soNo,
+    SO_DATE: fields.soDate,
+    SO_ATTACHMENT_URL: fields.soAttachmentUrl,
+    SO_REMARKS: fields.soRemarks,
+    STATUS: "PENDING",
+  });
+  if (existingSaleOrder) {
+    await updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", orderId, saleOrderFields);
+  } else {
+    await appendRow(env.sheets.transactions, "SALE_ORDERS", saleOrderFields);
+  }
+
+  // SALE_ORDER_ITEMS uses the same column names as ORDER_ITEMS (no renaming). The
+  // placeholder copy from discount time might be stale if anything changed since, so
+  // resync from scratch rather than assume it's still accurate.
+  const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter((i) => i.ORDER_ID === orderId);
+  await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [orderId]);
+  if (items.length > 0) {
+    const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
+    await appendRows(
+      env.sheets.transactions,
+      "SALE_ORDER_ITEMS",
+      items.map((item, i) => ({
+        ...item,
+        Timestamp: now,
+        Useremail: employeeId,
+        SALE_ORDER_ID: saleOrderId,
+        SALE_ORDER_ITEM_ID: soItemIds[i],
+      }))
+    );
+  }
+
+  // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
+  // Deliberately still the literal "SALE ORDER" — revertOrphanedSaleOrder(), the SO
+  // Confirmation stage and BEFORE_DISPATCH_APPROVAL_COMPLETED all key off this exact value.
+  await updateRow(
+    env.sheets.transactions,
+    ORDER_TAB,
+    "ORDER_ID",
+    orderId,
+    punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: employeeId })
+  );
+
+  await createPlaceholderSoConfirmation(orderId, saleOrderId, employeeId, fields);
+
+  return { saleOrderId };
+}
+
+/** Saves the manually-uploaded Sale Order form. */
 ordersRouter.post("/:id/sale-order-form", requireModule("sale-order"), async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
-    const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
-    const order = orders.find((o) => o.ORDER_ID === req.params.id);
-    if (!order) {
-      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
-    }
-
-    const now = new Date().toISOString();
-    const existingSaleOrder = (await readTable(env.sheets.transactions, "SALE_ORDERS")).find((r) => r.ORDER_ID === req.params.id);
-    const saleOrderId = existingSaleOrder?.SALE_ORDER_ID ?? (await nextId("SO", "SALE_ORDERS", "SALE_ORDER_ID"));
-
-    const saleOrderFields = saleOrderToSheet({
-      ...order,
-      CREATED_AT: now,
-      CREATED_BY: req.user!.employeeId,
-      ORDER_ID: req.params.id,
-      SALE_ORDER_ID: saleOrderId,
-      SO_NO: body.soNo,
-      SO_DATE: body.soDate,
-      SO_ATTACHMENT_URL: body.soAttachmentUrl,
-      SO_REMARKS: body.soRemarks,
-      STATUS: "PENDING",
-    });
-    if (existingSaleOrder) {
-      await updateRow(env.sheets.transactions, "SALE_ORDERS", "ORDER_ID", req.params.id, saleOrderFields);
-    } else {
-      await appendRow(env.sheets.transactions, "SALE_ORDERS", saleOrderFields);
-    }
-
-    // SALE_ORDER_ITEMS uses the same column names as ORDER_ITEMS (no renaming). The
-    // placeholder copy from discount time might be stale if anything changed since, so
-    // resync from scratch rather than assume it's still accurate.
-    const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS")).filter(
-      (i) => i.ORDER_ID === req.params.id
-    );
-    await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
-    if (items.length > 0) {
-      const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", items.length);
-      await appendRows(
-        env.sheets.transactions,
-        "SALE_ORDER_ITEMS",
-        items.map((item, i) => ({
-          ...item,
-          Timestamp: now,
-          Useremail: req.user!.employeeId,
-          SALE_ORDER_ID: saleOrderId,
-          SALE_ORDER_ITEM_ID: soItemIds[i],
-        }))
-      );
-    }
-
-    // The punch order's part in the pipeline is done; mark it so the Sale Order actions hide.
-    await updateRow(
-      env.sheets.transactions,
-      ORDER_TAB,
-      "ORDER_ID",
-      req.params.id,
-      punchToSheet({ STATUS: "SALE ORDER", CREATED_BY: req.user!.employeeId })
-    );
-
-    await createPlaceholderSoConfirmation(req.params.id, saleOrderId, req.user!.employeeId, {
+    const result = await finalizeSaleOrder(req.params.id, req.user!.employeeId, {
       soNo: body.soNo,
       soDate: body.soDate,
       soAttachmentUrl: body.soAttachmentUrl,
       soRemarks: body.soRemarks,
     });
-
-    res.json({ orderId: req.params.id, saleOrderId });
+    if ("error" in result) return res.status(404).json({ error: result.error });
+    res.json({ orderId: req.params.id, saleOrderId: result.saleOrderId });
   } catch (err) {
     next(err);
   }
+});
+
+/** Indian fiscal year label for a date, e.g. 2026-08-17 -> "26-27" (FY starts in April). */
+function fiscalYearLabel(d: Date): string {
+  const y = d.getFullYear();
+  const startYear = d.getMonth() + 1 >= 4 ? y : y - 1;
+  return `${String(startYear % 100).padStart(2, "0")}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+/** Next human-facing Sale Order No. in the ZOTO/SO/<FY>/<NNNN> series, continuing from the
+ * highest number already present in SALE_ORDERS for the current fiscal year. */
+async function nextSaleOrderNo(): Promise<string> {
+  const fy = fiscalYearLabel(new Date());
+  const prefix = `ZOTO/SO/${fy}/`;
+  const rows = await readTable(env.sheets.transactions, "SALE_ORDERS");
+  let max = 0;
+  for (const r of rows) {
+    const no = String(r["Sale Order No."] ?? "");
+    if (!no.startsWith(prefix)) continue;
+    const n = Number(no.slice(prefix.length));
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
+}
+
+const DATE_FMT = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+
+/**
+ * One-click Create Sale Order: mints the Sale Order No., dates it today, generates the PDF
+ * from the Sale Order Template T1 Google Doc (GST version — the item table also carries an
+ * Output CGST/SGST Tax Payable row pair, unlike System 2's tax-free template), uploads it,
+ * and completes the stage with that PDF as the Sale Order Attachment. Generated BEFORE
+ * anything is written, so a generation failure leaves the order exactly where it was (still
+ * showing the button) rather than advancing it with no attachment.
+ */
+ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (req, res, next) => {
+    try {
+      const orderId = req.params.id;
+      const orderRow = (await readTable(env.sheets.transactions, ORDER_TAB)).find((r) => r.ORDER_ID === orderId);
+      if (!orderRow) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Order not found" } });
+      const order = punchFromSheet(orderRow);
+
+      if (order.STATUS !== "PENDING SALE ORDER") {
+        return res.status(409).json({
+          error: {
+            code: "WRONG_STAGE",
+            message: `Sale Order can only be created while the order is at "PENDING SALE ORDER" (currently "${order.STATUS}").`,
+          },
+        });
+      }
+
+      const now = new Date();
+      const saleOrderNo = await nextSaleOrderNo();
+      const soDate = now.toISOString().slice(0, 10);
+
+      const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS"))
+        .filter((r) => r.ORDER_ID === orderId)
+        .map(itemFromSheet);
+
+      const totalQty = items.reduce((sum, it) => sum + (Number(it.QTY) || 0), 0);
+      const totalAmount = Number(order.TOTAL_AMOUNT) || 0;
+      const orderBasicAmount = Number(order.BASIC_AMOUNT) || 0;
+      const orderTaxAmount = Number(order.TAX_AMOUNT) || 0;
+      // Derived from ORDER_PUNCH's own resummed Basic/Tax/Total — NOT a re-sum of item rows.
+      // Some legacy items can have blank per-item CGST/SGST (pre-dating that split), which
+      // would make an item-level subtraction wrongly swallow the whole tax amount into
+      // "Round Off" on this invoice. The order-level total is always authoritative here.
+      const roundOffAmount = totalAmount - (orderBasicAmount + orderTaxAmount);
+      // The two Output CGST/SGST Tax Payable rows are still summed from the items for
+      // display — informational only, doesn't affect the Total/Round Off line above.
+      const cgstTotal = items.reduce((sum, it) => sum + (Number(it.CGST) || 0), 0);
+      const sgstTotal = items.reduce((sum, it) => sum + (Number(it.SGST) || 0), 0);
+
+      const pdfFileId = await generateSaleOrderPdf(
+        orderId,
+        {
+          saleOrderNo,
+          saleOrderDate: DATE_FMT.format(now),
+          paymentType: order.PAYMENT_TYPE ?? "",
+          customerName: order.CUSTOMER_NAME ?? "",
+          purchaseOrderNo: order.PO_NO ?? "",
+          saleOrderRemarks: `Auto-generated on ${DATE_FMT.format(now)}`,
+          consigneeName: order.CONSIGNEE_NAME || order.CUSTOMER_NAME || "",
+          preferredDeliveryMode: order.PREFERRED_DELIVERY_MODE ?? "",
+          preferredTransporterName: order.PREFERRED_TPT_NAME ?? "",
+          shippingState: order.SHIPPING_STATE ?? "",
+          roundOff: roundOffAmount.toFixed(2),
+          totalQuantity: String(totalQty),
+          totalAmount: totalAmount.toFixed(2),
+          amountInWords: amountInWords(totalAmount),
+          cgstTotal: cgstTotal.toFixed(2),
+          sgstTotal: sgstTotal.toFixed(2),
+          branchName: order.BRANCH_NAME ?? "",
+          sellerAddressLine1: order.SELLER_ADDRESS_1 ?? "",
+          sellerAddressLine2: order.SELLER_ADDRESS_2 ?? "",
+          sellerState: order.SELLER_STATE ?? "",
+          sellerPincode: order.SELLER_PINCODE ?? "",
+          sellerEmail: order.SELLER_EMAIL ?? "",
+          sellerGstin: order.SELLER_GSTIN ?? "",
+          billingAddressLine1: order.BILLING_ADDRESS ?? "",
+          billingAddressLine2: order.BILLING_ADDRESS_2 ?? "",
+          billingState: order.BILLING_STATE ?? "",
+          buyerGstin: order.BUYER_GSTIN ?? "",
+          consigneeGstin: order.CONSIGNEE_GSTIN ?? "",
+        },
+        items.map((it) => ({
+          partNo: String(it.PART_NO ?? ""),
+          partName: String(it.PART_NAME ?? ""),
+          hsn: "",
+          dueOn: DATE_FMT.format(now),
+          quantity: String(it.QTY ?? ""),
+          unit: String(it.UOM ?? ""),
+          price: String(it.PRICE ?? ""),
+          discountPct: String(it.DISCOUNT_PCT ?? ""),
+          basicAmount: String(it.BASIC_AMOUNT ?? ""),
+        }))
+      );
+
+      if (!pdfFileId) {
+        return res.status(502).json({
+          error: {
+            code: "SALE_ORDER_PDF_FAILED",
+            message:
+              "Could not generate the Sale Order PDF from the template. The order has not been changed — check the server logs and that SALE_ORDER_TEMPLATE_DOC_ID is set and shared with the Drive service user.",
+          },
+        });
+      }
+
+      const result = await finalizeSaleOrder(orderId, req.user!.employeeId, {
+        soNo: saleOrderNo,
+        soDate,
+        soAttachmentUrl: pdfFileId,
+        soRemarks: `Auto-generated on ${DATE_FMT.format(now)}`,
+      });
+      if ("error" in result) return res.status(404).json({ error: result.error });
+
+      res.json({
+        orderId,
+        saleOrderId: result.saleOrderId,
+        saleOrderNo,
+        saleOrderDate: soDate,
+        attachmentFileId: pdfFileId,
+      });
+    } catch (err) {
+      next(err);
+    }
 });
 
 const confirmationChangesSchema = z.object({

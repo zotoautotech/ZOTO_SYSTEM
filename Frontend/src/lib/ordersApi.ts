@@ -181,6 +181,20 @@ export async function uploadSaleOrderForm(orderId: string, payload: SaleOrderFor
   return res.data;
 }
 
+/** One-click Sale Order generation: server mints the Sale Order No./Date, generates the PDF
+ * from the Sale Order Template T1 Google Doc, and completes the stage — replaces the manual
+ * upload form's "type in the four fields yourself" flow entirely. */
+export async function createSaleOrder(orderId: string) {
+  const res = await api.post<{
+    orderId: string;
+    saleOrderId: string;
+    saleOrderNo: string;
+    saleOrderDate: string;
+    attachmentFileId: string;
+  }>(`/orders/${orderId}/create-sale-order`);
+  return res.data;
+}
+
 /** The SALE_ORDERS row for an order once its Sale Order form is saved, or null. */
 export async function getSaleOrder(orderId: string) {
   const res = await api.get<Record<string, string> | null>(`/orders/${orderId}/sale-order`);

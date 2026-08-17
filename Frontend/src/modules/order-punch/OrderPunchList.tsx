@@ -128,7 +128,16 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
     selectedIds.size === 1 && orders.find((o) => o.ORDER_ID === Array.from(selectedIds)[0])?.STATUS === "PENDING";
 
   const columns: Column<OrderRecord>[] = [
-    { key: "status", header: "Status", render: (o) => <StatusBadge status={o.STATUS} /> },
+    {
+      key: "status",
+      header: "Status",
+      render: (o) => (
+        <StatusBadge
+          status={o.STATUS}
+          label={basePath === "/modules/sale-order" && o.STATUS === "SALE ORDER" ? "COMPLETED SALE ORDER" : undefined}
+        />
+      ),
+    },
     { key: "timestamp", header: "Timestamp", render: (o) => formatTimestamp(o.CREATED_AT) },
     { key: "assignedPerson", header: "Assigned Person", render: (o) => o.SALE_STAFF_NAME || "—" },
     {
@@ -150,7 +159,10 @@ export function OrderPunchList({ hideCreate = false }: { hideCreate?: boolean } 
           style={{ width: "100%", textAlign: "left", display: "block", border: "1px solid var(--color-border)", borderRadius: 12, background: selectedIds.has(order.ORDER_ID) ? "var(--color-primary-tint)" : "var(--color-bg)", padding: "14px 16px", marginBottom: 10, color: "var(--color-text)" }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <StatusBadge status={order.STATUS} />
+            <StatusBadge
+              status={order.STATUS}
+              label={basePath === "/modules/sale-order" && order.STATUS === "SALE ORDER" ? "COMPLETED SALE ORDER" : undefined}
+            />
             <span className="text-muted" style={{ fontSize: 12 }}>{formatTimestamp(order.CREATED_AT)}</span>
           </div>
           <div style={{ fontWeight: 700, fontSize: 15, marginTop: 10 }}>{order.CUSTOMER_NAME || "Customer not set"}</div>
