@@ -1125,6 +1125,24 @@ pattern) anywhere else this app reads a Planned/date-ish cell back from Sheets.
   `orderPunchMap.ts` first — don't assume the map is still correct just because it
   typechecks (a wrong string literal is a silent runtime failure, not a compile error).
   `Dispatch_Approval` was also renamed to `Dispatch Items Approval` in the same pass.
+- **The customer master's `CUST ID` column is ARRAYFORMULA-generated — never write a literal
+  into it.** Cell `C4` of `CUSTOMER MASTER T1`/`T2` holds
+  `=ARRAYFORMULA(IF(E4:E<>"","CUST-"&TEXT(ROW(E4:E)-3,"0000"),""))`, which spills an id down
+  the entire column (so a customer's id is purely a function of its row: `ROW - 3`). Google
+  Sheets refuses to expand an array formula if **any** cell in the spill range already holds
+  content, and turns the source cell into `#REF!` — blanking the id for *every other* row.
+  `POST /masters/customers` used to mint its own id via `nextSequentialId()` and write it into
+  this column; the first customer added through the app (System 2's `C69` = literal
+  `"CUST-0066"`) did exactly this and silently reduced the punch form's customer picker from
+  66 customers to 1, because `GET /masters/customers` filters on `/^CUST-\d+$/` and every
+  other id had gone blank. Note the failure is invisible from the app side — the list endpoint
+  returns 200 with a short array, it doesn't error. Fixed by clearing that one cell (the
+  formula regenerates the *identical* `CUST-0066` for that row, so nothing referencing it
+  broke) and by changing the route to append **without** `CUST ID`, then read the row back to
+  pick up the id the sheet generated, 500ing with `CUST_ID_NOT_GENERATED` if it can't. An
+  empty string is still content as far as the spill is concerned — clearing such a cell needs
+  `values.clear()`, not writing `""`. If the picker ever looks short again, dump column C with
+  `valueRenderOption: "FORMULA"` and look for a literal below `C4`.
 - **`CUSTOMER MASTER T1`'s "Field Sale Repersentative" column is misspelled in the live
   sheet** (not "Representative") — `getBuyerFields()` in `Backend/src/routes/orders.ts`
   reads that exact (misspelled) header to auto-fill `SALE_STAFF_NAME` on Order Punch. The

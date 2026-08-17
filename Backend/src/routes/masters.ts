@@ -136,14 +136,6 @@ mastersRouter.post("/customers", async (req, res, next) => {
   try {
     const body = newCustomerSchema.parse(req.body);
     const now = new Date().toISOString();
-    const custId = await nextSequentialId(
-      env.sheets.customerBilling,
-      CUSTOMER_TAB,
-      "CUST ID",
-      "CUST-",
-      4,
-      CUSTOMER_HEADER_ROW
-    );
 
     const joinDate = new Date(now);
     const joinDateStr = [
@@ -152,12 +144,18 @@ mastersRouter.post("/customers", async (req, res, next) => {
       joinDate.getFullYear(),
     ].join("-");
 
+    // NEVER write "CUST ID" here. That column is generated entirely by an ARRAYFORMULA in
+    // C4 (=ARRAYFORMULA(IF(E4:E<>"","CUST-"&TEXT(ROW(E4:E)-3,"0000"),""))) which spills down
+    // the whole column. A literal value anywhere in the spill range makes Sheets refuse to
+    // expand the array, so C4 becomes #REF! and EVERY other customer's id goes blank — which
+    // silently emptied the punch form's customer picker (it filters on /^CUST-\d+$/), leaving
+    // only the one hardcoded row visible. Append without the id and read back what the sheet
+    // generated instead.
     await appendRow(
       env.sheets.customerBilling,
       CUSTOMER_TAB,
       {
         "DATE OF JOINING ADC": joinDateStr,
-        "CUST ID": custId,
         "CUSTOMER NAME": body.customerName,
         "Payment Terms With Days": body.paymentTermsDays !== undefined ? String(body.paymentTermsDays) : "",
         "Company GSTIN NO.": body.gstin,
@@ -172,6 +170,29 @@ mastersRouter.post("/customers", async (req, res, next) => {
       },
       CUSTOMER_HEADER_ROW
     );
+
+    // Read back the id the sheet's ARRAYFORMULA just generated for the row we appended (it's
+    // the last row carrying this customer's name). Bail loudly rather than writing address/
+    // contact rows keyed on a blank id, which would orphan them.
+    const afterRows = await readTable(env.sheets.customerBilling, CUSTOMER_TAB, {
+      refresh: true,
+      headerRow: CUSTOMER_HEADER_ROW,
+    });
+    const created = [...afterRows]
+      .reverse()
+      .find((r) => (r["CUSTOMER NAME"] ?? "").trim() === body.customerName.trim());
+    const custId = (created?.["CUST ID"] ?? "").trim();
+    if (!/^CUST-\d+$/.test(custId)) {
+      return res.status(500).json({
+        error: {
+          code: "CUST_ID_NOT_GENERATED",
+          message:
+            "Customer row was saved, but the sheet did not generate a CUST ID. Check that " +
+            `"${CUSTOMER_TAB}" cell C4 still holds its ARRAYFORMULA and that no literal value ` +
+            "was typed into column C (a literal blocks the formula and blanks every id).",
+        },
+      });
+    }
 
     await appendRow(env.sheets.customerBilling, "Customer Addresses", {
       Timestamp: now,
