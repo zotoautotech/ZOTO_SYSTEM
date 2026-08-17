@@ -76,10 +76,9 @@ function verifyViewToken(fileId: string, token: string): boolean {
   }
 }
 
-/** Streams the file's raw bytes. Used by the /viewer page below (as the <img>/<embed> src)
- * and for the Download button (`?download=1` switches to a Content-Disposition that forces
- * a save-as instead of inline display). Auth is the short-lived token from /view-url, not
- * the usual bearer header, since this is a plain resource load, not an API call. */
+/** Streams the file's raw bytes. Used by the /viewer page below as the <img>/<embed> src.
+ * Auth is the short-lived token from /view-url, not the usual bearer header, since this is a
+ * plain resource load, not an API call. */
 uploadsRouter.get("/:fileId/stream", async (req, res, next) => {
   try {
     if (!verifyViewToken(req.params.fileId, String(req.query.token ?? ""))) {
@@ -112,9 +111,8 @@ function escapeHtml(s: string): string {
 }
 
 /** A small self-contained viewer page — never Drive's own UI (Share dialog, edit access,
- * the whole file-manager chrome), just the content plus one clearly visible Download
- * button. This is what "View attachment" actually opens; /stream above is just the raw
- * bytes it (and the Download button) point at. */
+ * the whole file-manager chrome), just the content on a plain white background. This is
+ * what "View attachment" actually opens; /stream above is just the raw bytes it points at. */
 uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
   try {
     const token = String(req.query.token ?? "");
@@ -131,11 +129,14 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
     const name = escapeHtml(meta.data.name || "Attachment");
     const isImage = (meta.data.mimeType || "").startsWith("image/");
     const streamUrl = `./stream?token=${encodeURIComponent(token)}`;
-    const downloadUrl = `./stream?token=${encodeURIComponent(token)}&download=1`;
 
+    // #toolbar=0&navpanes=0&scrollbar=0 are the PDF open-parameter spec Chrome/Edge's built-in
+    // PDF viewer honours — they hide ITS OWN native toolbar/thumbnail-sidebar/scrollbar chrome
+    // (the dark bar with download/print/thumbnails), which our page's CSS can't reach since
+    // it's the browser's own overlay around <embed>, not page content.
     const content = isImage
       ? `<img id="attachment-image" src="${streamUrl}" alt="${name}" />`
-      : `<embed src="${streamUrl}" type="application/pdf" />`;
+      : `<embed src="${streamUrl}#toolbar=0&navpanes=0&scrollbar=0" type="application/pdf" />`;
     const controls = isImage
       ? `<div class="zoom-controls" aria-label="Image zoom controls">
           <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
@@ -156,7 +157,7 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
   html, body { height: 100%; }
   body {
     margin: 0;
-    background: #202124;
+    background: #ffffff;
     font-family: -apple-system, Segoe UI, Roboto, sans-serif;
     height: 100dvh;
     display: flex;
@@ -171,31 +172,14 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
     gap: 10px;
     padding: 10px 16px;
     padding-top: calc(10px + env(safe-area-inset-top));
-    background: #2d2e30;
-    color: #e8eaed;
+    background: #f1f3f4;
+    color: #202124;
     flex-shrink: 0;
+    border-bottom: 1px solid #dadce0;
   }
   header .name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .download-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    background: #8ab4f8;
-    color: #202124;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 16px;
-    min-height: 40px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-  /* Google Drive-style contained preview by default. Zoomed images can still scroll in
-     either direction inside this pane. */
+  /* Plain contained preview by default. Zoomed images can still scroll in either direction
+     inside this pane. */
   main {
     flex: 1;
     min-height: 0;
@@ -207,11 +191,7 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
     padding: 24px;
     padding-bottom: calc(24px + 60px + env(safe-area-inset-bottom));
   }
-  main::-webkit-scrollbar { width: 14px; height: 14px; }
-  main::-webkit-scrollbar-track { background: #202124; }
-  main::-webkit-scrollbar-thumb { background: #777; border: 3px solid #202124; border-radius: 999px; }
-  main::-webkit-scrollbar-thumb:hover { background: #999; }
-  img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); touch-action: pan-x pan-y pinch-zoom; }
+  img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); touch-action: pan-x pan-y pinch-zoom; }
   embed { width: 100%; height: 100%; border: none; }
   .zoom-controls {
     position: fixed;
@@ -220,20 +200,18 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
     transform: translateX(-50%);
     display: flex;
     overflow: hidden;
-    border: 1px solid #5f6368;
+    border: 1px solid #dadce0;
     border-radius: 10px;
-    background: #303134;
-    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
   }
-  .zoom-controls button { min-width: 48px; height: 44px; border: 0; border-right: 1px solid #5f6368; background: transparent; color: #e8eaed; font-size: 20px; cursor: pointer; }
+  .zoom-controls button { min-width: 48px; height: 44px; border: 0; border-right: 1px solid #dadce0; background: transparent; color: #202124; font-size: 20px; cursor: pointer; }
   .zoom-controls button#zoom-reset { min-width: 56px; font-size: 13px; }
   .zoom-controls button:last-child { border-right: 0; }
-  .zoom-controls button:hover, .zoom-controls button:active { background: #3c4043; }
+  .zoom-controls button:hover, .zoom-controls button:active { background: #f1f3f4; }
   @media (max-width: 480px) {
     header { padding-left: 12px; padding-right: 12px; }
     header .name { font-size: 13px; }
-    .download-btn .label { display: none; }
-    .download-btn { padding: 10px; min-width: 40px; }
     main { padding: 12px; padding-bottom: calc(12px + 60px + env(safe-area-inset-bottom)); }
   }
 </style>
@@ -241,10 +219,6 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
 <body>
   <header>
     <span class="name">${name}</span>
-    <a class="download-btn" href="${downloadUrl}" download aria-label="Download">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
-      <span class="label">Download</span>
-    </a>
   </header>
   <main id="viewer-content">${content}</main>
   ${controls}

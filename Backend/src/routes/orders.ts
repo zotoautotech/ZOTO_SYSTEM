@@ -3,19 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, appendRows, deleteRows, ensureSheetTab, readTable, updateRow, type SheetRow } from "../services/sheets.js";
 import { nextId, nextIds } from "../services/ids.js";
-import {
-  requireAuth,
-  requireCanDelete,
-  requireModule,
-  requireAnyModule,
-  requireNamedUsers,
-  ORDER_FAMILY_MODULES,
-} from "../middleware/auth.js";
-
-/** Only Admin or Jyoti may actually fill the Sale Order Discount/Upload forms — the wider
- * Sale Order module (Admin, Abhishek Sharma, Jyoti, Kashish per USERS.Permissions_Process)
- * can still VIEW these orders, just not submit these two specific forms. See CLAUDE.md. */
-const SALE_ORDER_FORM_ALLOWLIST = ["Jyoti"];
+import { requireAuth, requireCanDelete, requireModule, requireAnyModule, ORDER_FAMILY_MODULES } from "../middleware/auth.js";
 import { getPermissions } from "../services/permissions.js";
 import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
@@ -1090,11 +1078,7 @@ async function createPlaceholderSaleOrder(orderId: string, employeeId: string): 
  * whether the doer entered a flat Rs amount or a percentage), recalculates each item's GST and
  * the order's totals, logs one Order Punch Discount row per item, and pushes the order into
  * the Sale Order stage's pending queue. */
-ordersRouter.post(
-  "/:id/discount",
-  requireModule("sale-order"),
-  requireNamedUsers(SALE_ORDER_FORM_ALLOWLIST),
-  async (req, res, next) => {
+ordersRouter.post("/:id/discount", requireModule("sale-order"), async (req, res, next) => {
   try {
     const body = discountSchema.parse(req.body);
     if (body.applicable && body.scope === "Invoice") {
@@ -1291,8 +1275,7 @@ ordersRouter.post(
   } catch (err) {
     next(err);
   }
-  }
-);
+});
 
 const saleOrderFormSchema = z.object({
   soNo: z.string().min(1),
@@ -1375,11 +1358,7 @@ async function createPlaceholderSoConfirmation(
  * Attachment/Remarks blank — this fills those in via updateRow instead of appending a second
  * row (falls back to a fresh append if somehow no placeholder exists yet), then also creates
  * a placeholder SO_Confirmation + SO_Confirmation_Items row the same way, for the next stage. */
-ordersRouter.post(
-  "/:id/sale-order-form",
-  requireModule("sale-order"),
-  requireNamedUsers(SALE_ORDER_FORM_ALLOWLIST),
-  async (req, res, next) => {
+ordersRouter.post("/:id/sale-order-form", requireModule("sale-order"), async (req, res, next) => {
   try {
     const body = saleOrderFormSchema.parse(req.body);
     const orders = (await readTable(env.sheets.transactions, ORDER_TAB)).map(punchFromSheet);
@@ -1452,8 +1431,7 @@ ordersRouter.post(
   } catch (err) {
     next(err);
   }
-  }
-);
+});
 
 const confirmationChangesSchema = z.object({
   poNo: z.string().optional(), poDate: z.string().optional(), poAttachmentUrl: z.string().optional(), otherAttachmentUrl: z.string().optional(), poRemarks: z.string().optional(),
