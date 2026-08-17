@@ -19,6 +19,16 @@ const ITEM_TABLE_HEADER_ANCHOR = "Sl No.";
 const ITEM_ROW_COLUMN_COUNT = 10;
 const FIRST_ITEM_ROW_INDEX = 1; // row 0 is the header row
 
+/** Several address/state columns in ORDER_PUNCH hold the literal string "NA" rather than
+ * being genuinely blank (a punch-time default for fields the doer skipped). Printed as-is on
+ * the Sale Order, "State Name: NA" reads worse than just leaving it empty — callers should
+ * run every such field through this before handing it to generateSaleOrderPdf(), so a
+ * missing value renders as a blank line, not a literal "NA" or an unresolved token. */
+export function blankIfNA(value: string | undefined | null): string {
+  const v = (value ?? "").trim();
+  return v.toUpperCase() === "NA" ? "" : v;
+}
+
 export interface SaleOrderDocItem {
   partNo: string;
   partName: string;

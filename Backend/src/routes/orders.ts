@@ -10,7 +10,7 @@ import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } fr
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
 import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
-import { generateSaleOrderPdf } from "../services/saleOrderDoc.js";
+import { generateSaleOrderPdf, blankIfNA } from "../services/saleOrderDoc.js";
 import { amountInWords } from "../services/amountWords.js";
 
 // itemFromSheet only knows ORDER_ITEMS' own columns, so reading SALE_ORDER_ITEMS through it
@@ -1544,7 +1544,7 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           consigneeName: order.CONSIGNEE_NAME || order.CUSTOMER_NAME || "",
           preferredDeliveryMode: order.PREFERRED_DELIVERY_MODE ?? "",
           preferredTransporterName: order.PREFERRED_TPT_NAME ?? "",
-          shippingState: order.SHIPPING_STATE ?? "",
+          shippingState: blankIfNA(order.SHIPPING_STATE),
           roundOff: roundOffAmount.toFixed(2),
           totalQuantity: String(totalQty),
           totalAmount: totalAmount.toFixed(2),
@@ -1558,13 +1558,13 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           sellerPincode: order.SELLER_PINCODE ?? "",
           sellerEmail: order.SELLER_EMAIL ?? "",
           sellerGstin: order.SELLER_GSTIN ?? "",
-          billingAddressLine1: order.BILLING_ADDRESS ?? "",
-          billingAddressLine2: order.BILLING_ADDRESS_2 ?? "",
-          billingState: order.BILLING_STATE ?? "",
+          billingAddressLine1: blankIfNA(order.BILLING_ADDRESS),
+          billingAddressLine2: blankIfNA(order.BILLING_ADDRESS_2),
+          billingState: blankIfNA(order.BILLING_STATE),
           buyerGstin: order.BUYER_GSTIN ?? "",
           consigneeGstin: order.CONSIGNEE_GSTIN ?? "",
-          shippingAddressLine1: order.SHIPPING_ADDRESS ?? "",
-          shippingAddressLine2: order.SHIPPING_ADDRESS_2 ?? "",
+          shippingAddressLine1: blankIfNA(order.SHIPPING_ADDRESS),
+          shippingAddressLine2: blankIfNA(order.SHIPPING_ADDRESS_2),
         },
         items.map((it) => ({
           partNo: String(it.PART_NO ?? ""),
