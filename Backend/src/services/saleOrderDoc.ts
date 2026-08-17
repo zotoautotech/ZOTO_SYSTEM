@@ -93,12 +93,18 @@ function locateItemTable(doc: docs_v1.Schema$Document): { tableStartIndex: numbe
   throw new Error(`Sale order template: item table not found (looking for header "${ITEM_TABLE_HEADER_ANCHOR}")`);
 }
 
-function valueForCell(item: SaleOrderDocItem, srNo: number, cellIndex: number): string {
+/** Which field sits in columns 1-3 differs between templates: T2 (default) keeps the
+ * original Part No. / Description / HSN-SAC order; T1 was reordered to Description /
+ * HSN-SAC / Part No. to match the ADC reference invoice exactly. Columns 0 and 4-9 are
+ * identical in both. */
+export type ColumnLayout = "default" | "descriptionFirst";
+
+function valueForCell(item: SaleOrderDocItem, srNo: number, cellIndex: number, layout: ColumnLayout): string {
+  if (cellIndex === 0) return String(srNo);
+  if (cellIndex === 1) return layout === "descriptionFirst" ? item.partName : item.partNo;
+  if (cellIndex === 2) return layout === "descriptionFirst" ? item.hsn : item.partName;
+  if (cellIndex === 3) return layout === "descriptionFirst" ? item.partNo : item.hsn;
   switch (cellIndex) {
-    case 0: return String(srNo);
-    case 1: return item.partNo;
-    case 2: return item.partName;
-    case 3: return item.hsn;
     case 4: return item.dueOn;
     case 5: return [item.quantity, item.unit].filter(Boolean).join(" ");
     case 6: return item.price;
@@ -117,7 +123,8 @@ async function fillRow(
   documentId: string,
   rowIndex: number,
   item: SaleOrderDocItem,
-  srNo: number
+  srNo: number,
+  layout: ColumnLayout
 ) {
   for (let cellIndex = ITEM_ROW_COLUMN_COUNT - 1; cellIndex >= 0; cellIndex--) {
     const doc = (await docs.documents.get({ documentId })).data;
@@ -133,17 +140,22 @@ async function fillRow(
       requests.push({ deleteContentRange: { range: { startIndex: contentStart, endIndex: cellEnd - 1 } } });
     }
     // Docs rejects insertText with an empty string, so a blank value just leaves the cell empty.
-    const value = valueForCell(item, srNo, cellIndex);
+    const value = valueForCell(item, srNo, cellIndex, layout);
     if (value) requests.push({ insertText: { location: { index: contentStart }, text: value } });
     if (requests.length === 0) continue;
     await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
   }
 }
 
-async function fillItemTable(docs: docs_v1.Docs, documentId: string, items: SaleOrderDocItem[]) {
+async function fillItemTable(
+  docs: docs_v1.Docs,
+  documentId: string,
+  items: SaleOrderDocItem[],
+  layout: ColumnLayout
+) {
   if (items.length === 0) return;
 
-  await fillRow(docs, documentId, FIRST_ITEM_ROW_INDEX, items[0], 1);
+  await fillRow(docs, documentId, FIRST_ITEM_ROW_INDEX, items[0], 1, layout);
 
   let lastRowIndex = FIRST_ITEM_ROW_INDEX;
   for (let i = 1; i < items.length; i++) {
@@ -167,7 +179,7 @@ async function fillItemTable(docs: docs_v1.Docs, documentId: string, items: Sale
       },
     });
     lastRowIndex += 1;
-    await fillRow(docs, documentId, lastRowIndex, items[i], i + 1);
+    await fillRow(docs, documentId, lastRowIndex, items[i], i + 1, layout);
   }
 }
 
@@ -179,7 +191,8 @@ async function fillItemTable(docs: docs_v1.Docs, documentId: string, items: Sale
 export async function generateSaleOrderPdf(
   orderId: string,
   fields: SaleOrderDocFields,
-  items: SaleOrderDocItem[]
+  items: SaleOrderDocItem[],
+  columnLayout: ColumnLayout = "default"
 ): Promise<string | null> {
   try {
     if (!env.saleOrderTemplateDocId) {
@@ -199,7 +212,7 @@ export async function generateSaleOrderPdf(
     const documentId = copied.data.id!;
 
     try {
-      await fillItemTable(docs, documentId, items);
+      await fillItemTable(docs, documentId, items, columnLayout);
 
       // Exact token text taken from a live dump of the template, not from what was originally
       // written into it — the doer has hand-edited this template since. replaceAllText needs

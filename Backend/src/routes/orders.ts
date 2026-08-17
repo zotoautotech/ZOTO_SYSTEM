@@ -1574,7 +1574,8 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           price: String(it.PRICE ?? ""),
           discountPct: String(it.DISCOUNT_PCT ?? ""),
           basicAmount: String(it.BASIC_AMOUNT ?? ""),
-        }))
+        })),
+        "descriptionFirst"
       );
 
       if (!pdfFileId) {
