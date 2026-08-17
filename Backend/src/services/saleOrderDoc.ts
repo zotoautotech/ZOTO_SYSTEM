@@ -147,11 +147,39 @@ async function fillRow(
   }
 }
 
+/** Appends one blank row right after the given row index (same right-to-left-safe pattern
+ * as a real item row) — used to pad the item section out to `minRows`, matching classic
+ * invoice software (Tally Prime etc.) where the item table holds a fixed minimum height and
+ * the totals always start at the same position, regardless of how many items are on the
+ * order. Left entirely blank, no content written. */
+async function insertBlankRow(docs: docs_v1.Docs, documentId: string, afterRowIndex: number) {
+  const doc = (await docs.documents.get({ documentId })).data;
+  const { tableStartIndex } = locateItemTable(doc);
+  await docs.documents.batchUpdate({
+    documentId,
+    requestBody: {
+      requests: [
+        {
+          insertTableRow: {
+            tableCellLocation: {
+              tableStartLocation: { index: tableStartIndex },
+              rowIndex: afterRowIndex,
+              columnIndex: 0,
+            },
+            insertBelow: true,
+          },
+        },
+      ],
+    },
+  });
+}
+
 async function fillItemTable(
   docs: docs_v1.Docs,
   documentId: string,
   items: SaleOrderDocItem[],
-  layout: ColumnLayout
+  layout: ColumnLayout,
+  minRows: number
 ) {
   if (items.length === 0) return;
 
@@ -159,27 +187,16 @@ async function fillItemTable(
 
   let lastRowIndex = FIRST_ITEM_ROW_INDEX;
   for (let i = 1; i < items.length; i++) {
-    const doc = (await docs.documents.get({ documentId })).data;
-    const { tableStartIndex } = locateItemTable(doc);
-    await docs.documents.batchUpdate({
-      documentId,
-      requestBody: {
-        requests: [
-          {
-            insertTableRow: {
-              tableCellLocation: {
-                tableStartLocation: { index: tableStartIndex },
-                rowIndex: lastRowIndex,
-                columnIndex: 0,
-              },
-              insertBelow: true,
-            },
-          },
-        ],
-      },
-    });
+    await insertBlankRow(docs, documentId, lastRowIndex);
     lastRowIndex += 1;
     await fillRow(docs, documentId, lastRowIndex, items[i], i + 1, layout);
+  }
+
+  // Pad with blank rows so the item section always occupies at least `minRows` rows before
+  // the tax/total summary rows below it — a fixed-size item box, same as the reference.
+  for (let filled = items.length; filled < minRows; filled++) {
+    await insertBlankRow(docs, documentId, lastRowIndex);
+    lastRowIndex += 1;
   }
 }
 
@@ -192,7 +209,10 @@ export async function generateSaleOrderPdf(
   orderId: string,
   fields: SaleOrderDocFields,
   items: SaleOrderDocItem[],
-  columnLayout: ColumnLayout = "default"
+  columnLayout: ColumnLayout = "default",
+  // 1 = no padding (T2's existing behaviour, unchanged). T1 passes a larger number so the
+  // item section always holds a fixed minimum height, matching the Tally-style reference.
+  minRows = 1
 ): Promise<string | null> {
   try {
     if (!env.saleOrderTemplateDocId) {
@@ -212,7 +232,7 @@ export async function generateSaleOrderPdf(
     const documentId = copied.data.id!;
 
     try {
-      await fillItemTable(docs, documentId, items, columnLayout);
+      await fillItemTable(docs, documentId, items, columnLayout, minRows);
 
       // Exact token text taken from a live dump of the template, not from what was originally
       // written into it — the doer has hand-edited this template since. replaceAllText needs
