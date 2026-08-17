@@ -1532,7 +1532,7 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
       const cgstTotal = items.reduce((sum, it) => sum + (Number(it.CGST) || 0), 0);
       const sgstTotal = items.reduce((sum, it) => sum + (Number(it.SGST) || 0), 0);
 
-      const pdfFileId = await generateSaleOrderPdf(
+      const pdfResult = await generateSaleOrderPdf(
         orderId,
         {
           saleOrderNo,
@@ -1581,15 +1581,15 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
         8
       );
 
-      if (!pdfFileId) {
+      if ("error" in pdfResult) {
         return res.status(502).json({
           error: {
             code: "SALE_ORDER_PDF_FAILED",
-            message:
-              "Could not generate the Sale Order PDF from the template. The order has not been changed — check the server logs and that SALE_ORDER_TEMPLATE_DOC_ID is set and shared with the Drive service user.",
+            message: `Could not generate the Sale Order PDF. The order has not been changed. ${pdfResult.error}`,
           },
         });
       }
+      const pdfFileId = pdfResult.fileId;
 
       const result = await finalizeSaleOrder(orderId, req.user!.employeeId, {
         soNo: saleOrderNo,

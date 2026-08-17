@@ -202,10 +202,30 @@ async function fillItemTable(
   }
 }
 
+/** Turns a caught error into a short, specific reason a doer (or whoever reads the alert)
+ * can actually act on, instead of always blaming the template/env var regardless of what
+ * really failed — that generic message once sent someone chasing a non-existent template
+ * misconfiguration when the real cause was a transient Google API rate limit. */
+function describeGenerationFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/quota exceeded/i.test(message)) {
+    const api = /sheets\.googleapis\.com/i.test(message)
+      ? "Google Sheets"
+      : /drive\.googleapis\.com|docs\.googleapis\.com/i.test(message)
+        ? "Google Drive/Docs"
+        : "Google API";
+    return `${api} API rate limit hit (too many requests this minute) — wait a minute and try again. This isn't a template problem.`;
+  }
+  if (/permission|forbidden|403/i.test(message) && /drive|docs/i.test(message)) {
+    return "The Drive service account can't access the Sale Order template — check it's still shared with it.";
+  }
+  return message;
+}
+
 /**
- * Builds the PDF and returns its Drive fileId, or null if it couldn't be generated. Never
- * throws — the caller decides what to do with a null (the route surfaces it as an error
- * rather than silently completing the stage with no attachment).
+ * Builds the PDF and returns its Drive fileId, or a short failure reason if it couldn't be
+ * generated. Never throws — the caller decides what to do with a failure (the route surfaces
+ * the reason as an error rather than silently completing the stage with no attachment).
  */
 export async function generateSaleOrderPdf(
   orderId: string,
@@ -215,11 +235,11 @@ export async function generateSaleOrderPdf(
   // 1 = no padding (T2's existing behaviour, unchanged). T1 passes a larger number so the
   // item section always holds a fixed minimum height, matching the Tally-style reference.
   minRows = 1
-): Promise<string | null> {
+): Promise<{ fileId: string } | { error: string }> {
   try {
     if (!env.saleOrderTemplateDocId) {
       console.error("generateSaleOrderPdf: SALE_ORDER_TEMPLATE_DOC_ID not configured");
-      return null;
+      return { error: "SALE_ORDER_TEMPLATE_DOC_ID is not configured on the server." };
     }
 
     const drive = await getDriveClientForDocs();
@@ -304,17 +324,18 @@ export async function generateSaleOrderPdf(
         { responseType: "arraybuffer" }
       );
       const pdfBuffer = Buffer.from(pdfExport.data as ArrayBuffer);
-      return await uploadBufferToDrive(
+      const fileId = await uploadBufferToDrive(
         drive,
         pdfBuffer,
         `Sale Order - ${fields.saleOrderNo || orderId}.pdf`,
         "application/pdf"
       );
+      return { fileId };
     } finally {
       await drive.files.delete({ fileId: documentId, supportsAllDrives: true }).catch(() => {});
     }
   } catch (err) {
     console.error("generateSaleOrderPdf failed:", err);
-    return null;
+    return { error: describeGenerationFailure(err) };
   }
 }
