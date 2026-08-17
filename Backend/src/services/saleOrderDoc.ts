@@ -117,65 +117,26 @@ function valueForCell(item: SaleOrderDocItem, srNo: number, cellIndex: number, l
   }
 }
 
-/** Clears and refills one item row, right-to-left, re-reading the document before each cell —
- * Docs character indices shift after every edit, so a fresh read is what keeps the index math
- * correct across a multi-step fill (same approach as gatePass.ts). */
-async function fillRow(
-  docs: docs_v1.Docs,
-  documentId: string,
-  rowIndex: number,
-  item: SaleOrderDocItem,
-  srNo: number,
-  layout: ColumnLayout
-) {
-  for (let cellIndex = ITEM_ROW_COLUMN_COUNT - 1; cellIndex >= 0; cellIndex--) {
-    const doc = (await docs.documents.get({ documentId })).data;
-    const { table } = locateItemTable(doc);
-    const cell = table.tableRows?.[rowIndex]?.tableCells?.[cellIndex];
-    const contentStart = cell?.content?.[0]?.startIndex;
-    const cellEnd = cell?.endIndex;
-    if (contentStart === undefined || contentStart === null || cellEnd === undefined || cellEnd === null) continue;
-
-    const requests: docs_v1.Schema$Request[] = [];
-    // A cell's terminating paragraph mark can't be deleted — stop one short of endIndex.
-    if (cellEnd - 1 > contentStart) {
-      requests.push({ deleteContentRange: { range: { startIndex: contentStart, endIndex: cellEnd - 1 } } });
-    }
-    // Docs rejects insertText with an empty string, so a blank value just leaves the cell empty.
-    const value = valueForCell(item, srNo, cellIndex, layout);
-    if (value) requests.push({ insertText: { location: { index: contentStart }, text: value } });
-    if (requests.length === 0) continue;
-    await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
-  }
-}
-
-/** Appends one blank row right after the given row index (same right-to-left-safe pattern
- * as a real item row) — used to pad the item section out to `minRows`, matching classic
- * invoice software (Tally Prime etc.) where the item table holds a fixed minimum height and
- * the totals always start at the same position, regardless of how many items are on the
- * order. Left entirely blank, no content written. */
-async function insertBlankRow(docs: docs_v1.Docs, documentId: string, afterRowIndex: number) {
-  const doc = (await docs.documents.get({ documentId })).data;
-  const { tableStartIndex } = locateItemTable(doc);
-  await docs.documents.batchUpdate({
-    documentId,
-    requestBody: {
-      requests: [
-        {
-          insertTableRow: {
-            tableCellLocation: {
-              tableStartLocation: { index: tableStartIndex },
-              rowIndex: afterRowIndex,
-              columnIndex: 0,
-            },
-            insertBelow: true,
-          },
-        },
-      ],
-    },
-  });
-}
-
+/**
+ * Fills the whole item table in a small, constant number of Google API calls, regardless of
+ * item count — the original version re-fetched the whole document and issued a separate
+ * batchUpdate for every single CELL (up to 20 calls per row), which meant a 13-item order
+ * made 250+ sequential API calls and reliably tripped Google's per-minute quota.
+ *
+ * Two facts make batching safe here:
+ *  1. Every blank row is interchangeable (no content differentiates them), so all of the
+ *     rows this order needs beyond the template's one starter row — extra item rows AND
+ *     `minRows` padding rows alike — can be inserted in ONE batchUpdate, all targeting the
+ *     SAME base row index. The API applies requests in array order, and re-inserting below
+ *     the same original row N times just stacks N blank rows below it — which row ends up
+ *     "third" doesn't matter since they're identical until filled.
+ *  2. Docs character positions only shift AFTER the point of an edit, never before it. So if
+ *     every fill request is ordered from the LAST row/cell in the table back to the FIRST,
+ *     each one only touches document range at or after its own position — never invalidating
+ *     the (already-read) positions still queued for earlier rows/cells later in the batch.
+ *     That lets every delete+insert pair for the entire table ride in one single batchUpdate,
+ *     built from one single up-front document read.
+ */
 async function fillItemTable(
   docs: docs_v1.Docs,
   documentId: string,
@@ -185,20 +146,51 @@ async function fillItemTable(
 ) {
   if (items.length === 0) return;
 
-  await fillRow(docs, documentId, FIRST_ITEM_ROW_INDEX, items[0], 1, layout);
+  const totalRows = Math.max(items.length, minRows);
+  const extraRows = totalRows - 1; // the template already has row 1 (the one starter row)
 
-  let lastRowIndex = FIRST_ITEM_ROW_INDEX;
-  for (let i = 1; i < items.length; i++) {
-    await insertBlankRow(docs, documentId, lastRowIndex);
-    lastRowIndex += 1;
-    await fillRow(docs, documentId, lastRowIndex, items[i], i + 1, layout);
+  if (extraRows > 0) {
+    const doc = (await docs.documents.get({ documentId })).data;
+    const { tableStartIndex } = locateItemTable(doc);
+    const insertRequests: docs_v1.Schema$Request[] = Array.from({ length: extraRows }, () => ({
+      insertTableRow: {
+        tableCellLocation: {
+          tableStartLocation: { index: tableStartIndex },
+          rowIndex: FIRST_ITEM_ROW_INDEX,
+          columnIndex: 0,
+        },
+        insertBelow: true,
+      },
+    }));
+    await docs.documents.batchUpdate({ documentId, requestBody: { requests: insertRequests } });
   }
 
-  // Pad with blank rows so the item section always occupies at least `minRows` rows before
-  // the tax/total summary rows below it — a fixed-size item box, same as the reference.
-  for (let filled = items.length; filled < minRows; filled++) {
-    await insertBlankRow(docs, documentId, lastRowIndex);
-    lastRowIndex += 1;
+  // One fresh read now that every row that will ever exist is already in place, then fill
+  // every real item's cells — last row to first, last cell to first within each row — in a
+  // single batch built entirely from this one read.
+  const doc = (await docs.documents.get({ documentId })).data;
+  const { table } = locateItemTable(doc);
+  const fillRequests: docs_v1.Schema$Request[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const row = table.tableRows?.[FIRST_ITEM_ROW_INDEX + i];
+    if (!row) continue;
+    for (let cellIndex = ITEM_ROW_COLUMN_COUNT - 1; cellIndex >= 0; cellIndex--) {
+      const cell = row.tableCells?.[cellIndex];
+      const contentStart = cell?.content?.[0]?.startIndex;
+      const cellEnd = cell?.endIndex;
+      if (contentStart === undefined || contentStart === null || cellEnd === undefined || cellEnd === null) continue;
+
+      // A cell's terminating paragraph mark can't be deleted — stop one short of endIndex.
+      if (cellEnd - 1 > contentStart) {
+        fillRequests.push({ deleteContentRange: { range: { startIndex: contentStart, endIndex: cellEnd - 1 } } });
+      }
+      // Docs rejects insertText with an empty string, so a blank value just leaves it empty.
+      const value = valueForCell(items[i], i + 1, cellIndex, layout);
+      if (value) fillRequests.push({ insertText: { location: { index: contentStart }, text: value } });
+    }
+  }
+  if (fillRequests.length > 0) {
+    await docs.documents.batchUpdate({ documentId, requestBody: { requests: fillRequests } });
   }
 }
 
