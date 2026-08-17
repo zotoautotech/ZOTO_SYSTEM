@@ -130,13 +130,16 @@ uploadsRouter.get("/:fileId/viewer", async (req, res, next) => {
     const isImage = (meta.data.mimeType || "").startsWith("image/");
     const streamUrl = `./stream?token=${encodeURIComponent(token)}`;
 
-    // #toolbar=0&navpanes=0&scrollbar=0 are the PDF open-parameter spec Chrome/Edge's built-in
-    // PDF viewer honours — they hide ITS OWN native toolbar/thumbnail-sidebar/scrollbar chrome
-    // (the dark bar with download/print/thumbnails), which our page's CSS can't reach since
-    // it's the browser's own overlay around <embed>, not page content.
-    const content = isImage
-      ? `<img id="attachment-image" src="${streamUrl}" alt="${name}" />`
-      : `<embed src="${streamUrl}#toolbar=0&navpanes=0&scrollbar=0" type="application/pdf" />`;
+    // A PDF wrapped in our own <embed>-based page always shows a smaller/duplicated version
+    // of the browser's PDF chrome, no matter what open-parameters are passed — the only way
+    // to get the exact full, native, edge-to-edge PDF experience (the browser's own toolbar,
+    // page thumbnails, zoom, print, download) is to not wrap it in a page at all and let the
+    // browser open the raw file directly, same as navigating straight to a .pdf URL.
+    if (!isImage) {
+      return res.redirect(streamUrl);
+    }
+
+    const content = `<img id="attachment-image" src="${streamUrl}" alt="${name}" />`;
     const controls = isImage
       ? `<div class="zoom-controls" aria-label="Image zoom controls">
           <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
