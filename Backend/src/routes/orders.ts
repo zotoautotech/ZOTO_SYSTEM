@@ -46,6 +46,10 @@ export async function getSellerFields(): Promise<SheetRow> {
     return {
       BRANCH_ID: branch["ADC Firm ID"] || "",
       BRANCH_NAME: branch["Branch Name"] || "",
+      // The legal company name for documents (e.g. "ZOTO AUTOTECH PRIVATE LIMITED") —
+      // distinct from Branch Name ("Delhi"), which is just this branch's location, not
+      // something that should ever appear as the letterhead on a customer-facing PDF.
+      FIRM_NAME: branch["Firm Name"] || "",
       SELLER_GSTIN: branch["GSTIN"] || "",
       SELLER_EMAIL: branch["Email"] || "",
       SELLER_CONTACT: branch["Contact No."] || "",
@@ -1506,6 +1510,10 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
       const saleOrderNo = await nextSaleOrderNo();
       const soDate = now.toISOString().slice(0, 10);
 
+      // Fresh live lookup, not order.BRANCH_NAME — ORDER_PUNCH only ever stored the branch
+      // location ("Delhi"), never the legal company name, so it isn't available any other way.
+      const seller = await getSellerFields();
+
       const items = (await readTable(env.sheets.transactions, "ORDER_ITEMS"))
         .filter((r) => r.ORDER_ID === orderId)
         .map(itemFromSheet);
@@ -1543,7 +1551,7 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           amountInWords: amountInWords(totalAmount),
           cgstTotal: cgstTotal.toFixed(2),
           sgstTotal: sgstTotal.toFixed(2),
-          branchName: order.BRANCH_NAME ?? "",
+          branchName: seller.FIRM_NAME || order.BRANCH_NAME || "",
           sellerAddressLine1: order.SELLER_ADDRESS_1 ?? "",
           sellerAddressLine2: order.SELLER_ADDRESS_2 ?? "",
           sellerState: order.SELLER_STATE ?? "",
