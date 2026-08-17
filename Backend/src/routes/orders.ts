@@ -1835,10 +1835,20 @@ ordersRouter.post("/:id/so-confirmation", requireModule("so-confirmation"), asyn
         await deleteRows(env.sheets.transactions, "ORDER_ITEMS", "ORDER_ID", [req.params.id]);
         await appendRows(env.sheets.transactions, "ORDER_ITEMS", newItemRows.map(itemToSheet));
         await deleteRows(env.sheets.transactions, "SALE_ORDER_ITEMS", "ORDER_ID", [req.params.id]);
+        // itemToSheet() only knows ORDER_ITEMS' own columns — it never sets SALE_ORDER_ITEM_ID,
+        // which only exists on SALE_ORDER_ITEMS. Without minting one here, every row this
+        // "Changes" outcome recreates ends up with a permanently blank SALE_ORDER_ITEM_ID,
+        // same class of gap as the fix already applied to saleOrderItemFromSheet()'s read
+        // side — this is the write side of the same column.
+        const soItemIds = await nextIds("SOI", "SALE_ORDER_ITEMS", "SALE_ORDER_ITEM_ID", newItemRows.length);
         await appendRows(
           env.sheets.transactions,
           "SALE_ORDER_ITEMS",
-          newItemRows.map((row) => ({ ...itemToSheet(row), SALE_ORDER_ID: saleOrder.SALE_ORDER_ID }))
+          newItemRows.map((row, i) => ({
+            ...itemToSheet(row),
+            SALE_ORDER_ID: saleOrder.SALE_ORDER_ID,
+            SALE_ORDER_ITEM_ID: soItemIds[i],
+          }))
         );
 
         const totalAmount = roundOff(basicAmount + taxAmount - discountRs);
