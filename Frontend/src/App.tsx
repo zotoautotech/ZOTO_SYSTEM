@@ -109,6 +109,7 @@ export default function App() {
                 completionTab={stage.completionTab}
                 stageTab={stage.tab}
                 completedColumns={stage.completedColumns}
+                pendingItemColumns={stage.pendingItemColumns}
               />
             }
           />,

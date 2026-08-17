@@ -250,10 +250,11 @@ tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
 
 tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
   try {
-    const { status, excludeIfInTab, includeIfInTab } = req.query as {
+    const { status, excludeIfInTab, includeIfInTab, itemLevel } = req.query as {
       status?: string;
       excludeIfInTab?: string;
       includeIfInTab?: string;
+      itemLevel?: string;
     };
     const rows = await readTable(env.sheets.transactions, "TRANSPORT");
     // status=ALL powers the "Completed Transport" trip-level list (TransportList.tsx) —
@@ -280,6 +281,19 @@ tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
     if (includeIfInTab) {
       const doneIds = await doneIdsForTab(includeIfInTab);
       filtered = filtered.filter((r) => doneIds.has(r.Transport_ID));
+    }
+
+    // itemLevel=true swaps the trip-level rows for the SAME matched trips' own
+    // Transport_Products rows instead — one row per item rather than per trip, for stages
+    // whose pending queue reads better item-first (Transport Reached, matching how the
+    // Transport stage's own pending view already works via a different endpoint). Reuses the
+    // exact trip selection above, so it can never drift from what the trip-level view shows.
+    if (itemLevel === "true") {
+      const tripIds = new Set(filtered.map((r) => r.Transport_ID));
+      const products = (await readTable(env.sheets.transactions, "Transport_Products")).filter((r) =>
+        tripIds.has(r.Transport_ID)
+      );
+      return res.json(products);
     }
 
     res.json(filtered);

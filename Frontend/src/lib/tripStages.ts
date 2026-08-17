@@ -33,6 +33,12 @@ export interface TripStageDef {
   /** The columns THIS stage records itself — what makes each stage's Completed view its own
    * rather than the same generic trip table repeated six times. */
   completedColumns: StageColumn[];
+  /** When set, the PENDING view (not just Completed) also goes item-level — one row per
+   * Transport_Products item on a matching trip, rather than one row per trip — matching how
+   * the "Transport" stage's own pending view already reads (see TransportList.tsx). `field`
+   * is the literal Transport_Products header. Rows still open the trip they belong to
+   * (Transport_ID), since the stage's own action form is trip-level, not per-item. */
+  pendingItemColumns?: StageColumn[];
 }
 
 /**
@@ -56,6 +62,14 @@ export const TRIP_STAGES: TripStageDef[] = [
       { header: "Vehicle No.", field: "Vehicle No." },
       { header: "Driver Name", field: "Driver Name" },
       { header: "Reason", field: "Reason" },
+    ],
+    pendingItemColumns: [
+      { header: "CUST ID", field: "CUST ID" },
+      { header: "Customer Name", field: "Customer Name" },
+      { header: "Part No.", field: "Part No." },
+      { header: "Part Name", field: "Part Name" },
+      { header: "Quantity", field: "Quantity" },
+      { header: "Unit", field: "Unit" },
     ],
   },
   {

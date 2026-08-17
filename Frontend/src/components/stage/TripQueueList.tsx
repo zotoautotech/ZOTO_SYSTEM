@@ -5,7 +5,7 @@ import { DataTable, type Column } from "../DataTable";
 import { StatusBadge } from "../StatusBadge";
 import { CustomerFilterPanel } from "../CustomerFilterPanel";
 import { formatTimestamp } from "../../lib/format";
-import { listTrips, listStageRows, type TripRecord } from "../../lib/tripsApi";
+import { listTrips, listTripItems, listStageRows, type TripRecord } from "../../lib/tripsApi";
 import type { StageColumn } from "../../lib/tripStages";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions } from "../../lib/headerActions";
@@ -25,6 +25,7 @@ export function TripQueueList({
   completionTab,
   stageTab,
   completedColumns,
+  pendingItemColumns,
   onCreateNew,
 }: {
   moduleKey: string;
@@ -37,6 +38,8 @@ export function TripQueueList({
    * shows THIS stage's own recorded rows instead of the generic trip table. */
   stageTab?: string;
   completedColumns?: StageColumn[];
+  /** When given, the PENDING view goes item-level too — see tripStages.ts. */
+  pendingItemColumns?: StageColumn[];
   onCreateNew?: () => void;
 }) {
   const navigate = useNavigate();
@@ -49,6 +52,9 @@ export function TripQueueList({
   // trip columns at every stage. The pending view stays trip-level — that's genuinely what
   // is pending: a trip awaiting this stage's form.
   const ownCompletedView = showCompleted && !!stageTab && !!completedColumns?.length;
+  // Item-level pending only applies while showing PENDING — the Completed toggle still shows
+  // either this stage's own recorded rows (ownCompletedView) or the generic trip table.
+  const itemLevelPending = !!pendingItemColumns?.length && !showCompleted;
   const { data: trips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ["trips", moduleKey, showCompleted],
     queryFn: () =>
@@ -58,14 +64,20 @@ export function TripQueueList({
           : listTrips(prevStatus, { excludeIfInTab: completionTab })
         : listTrips(showCompleted && nextStatus ? nextStatus : prevStatus),
     placeholderData: keepPreviousData,
-    enabled: !ownCompletedView,
+    enabled: !ownCompletedView && !itemLevelPending,
   });
   const { data: stageRows = [], isLoading: stageRowsLoading } = useQuery({
     queryKey: ["stageRows", stageTab],
     queryFn: () => listStageRows(stageTab!),
     enabled: ownCompletedView,
   });
-  const isLoading = ownCompletedView ? stageRowsLoading : tripsLoading;
+  const { data: pendingItems = [], isLoading: pendingItemsLoading } = useQuery({
+    queryKey: ["tripItems", moduleKey],
+    queryFn: () => listTripItems(prevStatus, { excludeIfInTab: completionTab }),
+    placeholderData: keepPreviousData,
+    enabled: itemLevelPending,
+  });
+  const isLoading = ownCompletedView ? stageRowsLoading : itemLevelPending ? pendingItemsLoading : tripsLoading;
 
   const sendThroughOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -83,6 +95,28 @@ export function TripQueueList({
       (v || "").toLowerCase().includes(normalizedQuery)
     );
     return matchesSendThrough && matchesSearch;
+  });
+
+  // Item-level pending view filters by Customer Name instead of Send Through — matches the
+  // Transport stage's own item-level pending view (TransportList.tsx), since that's the
+  // customer-facing identity a doer actually filters by here, not the vehicle/transporter.
+  const [activeItemCustomer, setActiveItemCustomer] = useState<string | null>(null);
+  const itemCustomerOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of pendingItems) {
+      const name = row["Customer Name"] || "Unknown";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return Array.from(counts, ([name, count]) => ({ name, count }));
+  }, [pendingItems]);
+  const filteredPendingItems = pendingItems.filter((r) => {
+    const matchesCustomer = !activeItemCustomer || (r["Customer Name"] || "Unknown") === activeItemCustomer;
+    const matchesSearch =
+      !normalizedQuery ||
+      [r["Customer Name"], r["Part No."], r["Part Name"], r.Transport_ID].some((v) =>
+        (v || "").toLowerCase().includes(normalizedQuery)
+      );
+    return matchesCustomer && matchesSearch;
   });
 
   const columns: Column<TripRecord>[] = [
@@ -147,11 +181,26 @@ export function TripQueueList({
       )
     : stageRows;
 
+  // Item-level pending columns — plain literal Transport_Products headers, same shape as
+  // stageColumns above. Rows still open the TRIP (Transport_ID), since this stage's own
+  // action form is trip-level, not per-item — item-level here is display only.
+  const itemColumns: Column<Record<string, string>>[] = [
+    { key: "timestamp", header: "Timestamp", render: (r) => formatTimestamp(r.Timestamp) },
+    ...(pendingItemColumns ?? []).map((c) => ({
+      key: c.field,
+      header: c.header,
+      render: (r: Record<string, string>) => r[c.field] || "—",
+    })),
+  ];
+
   return (
     <div style={isMobile ? undefined : { display: "flex", minHeight: "calc(100vh - 128px)" }}>
-      {!ownCompletedView && (
-        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
-      )}
+      {!ownCompletedView &&
+        (itemLevelPending ? (
+          <CustomerFilterPanel customers={itemCustomerOptions} active={activeItemCustomer} onSelect={setActiveItemCustomer} />
+        ) : (
+          <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+        ))}
       <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: ownCompletedView ? undefined : "1px solid var(--color-border)" }}>
         {ownCompletedView ? (
           <DataTable
@@ -161,6 +210,14 @@ export function TripQueueList({
                is item-level, LR/Delivery key off Dispatch ID), so fall back through the
                plausible ones before the timestamp. */
             getRowKey={(r) => r.Stock_Pd_ID || r["LR ID"] || r["Delivery ID"] || r["Dispatch ID"] || r.Invoice_ID || r.Transport_Reach_ID || r.Transport_ID || r.Timestamp}
+            onRowClick={(r) => r.Transport_ID && navigate(`/modules/${moduleKey}/${r.Transport_ID}`)}
+            emptyMessage={emptyMessage}
+          />
+        ) : itemLevelPending ? (
+          <DataTable
+            columns={itemColumns}
+            rows={filteredPendingItems}
+            getRowKey={(r) => r.Transport_Pd_ID || `${r.Transport_ID}-${r.ITEM_ID}`}
             onRowClick={(r) => r.Transport_ID && navigate(`/modules/${moduleKey}/${r.Transport_ID}`)}
             emptyMessage={emptyMessage}
           />

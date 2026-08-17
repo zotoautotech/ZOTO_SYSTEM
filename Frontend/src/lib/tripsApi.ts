@@ -17,6 +17,16 @@ export async function listTrips(
   return res.data;
 }
 
+/** Item-level view of the SAME trips listTrips() would return for this status — one row per
+ * Transport_Products item instead of one per trip. Raw sheet-header keys, same convention as
+ * listStageRows(), since the caller picks its own display columns. */
+export async function listTripItems(status?: string, opts?: { excludeIfInTab?: string }) {
+  const res = await api.get<Record<string, string>[]>("/transport-trips", {
+    params: { status, excludeIfInTab: opts?.excludeIfInTab, itemLevel: "true" },
+  });
+  return res.data;
+}
+
 /** A stage's own completed rows, straight off its own sheet tab — raw sheet-header keys,
  * since these six tabs have very different column sets and no shared field-name map. The
  * caller picks which columns to show via that stage's own `completedColumns`. */
