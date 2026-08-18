@@ -111,6 +111,7 @@ export default function App() {
                 stageTab={stage.tab}
                 completedColumns={stage.completedColumns}
                 pendingItemColumns={stage.pendingItemColumns}
+                pendingStatusLabel={stage.pendingStatusLabel}
                 {...(stage.key === "transport-reached"
                   ? { bulkForm: BulkReachedForm, bulkFormLabel: "Bulk Transport Reached Form" }
                   : {})}

@@ -26,6 +26,7 @@ export function TripQueueList({
   stageTab,
   completedColumns,
   pendingItemColumns,
+  pendingStatusLabel,
   bulkForm,
   bulkFormLabel,
   onCreateNew,
@@ -42,6 +43,9 @@ export function TripQueueList({
   completedColumns?: StageColumn[];
   /** When given, the PENDING view goes item-level too — see tripStages.ts. */
   pendingItemColumns?: StageColumn[];
+  /** Shown in the pending (non-Completed) trip table's Status column instead of the raw
+   * TRANSPORT.Status value — see tripStages.ts for why this needs to be per-stage. */
+  pendingStatusLabel?: string;
   /** When given (together with pendingItemColumns), the item-level pending view also gets a
    * bulk-select mode — a "Select" header action, checkboxes, and a button that opens this
    * component with the selected raw item rows. Only wired up for stages that actually have a
@@ -147,7 +151,7 @@ export function TripQueueList({
   });
 
   const columns: Column<TripRecord>[] = [
-    { key: "status", header: "Status", render: (t) => <StatusBadge status={t.Status || "OPEN"} /> },
+    { key: "status", header: "Status", render: (t) => <StatusBadge status={t.Status || "OPEN"} label={pendingStatusLabel} /> },
     { key: "timestamp", header: "Timestamp", render: (t) => formatTimestamp(t.Timestamp) },
     { key: "transportId", header: "Transport ID", render: (t) => t.Transport_ID },
     { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (t) => t["Vehicle Arrange for"] || "—" },

@@ -39,6 +39,14 @@ export interface TripStageDef {
    * is the literal Transport_Products header. Rows still open the trip they belong to
    * (Transport_ID), since the stage's own action form is trip-level, not per-item. */
   pendingItemColumns?: StageColumn[];
+  /** Shown in the pending (non-Completed) trip-level table's Status column instead of the raw
+   * TRANSPORT.Status value — a trip sitting at "REACHED" reads as "Tax Invoice Pending" on
+   * this queue and "Stock Release Pending" on that one, even though both queues are reading
+   * the exact same underlying Status. Doesn't touch the stored value, purely a display label
+   * (same convention as OrderPunchList's Sale Order status override) — only used while
+   * `!showCompleted`, since the Completed view already shows this stage's own recorded data
+   * instead of the raw trip Status. */
+  pendingStatusLabel?: string;
 }
 
 /**
@@ -77,6 +85,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     label: "Stock Release",
     prevStatus: "REACHED",
     nextStatus: "TAX INVOICE COMPLETED",
+    pendingStatusLabel: "Stock Release Pending",
     action: "stock-release",
     completionTab: "STOCK_RELEASE",
     tab: "STOCK_RELEASE",
@@ -98,6 +107,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     label: "Tax Invoice",
     prevStatus: "REACHED",
     nextStatus: "TAX INVOICE COMPLETED",
+    pendingStatusLabel: "Tax Invoice Pending",
     action: "tax-invoice",
     completionTab: "TAX_INVOICE",
     tab: "TAX_INVOICE",
@@ -116,6 +126,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     label: "Dispatch",
     prevStatus: "TAX INVOICE COMPLETED",
     nextStatus: "DISPATCHED",
+    pendingStatusLabel: "Dispatch Pending",
     action: "dispatch",
     tab: "Dispatch",
     completedColumns: [
@@ -133,6 +144,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     label: "Collect LR",
     prevStatus: "DISPATCHED",
     nextStatus: "LR COLLECTED",
+    pendingStatusLabel: "Collect LR Pending",
     action: "lr",
     tab: "LR",
     completedColumns: [
@@ -150,6 +162,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     label: "Delivery",
     prevStatus: "LR COLLECTED",
     nextStatus: "DELIVERED",
+    pendingStatusLabel: "Delivery Pending",
     action: "delivery",
     tab: "DELIVERY",
     completedColumns: [
