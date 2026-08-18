@@ -40,9 +40,17 @@ interface TripResult {
  * be decided.
  */
 export function BulkReachedForm({ items, onClose, onSaved }: Props) {
+  // Snapshot the selection at mount time — `items` is bound to the parent's live pending-item
+  // query, and onSaved() invalidates that query mid-flow, which shrinks the pending list (a
+  // just-decided trip drops off it). Without this snapshot, the prop update would reactively
+  // shrink `trips` to fewer/zero entries WHILE this modal is still open showing its own
+  // results, so "1 succeeded" would end up next to "0 selected trips" — confusing and wrong,
+  // since the decision already went through. The form's own view of what it's deciding must
+  // stay fixed once opened, regardless of what the background list does afterward.
+  const [snapshotItems] = useState(items);
   const trips = useMemo(() => {
     const map = new Map<string, Record<string, string>[]>();
-    for (const item of items) {
+    for (const item of snapshotItems) {
       const id = item.Transport_ID;
       if (!id) continue;
       if (!map.has(id)) map.set(id, []);
@@ -152,8 +160,8 @@ export function BulkReachedForm({ items, onClose, onSaved }: Props) {
 
       <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
         <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 16px" }}>
-          Applying one decision to {trips.length} selected trip{trips.length === 1 ? "" : "s"} ({items.length} item
-          {items.length === 1 ? "" : "s"}).
+          Applying one decision to {trips.length} selected trip{trips.length === 1 ? "" : "s"} ({snapshotItems.length} item
+          {snapshotItems.length === 1 ? "" : "s"}).
         </p>
 
         <div

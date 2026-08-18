@@ -52,7 +52,14 @@ function itemKey(item: DispatchApprovalItemRow) {
  * expectation, but editable per row since a doer may want to decide less than the full
  * balance on some items in the batch.
  */
-export function BulkDispatchApprovalForm({ items, onClose, onSaved }: Props) {
+export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }: Props) {
+  // Snapshot the selection at mount time — `items` is bound to the parent's live pending-item
+  // query, and onSaved() invalidates that query mid-flow, which shrinks the pending list (a
+  // just-decided item drops off it). Without this snapshot, the prop update would reactively
+  // shrink the list WHILE this modal is still open showing its own results — confusing and
+  // wrong, since the decision already went through. The form's own view of what it's deciding
+  // must stay fixed once opened, regardless of what the background list does afterward.
+  const [items] = useState(itemsProp);
   const [outcome, setOutcome] = useState<Outcome>("");
   const [nextExtendedDate, setNextExtendedDate] = useState("");
   const [remarks, setRemarks] = useState("");

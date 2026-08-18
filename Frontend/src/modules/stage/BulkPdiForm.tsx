@@ -30,7 +30,13 @@ interface ItemResult {
  * quantity, which is safely auto-filled from each item's own balance), so those two get their
  * own editable cell per selected row instead.
  */
-export function BulkPdiForm({ items, onClose, onSaved }: Props) {
+export function BulkPdiForm({ items: itemsProp, onClose, onSaved }: Props) {
+  // Snapshot the selection at mount time — `items` is bound to the parent's live pending-item
+  // query, and onSaved() invalidates that query mid-flow, which shrinks the pending list (a
+  // just-completed round drops off it). Without this snapshot, the prop update would
+  // reactively shrink the list WHILE this modal is still open showing its own results —
+  // confusing and wrong, since the decision already went through.
+  const [items] = useState(itemsProp);
   const [pdiDate, setPdiDate] = useState(todayIso());
   const [pdiAttachmentUrl, setPdiAttachmentUrl] = useState("");
   const [pdiRemarks, setPdiRemarks] = useState("");
