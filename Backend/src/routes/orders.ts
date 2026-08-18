@@ -1527,10 +1527,16 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
       // would make an item-level subtraction wrongly swallow the whole tax amount into
       // "Round Off" on this invoice. The order-level total is always authoritative here.
       const roundOffAmount = totalAmount - (orderBasicAmount + orderTaxAmount);
-      // The two Output CGST/SGST Tax Payable rows are still summed from the items for
-      // display — informational only, doesn't affect the Total/Round Off line above.
+      // The Output CGST/SGST/IGST Tax Payable rows are still summed from the items for
+      // display — informational only, doesn't affect the Total/Round Off line above. An
+      // order is always either CGST+SGST (intra-state) or IGST (inter-state), never a mix,
+      // since splitGst() decides that once for the whole order — so whichever pair is zero
+      // gets its row(s) deleted from the printed PDF rather than showing a redundant "0.00".
       const cgstTotal = items.reduce((sum, it) => sum + (Number(it.CGST) || 0), 0);
       const sgstTotal = items.reduce((sum, it) => sum + (Number(it.SGST) || 0), 0);
+      const igstTotal = items.reduce((sum, it) => sum + (Number(it.IGST) || 0), 0);
+      const removeTaxRowLabels =
+        igstTotal > 0 ? ["Output CGST Tax Payable", "Output SGST Tax Payable"] : ["Output IGST Tax Payable"];
 
       const pdfResult = await generateSaleOrderPdf(
         orderId,
@@ -1551,6 +1557,7 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           amountInWords: amountInWords(totalAmount),
           cgstTotal: cgstTotal.toFixed(2),
           sgstTotal: sgstTotal.toFixed(2),
+          igstTotal: igstTotal.toFixed(2),
           branchName: seller.FIRM_NAME || order.BRANCH_NAME || "",
           sellerAddressLine1: order.SELLER_ADDRESS_1 ?? "",
           sellerAddressLine2: order.SELLER_ADDRESS_2 ?? "",
@@ -1578,7 +1585,8 @@ ordersRouter.post("/:id/create-sale-order", requireModule("sale-order"), async (
           basicAmount: String(it.BASIC_AMOUNT ?? ""),
         })),
         "descriptionFirst",
-        8
+        8,
+        removeTaxRowLabels
       );
 
       if ("error" in pdfResult) {

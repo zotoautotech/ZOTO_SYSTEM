@@ -62,6 +62,13 @@ export interface SaleOrderDocFields {
    * error, it just does nothing. Optional so System 2's caller doesn't need to pass them. */
   cgstTotal?: string;
   sgstTotal?: string;
+  /** Only relevant on T1 (System 1 is GST-enabled) — T1's item table carries a third
+   * "Output IGST Tax Payable" row alongside CGST/SGST, filled for inter-state orders. An
+   * order is always either CGST+SGST (intra-state) or IGST (inter-state), never a mix, since
+   * splitGst() decides that once for the whole order — see removeTaxRowLabels below, which
+   * the caller uses to delete whichever pair doesn't apply so the PDF doesn't show two
+   * "0.00" tax rows next to the one that actually applies. */
+  igstTotal?: string;
   branchName?: string;
   /** T1's original, unedited header block still carries the full seller/buyer/consignee
    * address+GSTIN token set from the initial build — T2's header was since hand-edited down
@@ -204,6 +211,33 @@ async function fillItemTable(
   }
 }
 
+/**
+ * Deletes whichever tax rows in the item table (identified by their exact first-cell label
+ * text, e.g. "Output IGST Tax Payable") don't apply to this order — an order is always either
+ * CGST+SGST (intra-state) or IGST (inter-state), never both, so the unused pair/row would
+ * otherwise print as a redundant "0.00" line. Re-locates the table fresh (same reasoning as
+ * fillItemTable: Docs character indices shift after every edit) and deletes from the highest
+ * row index down, since removing a row only shifts the indices of rows AFTER it — rows still
+ * queued for deletion, all at lower indices, stay valid throughout.
+ */
+async function removeTaxRowsByLabel(docs: docs_v1.Docs, documentId: string, labels: string[]) {
+  if (labels.length === 0) return;
+  const doc = (await docs.documents.get({ documentId })).data;
+  const { tableStartIndex, table } = locateItemTable(doc);
+  const rowIndices = (table.tableRows ?? [])
+    .map((row, idx) => ({ idx, label: cellText(row.tableCells?.[0] ?? {}).trim() }))
+    .filter((r) => labels.includes(r.label))
+    .map((r) => r.idx)
+    .sort((a, b) => b - a);
+  if (rowIndices.length === 0) return;
+  const requests: docs_v1.Schema$Request[] = rowIndices.map((rowIndex) => ({
+    deleteTableRow: {
+      tableCellLocation: { tableStartLocation: { index: tableStartIndex }, rowIndex, columnIndex: 0 },
+    },
+  }));
+  await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
+}
+
 /** Turns a caught error into a short, specific reason a doer (or whoever reads the alert)
  * can actually act on, instead of always blaming the template/env var regardless of what
  * really failed — that generic message once sent someone chasing a non-existent template
@@ -236,7 +270,10 @@ export async function generateSaleOrderPdf(
   columnLayout: ColumnLayout = "default",
   // 1 = no padding (T2's existing behaviour, unchanged). T1 passes a larger number so the
   // item section always holds a fixed minimum height, matching the Tally-style reference.
-  minRows = 1
+  minRows = 1,
+  // Tax rows (by their exact first-cell label) to delete from the item table before
+  // filling scalars — see removeTaxRowsByLabel. Empty on T2 (no tax rows to prune).
+  removeTaxRowLabels: string[] = []
 ): Promise<{ fileId: string } | { error: string }> {
   try {
     if (!env.saleOrderTemplateDocId) {
@@ -257,6 +294,7 @@ export async function generateSaleOrderPdf(
 
     try {
       await fillItemTable(docs, documentId, items, columnLayout, minRows);
+      await removeTaxRowsByLabel(docs, documentId, removeTaxRowLabels);
 
       // Exact token text taken from a live dump of the template, not from what was originally
       // written into it — the doer has hand-edited this template since. replaceAllText needs
@@ -286,6 +324,10 @@ export async function generateSaleOrderPdf(
       if (fields.sgstTotal !== undefined) {
         scalars["<<sum(select(SALE_ORDER_ITEMS[SGST],[SALE_ORDER_ID]=[_Thisrow].[SALE_ORDER_ID]))>>"] =
           fields.sgstTotal;
+      }
+      if (fields.igstTotal !== undefined) {
+        scalars["<<sum(select(SALE_ORDER_ITEMS[IGST],[SALE_ORDER_ID]=[_Thisrow].[SALE_ORDER_ID]))>>"] =
+          fields.igstTotal;
       }
       if (fields.branchName !== undefined) {
         scalars["<<[Branch Name]>>"] = fields.branchName;
