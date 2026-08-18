@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { DataTable, type Column } from "../DataTable";
 import { StatusBadge } from "../StatusBadge";
@@ -8,7 +8,7 @@ import { formatTimestamp } from "../../lib/format";
 import { listTrips, listTripItems, listStageRows, type TripRecord } from "../../lib/tripsApi";
 import type { StageColumn } from "../../lib/tripStages";
 import { useSearch } from "../../lib/search";
-import { useSetHeaderActions } from "../../lib/headerActions";
+import { useSetHeaderActions, useSetHeaderLeft } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
 
 /** One list component for the "Transport" screen (Status=OPEN, create+attach) and every
@@ -26,6 +26,8 @@ export function TripQueueList({
   stageTab,
   completedColumns,
   pendingItemColumns,
+  bulkForm,
+  bulkFormLabel,
   onCreateNew,
 }: {
   moduleKey: string;
@@ -40,13 +42,38 @@ export function TripQueueList({
   completedColumns?: StageColumn[];
   /** When given, the PENDING view goes item-level too — see tripStages.ts. */
   pendingItemColumns?: StageColumn[];
+  /** When given (together with pendingItemColumns), the item-level pending view also gets a
+   * bulk-select mode — a "Select" header action, checkboxes, and a button that opens this
+   * component with the selected raw item rows. Only wired up for stages that actually have a
+   * bulk form (currently just transport-reached) — every other trip stage leaves this unset
+   * and gets no select mode at all. */
+  bulkForm?: React.ComponentType<{ items: Record<string, string>[]; onClose: () => void; onSaved: () => void }>;
+  bulkFormLabel?: string;
   onCreateNew?: () => void;
 }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { query } = useSearch();
+  const queryClient = useQueryClient();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkForm, setShowBulkForm] = useState(false);
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   // Each stage's Completed view reads its OWN tab (Stock Release's released parts, Tax
   // Invoice's invoice numbers, LR's LR No./charges…) rather than showing the same generic
   // trip columns at every stage. The pending view stays trip-level — that's genuinely what
@@ -131,22 +158,95 @@ export function TripQueueList({
     { key: "driverName", header: "Driver Name", render: (t) => t["Driver Name"] || "—" },
   ];
 
-  const headerActions = useMemo(
-    () => (
-      <div style={{ display: "flex", gap: 10 }}>
-        {onCreateNew && (
-          <button className="btn btn-primary" onClick={onCreateNew}>
-            + Arrange Vehicle
-          </button>
-        )}
-        {nextStatus && (
-          <button className="btn" onClick={() => setShowCompleted((c) => !c)}>
-            {showCompleted ? "Showing Completed" : "Completed…"}
-          </button>
-        )}
+  function itemRowKey(r: Record<string, string>) {
+    return r.Transport_Pd_ID || `${r.Transport_ID}-${r.ITEM_ID}`;
+  }
+  const selectedItems = filteredPendingItems.filter((r) => selectedIds.has(itemRowKey(r)));
+
+  function handleBulkSaved() {
+    queryClient.invalidateQueries({ queryKey: ["trips", moduleKey] });
+    queryClient.invalidateQueries({ queryKey: ["tripItems", moduleKey] });
+  }
+
+  function closeBulkFormAndExit() {
+    setShowBulkForm(false);
+    exitSelectMode();
+  }
+
+  const canBulkSelect = !!bulkForm && itemLevelPending;
+
+  useSetHeaderLeft(
+    canBulkSelect && selectMode ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={exitSelectMode}
+          aria-label="Cancel selection"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 15,
+          }}
+        >
+          ✕
+        </button>
+        <span style={{ fontWeight: 700 }}>{selectedIds.size} Selected</span>
       </div>
-    ),
-    [onCreateNew, nextStatus, showCompleted]
+    ) : null
+  );
+
+  const headerActions = useMemo(
+    () =>
+      canBulkSelect && selectMode ? (
+        <button
+          className="btn btn-primary"
+          onClick={() => setShowBulkForm(true)}
+          disabled={selectedIds.size === 0}
+          style={{ opacity: selectedIds.size === 0 ? 0.5 : 1 }}
+        >
+          {bulkFormLabel ?? "Bulk Form"}
+        </button>
+      ) : (
+        <div style={{ display: "flex", gap: 10 }}>
+          {onCreateNew && (
+            <button className="btn btn-primary" onClick={onCreateNew}>
+              + Arrange Vehicle
+            </button>
+          )}
+          {nextStatus && (
+            <button className="btn" onClick={() => setShowCompleted((c) => !c)}>
+              {showCompleted ? "Showing Completed" : "Completed…"}
+            </button>
+          )}
+          {canBulkSelect && (
+            <button
+              aria-label="Select"
+              onClick={() => setSelectMode(true)}
+              style={{
+                width: 38,
+                height: 38,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1px solid var(--color-border)",
+                borderRadius: 8,
+                background: "var(--color-bg)",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="4" y="4" width="16" height="16" rx="3" />
+                <path d="m8.5 12 2.5 2.5 4.5-5" />
+              </svg>
+            </button>
+          )}
+        </div>
+      ),
+    [onCreateNew, nextStatus, showCompleted, canBulkSelect, selectMode, selectedIds.size, bulkFormLabel]
   );
   useSetHeaderActions(headerActions);
 
@@ -217,9 +317,12 @@ export function TripQueueList({
           <DataTable
             columns={itemColumns}
             rows={filteredPendingItems}
-            getRowKey={(r) => r.Transport_Pd_ID || `${r.Transport_ID}-${r.ITEM_ID}`}
+            getRowKey={itemRowKey}
             onRowClick={(r) => r.Transport_ID && navigate(`/modules/${moduleKey}/${r.Transport_ID}`)}
             emptyMessage={emptyMessage}
+            selectable={canBulkSelect && selectMode}
+            selectedKeys={selectedIds}
+            onToggleRow={toggleRow}
           />
         ) : (
           <DataTable
@@ -231,6 +334,12 @@ export function TripQueueList({
           />
         )}
       </div>
+      {showBulkForm &&
+        bulkForm &&
+        (() => {
+          const BulkForm = bulkForm;
+          return <BulkForm items={selectedItems} onClose={closeBulkFormAndExit} onSaved={handleBulkSaved} />;
+        })()}
     </div>
   );
 }

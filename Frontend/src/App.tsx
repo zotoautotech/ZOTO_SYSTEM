@@ -27,6 +27,7 @@ import { TransportList } from "./modules/transport/TransportList";
 import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
 import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
+import { BulkReachedForm } from "./modules/transport/forms/BulkReachedForm";
 import { Dashboard } from "./modules/dashboard/Dashboard";
 import { MyTasksList } from "./checklist/MyTasksList";
 import { AssignedChecklistList } from "./checklist/AssignedChecklistList";
@@ -110,6 +111,9 @@ export default function App() {
                 stageTab={stage.tab}
                 completedColumns={stage.completedColumns}
                 pendingItemColumns={stage.pendingItemColumns}
+                {...(stage.key === "transport-reached"
+                  ? { bulkForm: BulkReachedForm, bulkFormLabel: "Bulk Transport Reached Form" }
+                  : {})}
               />
             }
           />,
