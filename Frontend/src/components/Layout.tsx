@@ -445,7 +445,9 @@ export function Layout() {
                   : undefined),
               })}
             >
-              <Icon />
+              <span style={{ flexShrink: 0, display: "flex" }}>
+                <Icon />
+              </span>
               {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
             </NavLink>
           );
