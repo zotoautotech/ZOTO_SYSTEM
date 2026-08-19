@@ -29,6 +29,7 @@ export function DonutChart({
   size = 128,
   strokeWidth = 20,
   centerValue,
+  onClick,
 }: {
   segments: DonutSegment[];
   size?: number;
@@ -36,6 +37,9 @@ export function DonutChart({
   /** Overrides what's shown centered (e.g. the total across every segment) — falls back to
    * the single segment's own value when there's exactly one. */
   centerValue?: number;
+  /** Makes the whole ring clickable (e.g. drilling into a data table) — cursor becomes a
+   * pointer over the chart. */
+  onClick?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ seg: DonutSegment; x: number; y: number } | null>(null);
@@ -80,7 +84,11 @@ export function DonutChart({
   const centerNumber = centerValue ?? (segments.length === 1 ? segments[0].value : total);
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: size, height: size }}>
+    <div
+      ref={containerRef}
+      onClick={onClick}
+      style={{ position: "relative", width: size, height: size, cursor: onClick ? "pointer" : undefined }}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--color-border)" strokeWidth={strokeWidth} opacity={0.25} />
         {arcs.map(({ key, seg, dash, offset }) => (

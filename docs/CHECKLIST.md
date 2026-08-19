@@ -158,14 +158,21 @@ Routes (`App.tsx`):
   elsewhere. Fixed to reuse the same `isDueNow()` check.
 - `/checklist/dashboard/account` → `AccountDashboardExpand.tsx` — the Account card's
   full-page single-chart drill-down (large `DonutChart`, same real per-doer segments +
-  hover tooltip as the card, `size={380}`). A "Data" button drills one level further into
-  `/checklist/dashboard/account/data` → `AccountPendingDataList.tsx`, a real table of every
-  pending task instance across every doer (`GET /tasks/mine`, the same department-wide query
-  `MyTasksList.tsx` already uses — not a new data source), each row's "Remark" button opening
-  the same `FollowUpForm.tsx` used elsewhere. **This two-level expand→data pattern
-  (`/dashboard/<card>` for the big chart, `/dashboard/<card>/data` for the real table) is
-  the template for any future real department card** — swap which query feeds the segments/
-  table, keep the shape. These two static routes must stay registered **before**
+  hover tooltip as the card, `size={380}`). **Clicking the ring itself** (`DonutChart`'s
+  `onClick` prop — not a separate "Data" button, which was tried first and removed on user
+  feedback since the ring being clickable was expected to be self-evident) drills one level
+  further into `/checklist/dashboard/account/data` → `AccountPendingDataList.tsx`, a real
+  table of every pending task instance across every doer (`GET /tasks/mine`, the same
+  department-wide query `MyTasksList.tsx` already uses — not a new data source), each row's
+  "Remark" button opening the same `FollowUpForm.tsx` used elsewhere. The small dashboard
+  card itself also has this same ring-click shortcut straight to `/data` (`DeptCard`'s
+  `onDonutClick`, distinct from its `onExpand` which opens the full-chart page) — clicking
+  the ring skips the intermediate big-chart page entirely, clicking the Expand icon still
+  goes to the big-chart page first. **This two-level expand→data pattern (`/dashboard/<card>`
+  for the big chart, `/dashboard/<card>/data` for the real table, ring-click as a shortcut
+  straight to `/data` from either page) is the template for any future real department
+  card** — swap which query feeds the segments/table, keep the shape. These two static
+  routes must stay registered **before**
   `checklist/dashboard/:doerId` in `App.tsx` so `/checklist/dashboard/account` doesn't get
   swallowed as `doerId="account"` (same route-ordering caution as the rest of this app —
   React Router ranks static segments over dynamic ones regardless of declaration order, but

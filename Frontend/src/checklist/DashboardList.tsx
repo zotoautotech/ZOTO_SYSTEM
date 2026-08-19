@@ -61,6 +61,7 @@ export function DashboardList() {
           segments={isLoading ? undefined : accountSegments}
           centerValue={isLoading ? undefined : accountTotal}
           onExpand={() => navigate("/checklist/dashboard/account")}
+          onDonutClick={doers.length > 0 ? () => navigate("/checklist/dashboard/account/data") : undefined}
         />
         {OTHER_DEPARTMENTS.map((title) => (
           <DeptCard key={title} title={title} segments={undefined} />
@@ -75,6 +76,7 @@ function DeptCard({
   segments,
   centerValue,
   onExpand,
+  onDonutClick,
 }: {
   title: string;
   /** `undefined` = no real data source yet, renders a blank gray ring. */
@@ -83,6 +85,9 @@ function DeptCard({
   /** Opens the full-page single-chart drill-down. Omit for cards with no real data source
    * yet — nothing to expand into. */
   onExpand?: () => void;
+  /** Clicking the ring itself jumps straight to the real data table, skipping the
+   * intermediate full-chart page — a shortcut alongside (not a replacement for) Expand. */
+  onDonutClick?: () => void;
 }) {
   return (
     <div
@@ -117,7 +122,7 @@ function DeptCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
-        <DonutChart segments={segments ?? []} centerValue={centerValue} />
+        <DonutChart segments={segments ?? []} centerValue={centerValue} onClick={onDonutClick} />
       </div>
 
       <div style={{ position: "absolute", right: 6, bottom: 4, color: "var(--color-border)", fontSize: 10 }}>
