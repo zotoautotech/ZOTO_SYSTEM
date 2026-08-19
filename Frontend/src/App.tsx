@@ -33,6 +33,8 @@ import { MyTasksList } from "./checklist/MyTasksList";
 import { AssignedChecklistList } from "./checklist/AssignedChecklistList";
 import { DashboardList } from "./checklist/DashboardList";
 import { DoerPendingList } from "./checklist/DoerPendingList";
+import { AccountDashboardExpand } from "./checklist/AccountDashboardExpand";
+import { AccountPendingDataList } from "./checklist/AccountPendingDataList";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -60,6 +62,8 @@ export default function App() {
         <Route path="checklist" element={<MyTasksList />} />
         <Route path="checklist/assigned" element={<AssignedChecklistList />} />
         <Route path="checklist/dashboard" element={<DashboardList />} />
+        <Route path="checklist/dashboard/account" element={<AccountDashboardExpand />} />
+        <Route path="checklist/dashboard/account/data" element={<AccountPendingDataList />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/dashboard" element={<Dashboard />} />

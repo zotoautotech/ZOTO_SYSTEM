@@ -269,6 +269,8 @@ export function Layout() {
   const CHECKLIST_SEGMENT_LABELS: Record<string, string> = {
     assigned: "Assigned Checklist",
     dashboard: "Dashboard - Pending Checklist",
+    account: "Pending Checklist Account",
+    data: "Pending Orders Dash",
   };
   pathSegments.forEach((seg, i) => {
     if (seg === "modules" || seg === "home" || seg === "checklist") return;

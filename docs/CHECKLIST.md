@@ -134,8 +134,10 @@ Routes (`App.tsx`):
   `position: relative` container) that appears the instant the cursor moves over that arc.
   The center always shows just the
   **total** pending count (`DonutChart`'s `centerValue` prop), never a per-segment number —
-  keeps the card readable at a glance while the breakdown is still one hover away. Clicking
-  the card drills into `/checklist/dashboard/:doerId` when there's exactly one doer.
+  keeps the card readable at a glance while the breakdown is still one hover away. Each
+  card's Expand icon (top-right) is a real button (`onExpand`, disabled/dimmed when there's
+  no data to expand into) rather than the whole card being clickable — only the Account card
+  currently has an `onExpand` handler, wired to `/checklist/dashboard/account`.
   **Every other department card (`OTHER_DEPARTMENTS`: Design, HR, JM, Purchasing,
   Management, Sale, Store, System, Quality ×2, Admin) renders blank** — a flat gray ring, no
   number — since none of those departments has a real sheet/routing built yet (see "What it
@@ -154,6 +156,20 @@ Routes (`App.tsx`):
   "pending," wildly inflating the dashboard's numbers past what's actually due — the exact
   bug class `isDueNow()`/`parsePlannedDate()` (see above) already exists to prevent
   elsewhere. Fixed to reuse the same `isDueNow()` check.
+- `/checklist/dashboard/account` → `AccountDashboardExpand.tsx` — the Account card's
+  full-page single-chart drill-down (large `DonutChart`, same real per-doer segments +
+  hover tooltip as the card, `size={380}`). A "Data" button drills one level further into
+  `/checklist/dashboard/account/data` → `AccountPendingDataList.tsx`, a real table of every
+  pending task instance across every doer (`GET /tasks/mine`, the same department-wide query
+  `MyTasksList.tsx` already uses — not a new data source), each row's "Remark" button opening
+  the same `FollowUpForm.tsx` used elsewhere. **This two-level expand→data pattern
+  (`/dashboard/<card>` for the big chart, `/dashboard/<card>/data` for the real table) is
+  the template for any future real department card** — swap which query feeds the segments/
+  table, keep the shape. These two static routes must stay registered **before**
+  `checklist/dashboard/:doerId` in `App.tsx` so `/checklist/dashboard/account` doesn't get
+  swallowed as `doerId="account"` (same route-ordering caution as the rest of this app —
+  React Router ranks static segments over dynamic ones regardless of declaration order, but
+  keep them explicitly ordered anyway per this project's established convention).
 - `/checklist/dashboard/:doerId` → `DoerPendingList.tsx` — admin-only, one doer's pending
   tasks (`GET /admin/pending/:doerId`), "Update Remark" opens `FollowUpForm.tsx`
   (`POST /checklist/tasks/:taskId/followup`).

@@ -60,7 +60,7 @@ export function DashboardList() {
           title="Pending Checklist Account"
           segments={isLoading ? undefined : accountSegments}
           centerValue={isLoading ? undefined : accountTotal}
-          onClick={doers.length === 1 ? () => navigate(`/checklist/dashboard/${encodeURIComponent(doers[0].doerId)}`) : undefined}
+          onExpand={() => navigate("/checklist/dashboard/account")}
         />
         {OTHER_DEPARTMENTS.map((title) => (
           <DeptCard key={title} title={title} segments={undefined} />
@@ -74,17 +74,18 @@ function DeptCard({
   title,
   segments,
   centerValue,
-  onClick,
+  onExpand,
 }: {
   title: string;
   /** `undefined` = no real data source yet, renders a blank gray ring. */
   segments?: DonutSegment[];
   centerValue?: number;
-  onClick?: () => void;
+  /** Opens the full-page single-chart drill-down. Omit for cards with no real data source
+   * yet — nothing to expand into. */
+  onExpand?: () => void;
 }) {
   return (
     <div
-      onClick={onClick}
       className="card"
       style={{
         padding: 12,
@@ -92,14 +93,27 @@ function DeptCard({
         flexDirection: "column",
         gap: 8,
         position: "relative",
-        cursor: onClick ? "pointer" : undefined,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{title}</span>
-        <div style={{ flexShrink: 0, color: "var(--color-text-muted)" }}>
+        <button
+          type="button"
+          onClick={onExpand}
+          disabled={!onExpand}
+          aria-label={`Expand ${title}`}
+          style={{
+            flexShrink: 0,
+            border: "none",
+            background: "none",
+            padding: 0,
+            color: "var(--color-text-muted)",
+            cursor: onExpand ? "pointer" : "default",
+            opacity: onExpand ? 1 : 0.4,
+          }}
+        >
           <ExpandGlyph />
-        </div>
+        </button>
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
