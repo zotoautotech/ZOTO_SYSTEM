@@ -293,6 +293,7 @@ export function Layout() {
       color: isActive ? "#fff" : "var(--color-text)",
       background: isActive ? "var(--color-primary)" : "transparent",
       transition: "background 0.15s ease, color 0.15s ease",
+      minWidth: 0,
     };
   }
 
@@ -441,14 +442,18 @@ export function Layout() {
               style={({ isActive }) => ({
                 ...navItemStyle(effectivelyCollapsed, isActive),
                 ...(item.indent && !effectivelyCollapsed
-                  ? { paddingLeft: 40, fontSize: 13 }
+                  ? { paddingLeft: 28, fontSize: 13 }
                   : undefined),
               })}
             >
               <span style={{ flexShrink: 0, display: "flex" }}>
                 <Icon />
               </span>
-              {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+              {!effectivelyCollapsed && (
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                  {item.label}
+                </span>
+              )}
             </NavLink>
           );
         })}
