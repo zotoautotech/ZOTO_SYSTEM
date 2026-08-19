@@ -119,14 +119,35 @@ Routes (`App.tsx`):
   `OrderPunchList.tsx`'s convention; a duplicate `<h2>Assigned Checklist</h2>` here used to
   repeat what the breadcrumb already showed and was removed.
   "+ Add" header button opens `TaskPunchForm.tsx` (posts to `POST /checklist/tasks`).
-- `/checklist/dashboard` → `DashboardList.tsx` — admin-only, per-doer pending count
-  (`GET /admin/dashboard`), click-through to `/checklist/dashboard/:doerId`.
+- `/checklist/dashboard` → `DashboardList.tsx` — admin-only. Rebuilt as a 6-column
+  donut-chart card grid matching the old AppSheet reference (`CHECKLIST-ADC-V1`)'s
+  "Dashboard - Pending Checklist" view card-for-card. **Only the "Pending Checklist
+  Account" card is real data** (`GET /admin/dashboard`, per-doer pending count via
+  `DonutChart` — single doer shows a plain donut with the count centered; more than one
+  doer sums into one center total; click a doer's name to drill into
+  `/checklist/dashboard/:doerId`). **The other 11 cards (Design, HR, JM, Purchasing,
+  Management, Sale, Store, System, Quality ×2, Admin) are a static placeholder** — hardcoded
+  in `STATIC_DEPTS` recreating the reference's exact numbers/segments, since no other
+  department's sheet/routing is built yet (see "What it is" above). Wire each one to real
+  data (same shape as the Account card) as its own department gets built — **do not treat
+  the placeholder numbers as real**, they're UI-only until then. `DonutChart.tsx` is the
+  reusable pure-SVG multi-segment donut behind every card (no charting library): single
+  segment centers its value, multi-segment labels each arc, zero-total renders a flat gray
+  ring (the empty "Management" card). No in-page `<h2>` title here either — same
+  breadcrumb-only convention as Assigned Checklist above; a duplicate heading was removed.
 - `/checklist/dashboard/:doerId` → `DoerPendingList.tsx` — admin-only, one doer's pending
   tasks (`GET /admin/pending/:doerId`), "Update Remark" opens `FollowUpForm.tsx`
   (`POST /checklist/tasks/:taskId/followup`).
 
 `Frontend/src/checklist/lib/checklistApi.ts` — the API client for all of the above.
 
-Sidebar nav (`Layout.tsx`): admin-only sub-links (Assigned Checklist, Dashboard - Pending
-Checklist) are shown indented under Checklist **only while inside the app** and only if
-`GET /checklist/admin/check` says `isAdmin: true`.
+Sidebar nav (`Layout.tsx`): admin-only sub-links are shown indented under Checklist **only
+while inside the app** and only if `GET /checklist/admin/check` says `isAdmin: true`. Each
+carries a distinct icon matching the old AppSheet reference's own icon for that view (not
+the generic `AppSectionIcon` every top-level app section uses) — `EyeIcon` for "Assigned
+Checklist", `DashboardMonitorIcon` for "Dashboard" (label shortened from "Dashboard -
+Pending Checklist" to just "Dashboard" in the sidebar only; the breadcrumb/page title still
+reads the full name via `CHECKLIST_SEGMENT_LABELS`). Indented sub-nav items render their
+icon like every other nav item now — an earlier version of `navItems.map()` hid the icon
+whenever `item.indent` was set (`{!item.indent && <Icon />}`), which is why these sub-links
+used to show as text-only; don't reintroduce that condition.

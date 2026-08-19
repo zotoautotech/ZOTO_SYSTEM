@@ -27,6 +27,29 @@ function AppSectionIcon() {
   );
 }
 
+// Monitor/desktop glyph for the Dashboard - Pending Checklist nav sub-link, matching the
+// old AppSheet reference's own icon for that view (distinct from the generic AppSectionIcon
+// used everywhere else, since a dashboard reads as a "screen" rather than a document list).
+function DashboardMonitorIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </svg>
+  );
+}
+
+// Eye glyph for the Assigned Checklist nav sub-link, matching the old AppSheet reference's
+// own icon for that view (same reasoning as DashboardMonitorIcon above).
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -219,8 +242,8 @@ export function Layout() {
         // Admin-only sub-links, indented under Checklist — only while actually inside it.
         ...(isInChecklist && isChecklistAdmin
           ? [
-              { to: "/checklist/assigned", icon: AppSectionIcon, label: "Assigned Checklist", end: false, indent: true },
-              { to: "/checklist/dashboard", icon: AppSectionIcon, label: "Dashboard - Pending Checklist", end: false, indent: true },
+              { to: "/checklist/assigned", icon: EyeIcon, label: "Assigned Checklist", end: false, indent: true },
+              { to: "/checklist/dashboard", icon: DashboardMonitorIcon, label: "Dashboard", end: false, indent: true },
             ]
           : []),
       ]
@@ -422,7 +445,7 @@ export function Layout() {
                   : undefined),
               })}
             >
-              {!item.indent && <Icon />}
+              <Icon />
               {!effectivelyCollapsed && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
             </NavLink>
           );
