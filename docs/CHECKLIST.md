@@ -119,22 +119,24 @@ Routes (`App.tsx`):
   `OrderPunchList.tsx`'s convention; a duplicate `<h2>Assigned Checklist</h2>` here used to
   repeat what the breadcrumb already showed and was removed.
   "+ Add" header button opens `TaskPunchForm.tsx` (posts to `POST /checklist/tasks`).
-- `/checklist/dashboard` → `DashboardList.tsx` — admin-only. Rebuilt as a 6-column
-  donut-chart card grid matching the old AppSheet reference (`CHECKLIST-ADC-V1`)'s
-  "Dashboard - Pending Checklist" view card-for-card. **Only the "Pending Checklist
-  Account" card is real data** (`GET /admin/dashboard`, per-doer pending count via
-  `DonutChart` — single doer shows a plain donut with the count centered; more than one
-  doer sums into one center total; click a doer's name to drill into
-  `/checklist/dashboard/:doerId`). **The other 11 cards (Design, HR, JM, Purchasing,
-  Management, Sale, Store, System, Quality ×2, Admin) are a static placeholder** — hardcoded
-  in `STATIC_DEPTS` recreating the reference's exact numbers/segments, since no other
-  department's sheet/routing is built yet (see "What it is" above). Wire each one to real
-  data (same shape as the Account card) as its own department gets built — **do not treat
-  the placeholder numbers as real**, they're UI-only until then. `DonutChart.tsx` is the
-  reusable pure-SVG multi-segment donut behind every card (no charting library): single
-  segment centers its value, multi-segment labels each arc, zero-total renders a flat gray
-  ring (the empty "Management" card). No in-page `<h2>` title here either — same
-  breadcrumb-only convention as Assigned Checklist above; a duplicate heading was removed.
+- `/checklist/dashboard` → `DashboardList.tsx` — admin-only. A 6-column donut-chart card
+  grid matching the old AppSheet reference (`CHECKLIST-ADC-V1`)'s "Dashboard - Pending
+  Checklist" card layout (title + donut only — no "Full Name" row, no filter icon, no "Back
+  to My Tasks" button; a first pass had all three, removed on user feedback since they
+  either duplicated info or added noise the reference doesn't have). **Only "Pending
+  Checklist Account" is real data** (`GET /admin/dashboard`, summed into one center total;
+  clicking the card drills into `/checklist/dashboard/:doerId` when there's exactly one
+  doer). **Every other department card (`OTHER_DEPARTMENTS`: Design, HR, JM, Purchasing,
+  Management, Sale, Store, System, Quality ×2, Admin) renders blank** — a flat gray ring, no
+  number — since none of those departments has a real sheet/routing built yet (see "What it
+  is" above). **Do not fabricate numbers for these** — an earlier version hardcoded the old
+  reference's example numbers as if they were real data and was deliberately reverted to
+  blank; wire a real query in for a department (same shape as the Account card: `value:
+  number` renders centered, `value: undefined` renders the blank ring) only once that
+  department's own backend route actually exists. `DonutChart.tsx` is the reusable pure-SVG
+  donut behind every card (no charting library) — single segment centers its value,
+  zero/empty segments render the flat gray ring. No in-page `<h2>` title — same
+  breadcrumb-only convention as Assigned Checklist above.
 - `/checklist/dashboard/:doerId` → `DoerPendingList.tsx` — admin-only, one doer's pending
   tasks (`GET /admin/pending/:doerId`), "Update Remark" opens `FollowUpForm.tsx`
   (`POST /checklist/tasks/:taskId/followup`).

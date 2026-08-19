@@ -1,74 +1,30 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { listDashboard } from "./lib/checklistApi";
-import { DonutChart, donutColors, type DonutSegment } from "./DonutChart";
+import { DonutChart, donutColors } from "./DonutChart";
 
 /** Admin-only "Dashboard - Pending Checklist" — one donut-chart card per department,
- * matching the old AppSheet reference (`CHECKLIST-ADC-V1`) card-for-card. Only
+ * matching the old AppSheet reference (`CHECKLIST-ADC-V1`)'s card grid. Only
  * **Pending Checklist Account** is wired to real data (`GET /admin/dashboard`, this app's
- * only built department so far — see docs/CHECKLIST.md). The other 11 cards are a static
- * placeholder layout recreating the reference's exact numbers/segments — there is no
- * Design/HR/Purchasing/etc. sheet or routing built yet to source them from. Wire each one
- * to real data (same shape as the Account card) as its own department gets built; don't
- * treat the placeholder numbers as real. */
+ * only built department so far — see docs/CHECKLIST.md). Every other department card is
+ * shown **blank** (a flat gray ring, no fabricated number) since there's no Design/HR/
+ * Purchasing/etc. sheet or routing built yet to source a real count from — wire each one to
+ * real data (same shape as the Account card) as its own department gets built. */
 
-interface StaticDoer {
-  name: string;
-  count: number;
-}
-
-interface StaticDept {
-  title: string;
-  doers: StaticDoer[];
-  paginationLabel?: string;
-}
-
-const PALETTE = [donutColors.primary, donutColors.secondary, donutColors.accent, donutColors.accentLight];
-
-// Static placeholder departments — see file-level note above.
-const STATIC_DEPTS: StaticDept[] = [
-  { title: "Pending Checklist Design", doers: [{ name: "0", count: 499 }] },
-  { title: "Pending Checklist HR", doers: [{ name: "0", count: 131 }] },
-  { title: "Pending Checklist JM", doers: [{ name: "Anshu (Executive Assistant)", count: 9 }] },
-  { title: "Pending Checklist Purchasing", doers: [{ name: "Nikki (Purchase Executive)", count: 3 }] },
-  { title: "Pending Checklist Management", doers: [] },
-  {
-    title: "Pending Checklist Sale",
-    doers: [{ name: "Ruby (CRM)", count: 19 }, { name: "Tanuj Sharma", count: 7 }],
-    paginationLabel: "1/3",
-  },
-  { title: "Pending Checklist Store", doers: [{ name: "Naunihal (Store Incharge)", count: 1 }] },
-  {
-    title: "Pending Checklist System",
-    doers: [
-      { name: "Amandeep (DME)", count: 4 },
-      { name: "Ashish", count: 4 },
-      { name: "—", count: 6 },
-      { name: "—", count: 31 },
-    ],
-    paginationLabel: "1/4",
-  },
-  {
-    title: "Pending Checklist Quality",
-    doers: [
-      { name: "0", count: 2235 },
-      { name: "Danish (Quality Head)", count: 287 },
-      { name: "—", count: 89 },
-    ],
-    paginationLabel: "1/5",
-  },
-  {
-    title: "Completed Checklist Quality",
-    doers: [
-      { name: "Danish (Quality Head)", count: 1337 },
-      { name: "—", count: 2554 },
-      { name: "—", count: 364 },
-      { name: "—", count: 1931 },
-    ],
-    paginationLabel: "1/4",
-  },
-  { title: "Pending Checklist Admin", doers: [{ name: "Gaurav Nagar (Office Maintenance)", count: 76 }] },
+// Every department the old reference shows, in its original order. Wire a real query in
+// once that department's own sheet/routing exists — until then it stays blank.
+const OTHER_DEPARTMENTS = [
+  "Pending Checklist Design",
+  "Pending Checklist HR",
+  "Pending Checklist JM",
+  "Pending Checklist Purchasing",
+  "Pending Checklist Management",
+  "Pending Checklist Sale",
+  "Pending Checklist Store",
+  "Pending Checklist System",
+  "Pending Checklist Quality",
+  "Completed Checklist Quality",
+  "Pending Checklist Admin",
 ];
 
 export function DashboardList() {
@@ -82,12 +38,6 @@ export function DashboardList() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button className="btn" onClick={() => navigate("/checklist")}>
-          Back to My Tasks
-        </button>
-      </div>
-
       <div
         style={{
           display: "grid",
@@ -97,14 +47,11 @@ export function DashboardList() {
       >
         <DeptCard
           title="Pending Checklist Account"
-          doers={doers.map((d) => ({ name: d.fullName, count: d.count }))}
-          onDoerClick={(i) => navigate(`/checklist/dashboard/${encodeURIComponent(doers[i].doerId)}`)}
-          isLoading={isLoading}
-          emptyMessage={!isLoading && doers.length === 0 ? "No pending tasks" : undefined}
-          centerOverrideValue={doers.length > 1 ? accountTotal : undefined}
+          value={isLoading ? undefined : accountTotal}
+          onClick={doers.length === 1 ? () => navigate(`/checklist/dashboard/${encodeURIComponent(doers[0].doerId)}`) : undefined}
         />
-        {STATIC_DEPTS.map((dept) => (
-          <DeptCard key={dept.title} title={dept.title} doers={dept.doers} paginationLabel={dept.paginationLabel} />
+        {OTHER_DEPARTMENTS.map((title) => (
+          <DeptCard key={title} title={title} value={undefined} />
         ))}
       </div>
     </div>
@@ -113,32 +60,17 @@ export function DashboardList() {
 
 function DeptCard({
   title,
-  doers,
-  paginationLabel,
-  onDoerClick,
-  isLoading,
-  emptyMessage,
-  centerOverrideValue,
+  value,
+  onClick,
 }: {
   title: string;
-  doers: StaticDoer[];
-  paginationLabel?: string;
-  onDoerClick?: (index: number) => void;
-  isLoading?: boolean;
-  emptyMessage?: string;
-  centerOverrideValue?: number;
+  /** Pending count. `undefined` = no real data source yet, renders a blank gray ring. */
+  value?: number;
+  onClick?: () => void;
 }) {
-  const [page, setPage] = useState(0);
-  const pageCount = Math.max(doers.length, 1);
-  const current = doers[page];
-
-  const segments: DonutSegment[] =
-    doers.length > 1
-      ? doers.map((d, i) => ({ value: d.count, color: PALETTE[i % PALETTE.length] }))
-      : [{ value: current?.count ?? 0, color: PALETTE[0] }];
-
   return (
     <div
+      onClick={onClick}
       className="card"
       style={{
         padding: 12,
@@ -146,71 +78,24 @@ function DeptCard({
         flexDirection: "column",
         gap: 8,
         position: "relative",
+        cursor: onClick ? "pointer" : undefined,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{title}</span>
-        <div style={{ display: "flex", gap: 4, flexShrink: 0, color: "var(--color-text-muted)" }}>
-          <FilterGlyph />
+        <div style={{ flexShrink: 0, color: "var(--color-text-muted)" }}>
           <ExpandGlyph />
         </div>
       </div>
 
-      <div style={{ fontSize: 11, color: "var(--color-text-muted)" }}>Full Name</div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          fontSize: 12,
-          minHeight: 16,
-        }}
-      >
-        <span
-          onClick={onDoerClick && doers.length ? () => onDoerClick(page) : undefined}
-          style={{ cursor: onDoerClick && doers.length ? "pointer" : undefined, color: "var(--color-text)" }}
-        >
-          {isLoading ? "…" : current?.name ?? emptyMessage ?? "0"}
-        </span>
-        {(paginationLabel || pageCount > 1) && doers.length > 1 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--color-text-muted)" }}>
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              style={{ border: "none", background: "none", cursor: "pointer", padding: 0, color: "inherit" }}
-            >
-              ‹
-            </button>
-            {paginationLabel ?? `${page + 1}/${pageCount}`}
-            <button
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              style={{ border: "none", background: "none", cursor: "pointer", padding: 0, color: "inherit" }}
-            >
-              ›
-            </button>
-          </span>
-        )}
-      </div>
-
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
-        <DonutChart
-          segments={
-            centerOverrideValue !== undefined ? [{ value: centerOverrideValue, color: PALETTE[0] }] : segments
-          }
-        />
+        <DonutChart segments={value !== undefined ? [{ value, color: donutColors.primary }] : []} />
       </div>
 
       <div style={{ position: "absolute", right: 6, bottom: 4, color: "var(--color-border)", fontSize: 10 }}>
         <ResizeGlyph />
       </div>
     </div>
-  );
-}
-
-function FilterGlyph() {
-  return (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-      <path d="M4 4h16l-6 8v6l-4 2v-8L4 4z" />
-    </svg>
   );
 }
 
