@@ -125,9 +125,14 @@ Routes (`App.tsx`):
   to My Tasks" button; a first pass had all three, removed on user feedback since they
   either duplicated info or added noise the reference doesn't have). **Only "Pending
   Checklist Account" is real data** (`GET /admin/dashboard`) — rendered as **one donut
-  segment per doer** (colors cycled from `PALETTE`), each carrying that doer's name as a
-  native SVG `<title>` hover tooltip (`DonutSegment.label`) — hovering any part of the ring
-  shows who it belongs to instantly, no click needed. The center always shows just the
+  segment per doer** (colors cycled from `PALETTE`), each carrying that doer's name in
+  `DonutSegment.label`. **Hover tooltip is custom-built, not the native SVG `<title>`** — a
+  first pass used `<title>`, which has a noticeable OS-level delay before appearing and
+  can't be styled; `DonutChart` now tracks `onMouseMove`/`onMouseLeave` per segment into
+  local state and renders its own small floating card (colored dot + name + value,
+  `pointer-events: none`, positioned via `getBoundingClientRect()` off a wrapping
+  `position: relative` container) that appears the instant the cursor moves over that arc.
+  The center always shows just the
   **total** pending count (`DonutChart`'s `centerValue` prop), never a per-segment number —
   keeps the card readable at a glance while the breakdown is still one hover away. Clicking
   the card drills into `/checklist/dashboard/:doerId` when there's exactly one doer.
