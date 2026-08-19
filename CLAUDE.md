@@ -11,6 +11,9 @@ is the short, current-state summary — don't let it grow into a second changelo
 - `Backend/` — Express API. Deployed on Vercel as `zoto-backend`.
 - `docs/` — `01`–`07` are the original planning docs (PRD, TRD, app flow, UI brief, backend
   schema, implementation plan, sheet redesign plan). `CHANGELOG.md` is the running log.
+  `CHECKLIST.md` is the full-system reference for the separate Checklist app (Accounts
+  department) — read it before touching `Frontend/src/checklist/` or
+  `Backend/src/routes/checklist*.ts`, and keep it current the same way as this file.
 
 ## Deploy
 
