@@ -317,7 +317,11 @@ checklistRouter.get("/admin/dashboard", requireChecklistAdmin, async (_req, res,
 
     const counts = new Map<string, number>();
     for (const r of rows) {
-      if (r.STATUS?.trim()) continue; // only pending
+      // Same "pending" definition as GET /tasks/mine: Status blank AND due now (Planned <=
+      // today) — a bare blank-Status check (the old behavior here) counted every future-
+      // dated instance the recurrence engine has already bulk-generated too, inflating the
+      // dashboard number far past what's actually due.
+      if (r.STATUS?.trim() || !isDueNow(r.PLANNED)) continue;
       const key = r.EMAIL?.trim();
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);

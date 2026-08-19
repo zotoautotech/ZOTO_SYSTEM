@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { listDashboard } from "./lib/checklistApi";
-import { DonutChart, donutColors } from "./DonutChart";
+import { DonutChart, donutColors, type DonutSegment } from "./DonutChart";
+
+const PALETTE = [donutColors.primary, donutColors.secondary, donutColors.accent, donutColors.accentLight];
 
 /** Admin-only "Dashboard - Pending Checklist" — one donut-chart card per department,
  * matching the old AppSheet reference (`CHECKLIST-ADC-V1`)'s card grid. Only
@@ -35,6 +37,15 @@ export function DashboardList() {
   });
 
   const accountTotal = doers.reduce((s, d) => s + d.count, 0);
+  // One segment per doer, colored/cycled from the palette, each carrying its own name as a
+  // hover tooltip (native <title>) — moving the cursor over that doer's slice of the ring
+  // shows their name immediately, no click needed. Center still shows just the total
+  // pending count, not a per-doer breakdown.
+  const accountSegments: DonutSegment[] = doers.map((d, i) => ({
+    value: d.count,
+    color: PALETTE[i % PALETTE.length],
+    label: d.fullName,
+  }));
 
   return (
     <div>
@@ -47,11 +58,12 @@ export function DashboardList() {
       >
         <DeptCard
           title="Pending Checklist Account"
-          value={isLoading ? undefined : accountTotal}
+          segments={isLoading ? undefined : accountSegments}
+          centerValue={isLoading ? undefined : accountTotal}
           onClick={doers.length === 1 ? () => navigate(`/checklist/dashboard/${encodeURIComponent(doers[0].doerId)}`) : undefined}
         />
         {OTHER_DEPARTMENTS.map((title) => (
-          <DeptCard key={title} title={title} value={undefined} />
+          <DeptCard key={title} title={title} segments={undefined} />
         ))}
       </div>
     </div>
@@ -60,12 +72,14 @@ export function DashboardList() {
 
 function DeptCard({
   title,
-  value,
+  segments,
+  centerValue,
   onClick,
 }: {
   title: string;
-  /** Pending count. `undefined` = no real data source yet, renders a blank gray ring. */
-  value?: number;
+  /** `undefined` = no real data source yet, renders a blank gray ring. */
+  segments?: DonutSegment[];
+  centerValue?: number;
   onClick?: () => void;
 }) {
   return (
@@ -89,7 +103,7 @@ function DeptCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
-        <DonutChart segments={value !== undefined ? [{ value, color: donutColors.primary }] : []} />
+        <DonutChart segments={segments ?? []} centerValue={centerValue} />
       </div>
 
       <div style={{ position: "absolute", right: 6, bottom: 4, color: "var(--color-border)", fontSize: 10 }}>

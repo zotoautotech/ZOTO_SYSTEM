@@ -124,19 +124,31 @@ Routes (`App.tsx`):
   Checklist" card layout (title + donut only — no "Full Name" row, no filter icon, no "Back
   to My Tasks" button; a first pass had all three, removed on user feedback since they
   either duplicated info or added noise the reference doesn't have). **Only "Pending
-  Checklist Account" is real data** (`GET /admin/dashboard`, summed into one center total;
-  clicking the card drills into `/checklist/dashboard/:doerId` when there's exactly one
-  doer). **Every other department card (`OTHER_DEPARTMENTS`: Design, HR, JM, Purchasing,
+  Checklist Account" is real data** (`GET /admin/dashboard`) — rendered as **one donut
+  segment per doer** (colors cycled from `PALETTE`), each carrying that doer's name as a
+  native SVG `<title>` hover tooltip (`DonutSegment.label`) — hovering any part of the ring
+  shows who it belongs to instantly, no click needed. The center always shows just the
+  **total** pending count (`DonutChart`'s `centerValue` prop), never a per-segment number —
+  keeps the card readable at a glance while the breakdown is still one hover away. Clicking
+  the card drills into `/checklist/dashboard/:doerId` when there's exactly one doer.
+  **Every other department card (`OTHER_DEPARTMENTS`: Design, HR, JM, Purchasing,
   Management, Sale, Store, System, Quality ×2, Admin) renders blank** — a flat gray ring, no
   number — since none of those departments has a real sheet/routing built yet (see "What it
   is" above). **Do not fabricate numbers for these** — an earlier version hardcoded the old
   reference's example numbers as if they were real data and was deliberately reverted to
-  blank; wire a real query in for a department (same shape as the Account card: `value:
-  number` renders centered, `value: undefined` renders the blank ring) only once that
-  department's own backend route actually exists. `DonutChart.tsx` is the reusable pure-SVG
-  donut behind every card (no charting library) — single segment centers its value,
-  zero/empty segments render the flat gray ring. No in-page `<h2>` title — same
-  breadcrumb-only convention as Assigned Checklist above.
+  blank; wire a real query in for a department (same shape as the Account card) only once
+  that department's own backend route actually exists. `DonutChart.tsx` is the reusable
+  pure-SVG donut behind every card (no charting library) — zero/empty segments render the
+  flat gray ring. No in-page `<h2>` title — same breadcrumb-only convention as Assigned
+  Checklist above.
+
+  **`GET /admin/dashboard`'s pending definition must match `GET /tasks/mine`'s** — Status
+  blank **and** `isDueNow(Planned)` (due today or overdue), not a bare blank-Status check.
+  An earlier version of this route only checked Status, which counted every future-dated
+  instance the recurrence engine has already bulk-generated (weeks/months ahead) as
+  "pending," wildly inflating the dashboard's numbers past what's actually due — the exact
+  bug class `isDueNow()`/`parsePlannedDate()` (see above) already exists to prevent
+  elsewhere. Fixed to reuse the same `isDueNow()` check.
 - `/checklist/dashboard/:doerId` → `DoerPendingList.tsx` — admin-only, one doer's pending
   tasks (`GET /admin/pending/:doerId`), "Update Remark" opens `FollowUpForm.tsx`
   (`POST /checklist/tasks/:taskId/followup`).

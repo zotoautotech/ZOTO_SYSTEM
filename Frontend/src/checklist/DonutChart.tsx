@@ -8,6 +8,9 @@
 export interface DonutSegment {
   value: number;
   color: string;
+  /** Shown as a native hover tooltip on this segment (e.g. the doer's name) — appears the
+   * moment the cursor moves over that arc, no click needed. */
+  label?: string;
 }
 
 const COLORS = {
@@ -23,10 +26,14 @@ export function DonutChart({
   segments,
   size = 128,
   strokeWidth = 20,
+  centerValue,
 }: {
   segments: DonutSegment[];
   size?: number;
   strokeWidth?: number;
+  /** Overrides what's shown centered (e.g. the total across every segment) — falls back to
+   * the single segment's own value when there's exactly one. */
+  centerValue?: number;
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -55,14 +62,11 @@ export function DonutChart({
       const fraction = seg.value / total;
       const dash = fraction * circumference;
       const offset = -(cumulative / total) * circumference;
-      const midAngle = ((cumulative + seg.value / 2) / total) * 360 - 90;
       cumulative += seg.value;
-      const rad = (midAngle * Math.PI) / 180;
-      const labelR = radius;
-      const lx = center + labelR * Math.cos(rad);
-      const ly = center + labelR * Math.sin(rad);
-      return { key: i, seg, dash, offset, lx, ly };
+      return { key: i, seg, dash, offset };
     });
+
+  const centerNumber = centerValue ?? (segments.length === 1 ? segments[0].value : total);
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -79,19 +83,15 @@ export function DonutChart({
           strokeDasharray={`${dash} ${circumference - dash}`}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${center} ${center})`}
-        />
+        >
+          {/* Native SVG tooltip — the doer's name (or whatever label the caller sets)
+              appears the instant the cursor moves over this arc, no click needed. */}
+          {seg.label && <title>{seg.label}</title>}
+        </circle>
       ))}
-      {segments.length === 1 ? (
-        <text x={center} y={center} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.16} fontWeight={700} fill="var(--color-text)">
-          {segments[0].value}
-        </text>
-      ) : (
-        arcs.map(({ key, seg, lx, ly }) => (
-          <text key={key} x={lx} y={ly} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.1} fontWeight={700} fill="#fff">
-            {seg.value}
-          </text>
-        ))
-      )}
+      <text x={center} y={center} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.16} fontWeight={700} fill="var(--color-text)">
+        {centerNumber}
+      </text>
     </svg>
   );
 }
