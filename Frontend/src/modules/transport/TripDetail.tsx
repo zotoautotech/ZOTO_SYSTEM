@@ -187,7 +187,7 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders, orderSnapshot, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
+  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
   const stage = getTripStage(moduleKey);
   const order = orders[0];
   // orderSnapshot (Transport_SO's own row) carries several fields ORDER_PUNCH doesn't —
@@ -344,21 +344,40 @@ export function TripDetail() {
             ]}
           />
 
-          <TableCard
-            title={isTaxInvoice ? "All Products of this Tax Invoice" : "S.O Items Dispatches"}
-            count={items.length}
-            rows={items}
-            getRowKey={(row, i) => `${row.partNo}-${i}`}
-            onExpand={() => navigate(`/modules/${moduleKey}/${transportId}/items`)}
-            columns={[
-              { header: "Part No.", render: (row) => row.partNo || "—" },
-              { header: "Part Name", render: (row) => row.partName || "—" },
-              { header: "Total Qty of Order", render: (row) => row.totalQtyOfOrder || "—" },
-              { header: "Quantity", render: (row) => row.loadQty || "—" },
-              { header: "Unit", render: (row) => row.unit || "—" },
-              { header: "Load Boxes", render: (row) => row.loadBoxes || "—" },
-            ]}
-          />
+          {isTaxInvoice ? (
+            <TableCard
+              title="All Products of this Tax Invoice"
+              count={taxInvoiceItems.length}
+              rows={taxInvoiceItems}
+              getRowKey={(row, i) => `${row.partName}-${i}`}
+              columns={[
+                { header: "Part Name", render: (row) => row.partName || "—" },
+                { header: "Qty", render: (row) => row.qty || "—" },
+                { header: "UOM", render: (row) => row.unit || "—" },
+                { header: "Price", render: (row) => formatCurrency(row.price) },
+                { header: "Basic Amount", render: (row) => formatCurrency(row.basicAmount) },
+                { header: "Tax Amount", render: (row) => formatCurrency(row.taxAmount) },
+                { header: "Total Amount", render: (row) => formatCurrency(row.totalAmount) },
+                { header: "Remarks", render: (row) => row.remarks || "—" },
+              ]}
+            />
+          ) : (
+            <TableCard
+              title="S.O Items Dispatches"
+              count={items.length}
+              rows={items}
+              getRowKey={(row, i) => `${row.partNo}-${i}`}
+              onExpand={() => navigate(`/modules/${moduleKey}/${transportId}/items`)}
+              columns={[
+                { header: "Part No.", render: (row) => row.partNo || "—" },
+                { header: "Part Name", render: (row) => row.partName || "—" },
+                { header: "Total Qty of Order", render: (row) => row.totalQtyOfOrder || "—" },
+                { header: "Quantity", render: (row) => row.loadQty || "—" },
+                { header: "Unit", render: (row) => row.unit || "—" },
+                { header: "Load Boxes", render: (row) => row.loadBoxes || "—" },
+              ]}
+            />
+          )}
 
           {isTaxInvoice && (
             <>

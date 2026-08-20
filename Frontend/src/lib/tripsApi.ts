@@ -51,6 +51,20 @@ export interface TripItemDispatchRow {
   loadBoxes: string;
 }
 
+/** Tax Invoice's own item breakdown — Price/Basic/Tax/Total Amount, already scaled to this
+ * row's own load quantity (not the item's full order quantity) server-side, so these can be
+ * shown as-is. See tripRoutes.ts's scaledItemFields for why that scaling matters. */
+export interface TripTaxInvoiceItemRow {
+  partName: string;
+  qty: string;
+  unit: string;
+  price: string;
+  basicAmount: string;
+  taxAmount: string;
+  totalAmount: string;
+  remarks: string;
+}
+
 export async function getTrip(transportId: string) {
   const res = await api.get<{
     transport: TripRecord;
@@ -62,6 +76,7 @@ export async function getTrip(transportId: string) {
     orderSnapshot: Record<string, string> | null;
     dispatches: TripDispatchRow[];
     items: TripItemDispatchRow[];
+    taxInvoiceItems: TripTaxInvoiceItemRow[];
     stockReleaseDone: boolean;
     taxInvoiceDone: boolean;
     gatePassFileId?: string;

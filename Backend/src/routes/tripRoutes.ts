@@ -26,6 +26,36 @@ const anyOrderModule = requireAnyModule(ORDER_FAMILY_MODULES);
 
 const ORDER_TAB = "ORDER_PUNCH";
 
+/** ORDER_ITEMS' own Basic/Tax/CGST/SGST/IGST/Total Amount are computed against the item's
+ * FULL order quantity — but a single Transport_Products/Tax_Invoice_Products row only ever
+ * represents ONE dispatch round's load quantity, which can be less than the item's full
+ * order quantity (e.g. 25 of 50 SET on a partial dispatch). Spreading the item's raw amount
+ * fields unscaled onto that row leaves every amount column showing the FULL order total next
+ * to a smaller Quantity — silently double (or more) the correct figure for that specific
+ * trip/invoice line. Price/Discount %/GST Slab % are per-unit or percentage figures, so those
+ * pass through unscaled; only the amount columns scale by loadQty/orderQty. Used by both
+ * createPlaceholderTaxInvoice() (the Transport Reached-time placeholder) and the actual
+ * POST /:transportId/tax-invoice submit handler, so neither can drift out of sync with the
+ * other on this calculation. */
+function scaledItemFields(item: SheetRow, loadQty: number): SheetRow {
+  const orderQty = Number(item.QTY) || 0;
+  const ratio = orderQty > 0 ? loadQty / orderQty : 1;
+  const scale = (v: string | undefined) => {
+    const n = Number(v);
+    return v !== undefined && v !== "" && !Number.isNaN(n) ? (n * ratio).toFixed(2) : (v ?? "");
+  };
+  return {
+    ...itemToSheet(item),
+    "Discount (Rs)": scale(item.DISCOUNT_RS),
+    "Basic Amount": scale(item.BASIC_AMOUNT),
+    CGST: scale(item.CGST),
+    SGST: scale(item.SGST),
+    IGST: scale(item.IGST),
+    "Tax Amount": scale(item.TAX_AMOUNT),
+    "Total Amount": scale(item.TOTAL_AMOUNT),
+  };
+}
+
 /**
  * Transport, Tax Invoice, Pre Dispatch, Vehicle Dispatch, Dispatch, LR and Delivery are
  * all TRIP-level in the live sheet (one truck/invoice/dispatch/LR/delivery can carry
@@ -419,17 +449,39 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
       customerName: a.order.CUSTOMER_NAME || "",
       timestamp: a.order.CREATED_AT || "",
     }));
-    const items = productRows
-      .filter((r) => r.Transport_ID === req.params.transportId)
-      .map((r) => ({
-        partNo: r["Part No."] || "",
+    const tripProductRows = productRows.filter((r) => r.Transport_ID === req.params.transportId);
+    const items = tripProductRows.map((r) => ({
+      partNo: r["Part No."] || "",
+      partName: r["Part Name"] || "",
+      totalQtyOfOrder: r["Quantity"] || "",
+      loadQty: r["Load Qty"] || "",
+      unit: r["Unit"] || "",
+      loadBoxes: r["Load Boxes"] || "",
+    }));
+    // Tax Invoice's own item breakdown — Price/Basic/Tax/Total Amount, scaled the same way
+    // (and by the same helper) as what actually gets written to Tax_Invoice_Products at
+    // submission time, so the pending preview here never shows a different number than the
+    // invoice will. See scaledItemFields' own comment for why raw ORDER_ITEMS amounts can't
+    // be used unscaled on a partial-dispatch row.
+    const itemByIdForInvoice = new Map(
+      (await readTable(env.sheets.transactions, "ORDER_ITEMS")).map((r) => [r.ITEM_ID, itemFromSheet(r)])
+    );
+    const taxInvoiceItems = tripProductRows.map((r) => {
+      const item = itemByIdForInvoice.get(r.ITEM_ID);
+      const loadQty = Number(r.Quantity) || 0;
+      const scaled = item ? scaledItemFields(item, loadQty) : null;
+      return {
         partName: r["Part Name"] || "",
-        totalQtyOfOrder: r["Quantity"] || "",
-        loadQty: r["Load Qty"] || "",
+        qty: r.Quantity || "",
         unit: r["Unit"] || "",
-        loadBoxes: r["Load Boxes"] || "",
-      }));
-    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId });
+        price: item?.PRICE || "",
+        basicAmount: scaled?.["Basic Amount"] || "",
+        taxAmount: scaled?.["Tax Amount"] || "",
+        totalAmount: scaled?.["Total Amount"] || "",
+        remarks: r["Additional Notes"] || "",
+      };
+    });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId });
   } catch (err) {
     next(err);
   }
@@ -768,7 +820,7 @@ async function createPlaceholderTaxInvoice(transportId: string, transport: Sheet
         Invoice_ID: invoiceId,
         Invoice_SO_ID: invoiceSoId,
         Invoice_Pd_ID: pdIds[j],
-        ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
+        ...(itemById.has(p.ITEM_ID) ? scaledItemFields(itemById.get(p.ITEM_ID)!, Number(p.Quantity) || 0) : {}),
         Segment: p.Segment ?? "",
         Category: p.Category ?? "",
         "Part Name": p["Part Name"] ?? "",
@@ -1073,7 +1125,7 @@ tripsRouter.post("/:transportId/tax-invoice", requireModule("tax-invoice"), asyn
           continue;
         }
         await updateRow(env.sheets.transactions, "Tax_Invoice_Products", "Invoice_Pd_ID", existingPd.Invoice_Pd_ID, {
-          ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
+          ...(itemById.has(p.ITEM_ID) ? scaledItemFields(itemById.get(p.ITEM_ID)!, Number(p.Quantity) || 0) : {}),
           Invoice_ID: invoiceId,
           Invoice_SO_ID: invoiceSoId,
           Quantity: p.Quantity ?? "",
@@ -1097,7 +1149,7 @@ tripsRouter.post("/:transportId/tax-invoice", requireModule("tax-invoice"), asyn
             Invoice_ID: invoiceId,
             Invoice_SO_ID: invoiceSoId,
             Invoice_Pd_ID: pdIds[j],
-            ...(itemById.has(p.ITEM_ID) ? itemToSheet(itemById.get(p.ITEM_ID)!) : {}),
+            ...(itemById.has(p.ITEM_ID) ? scaledItemFields(itemById.get(p.ITEM_ID)!, Number(p.Quantity) || 0) : {}),
             Segment: p.Segment ?? "",
             Category: p.Category ?? "",
             "Part Name": p["Part Name"] ?? "",
