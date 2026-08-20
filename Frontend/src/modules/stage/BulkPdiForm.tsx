@@ -89,6 +89,10 @@ export function BulkPdiForm({ items: itemsProp, onClose, onSaved }: Props) {
 
     setSubmitting(false);
     onSaved();
+    // Auto-close on a clean sweep — nothing left for the doer to review. A partial failure
+    // keeps the modal open so the per-item Saved/Failed list (and the hover reason) stays
+    // visible instead of vanishing along with the one thing they'd need to retry.
+    if (running.every((r) => r.status === "success")) onClose();
   }
 
   const successCount = results?.filter((r) => r.status === "success").length ?? 0;
