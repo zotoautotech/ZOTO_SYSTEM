@@ -55,6 +55,11 @@ export async function getTrip(transportId: string) {
   const res = await api.get<{
     transport: TripRecord;
     orders: OrderRecord[];
+    /** The first attached order's own Transport_SO row — raw sheet headers, carries the
+     * buyer/billing/shipping/consignee/logistics snapshot as it was at attach time (several
+     * fields, like Freight Paid by/at and Transporter GSTIN/PAN, aren't on ORDER_PUNCH at
+     * all since they're per-trip choices, not order defaults). Null if nothing's attached. */
+    orderSnapshot: Record<string, string> | null;
     dispatches: TripDispatchRow[];
     items: TripItemDispatchRow[];
     stockReleaseDone: boolean;

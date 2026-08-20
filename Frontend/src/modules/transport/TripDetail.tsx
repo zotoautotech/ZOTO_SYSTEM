@@ -187,8 +187,16 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
+  const { transport, orders, orderSnapshot, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
   const stage = getTripStage(moduleKey);
+  const order = orders[0];
+  // orderSnapshot (Transport_SO's own row) carries several fields ORDER_PUNCH doesn't —
+  // Freight Paid by/at, Transporter GSTIN/PAN/Person Name/Contact/Address, Marka Code — since
+  // those are per-trip choices captured at attach time, not order-level defaults. Prefer it
+  // for anything it has; fall back to the order snapshot only where orderSnapshot lacks the
+  // field entirely (Payment Type, Basic/Tax/Total/Invoice Discount amounts).
+  const snap = (field: string) => orderSnapshot?.[field] || "";
+  const isTaxInvoice = stage?.key === "tax-invoice";
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
   // Stock Release / Tax Invoice run in parallel off the same REACHED status — Status alone
   // can't tell "still pending this branch" apart from "done this branch, other one still
@@ -240,6 +248,17 @@ export function TripDetail() {
         </div>
 
         <div style={{ flex: 1, minWidth: 280 }}>
+          {isTaxInvoice && (
+            <Section title="GST Details">
+              <Field label="Invoice Discount (Rs)" value={formatCurrency(order?.INVOICE_DISCOUNT_RS)} />
+              <Field label="Basic Amount" value={formatCurrency(order?.BASIC_AMOUNT)} />
+              {/* Blank on System 2 (tax-free) — order.TAX_AMOUNT only exists on System 1's
+                  ORDER_PUNCH, not fabricated here. */}
+              <Field label="Tax Amount" value={formatCurrency(order?.TAX_AMOUNT)} />
+              <Field label="Total Amount" value={formatCurrency(order?.TOTAL_AMOUNT)} />
+            </Section>
+          )}
+
           <Section title="Vehicle Details">
             <Field label="Send Through" value={transport["Send Through"]} />
             <Field label="Vehicle Arrange for" value={transport["Vehicle Arrange for"]} />
@@ -253,11 +272,66 @@ export function TripDetail() {
             <Field label="Freight Charge" value={formatCurrency(transport["Freight Charge"])} />
             <FieldFile label="Dispatch Gate Pass" fileId={gatePassFileId} />
           </Section>
+
+          {isTaxInvoice && (
+            <>
+              <Section title="Buyer Details">
+                <Field label="CUST ID" value={snap("CUST ID")} />
+                <Field label="Customer Name" value={snap("Cutomer Name")} />
+                <Field label="Marka Code" value={snap("Marka Code")} />
+                <Field label="Business Segment" value={snap("Business Segment")} />
+                <Field label="Type of Customer" value={snap("Type of Customer")} />
+                <Field label="Buyer GSTIN No." value={snap("Buyer GSTIN No.")} />
+                <Field label="Buyer Email ID" value={snap("Buyer Email ID")} />
+                <Field label="Buyer Contact No." value={snap("Buyer Contact No.")} />
+                <Field label="Payment Type" value={order?.PAYMENT_TYPE} />
+                <Field label="Payment Terms" value={snap("Payment Terms")} />
+                <Field label="This Order Payment Terms" value={snap("This Order Payment Terms")} />
+                <Field label="Contact Person Name" value={snap("Contact Person Name")} />
+                <Field label="Contact Person Contact No." value={snap("Contact Person Contact No.")} />
+                <Field label="Sale Staff Name" value={snap("Sale Staff Name")} />
+                <Field label="Order given by" value={snap("Order given by")} />
+                <Field label="Ship to Consignee" value={snap("Ship to Consignee")} />
+              </Section>
+
+              {/* Only ever fills in once the Upload Tax Invoice Form action is actually
+                  submitted — blank rather than fabricated until then. */}
+              <Section title="Tax Invoice Details">
+                <Field label="Tax Invoice No." value={transport["Tax Invoice No."]} />
+                <Field label="Tax Invoice Date" value={transport["Tax Invoice Date"]} />
+                {!transport["Tax Invoice No."] && <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Not yet submitted.</p>}
+              </Section>
+
+              <Section title="E-Way Bill Details">
+                <Field label="E-Way Bill Applicable" value={transport["E-Way Bill Applicable"]} />
+                <Field label="E-Way Bill No." value={transport["E-Way Bill No."]} />
+                <Field label="E-Way Bill Date" value={transport["E-Way Bill Date"]} />
+                {!transport["E-Way Bill No."] && <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Not yet submitted.</p>}
+              </Section>
+            </>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 280 }}>
+          {isTaxInvoice && (
+            <Section title="Logistics Details">
+              <Field label="Delivery Mode" value={snap("Preferred Delivery Mode")} />
+              <Field label="Freight Paid by" value={snap("Freight Paid by")} />
+              <Field label="Freight Paid at" value={snap("Freight Paid at")} />
+              <Field label="Transport Mode" value={snap("Preferred Transportation Mode")} />
+              <Field label="Transporter Type" value={snap("Transporter Type")} />
+              <Field label="Transporter ID" value={snap("Transporter ID")} />
+              <Field label="Transporter Name" value={snap("Transporter Name")} />
+              <Field label="PAN" value={snap("PAN")} />
+              <Field label="Transporter Contact No." value={snap("Transporter Contact No.")} />
+              <Field label="Transporter Person Name" value={snap("Transporter Person Name")} />
+              <Field label="Transporter Person Contact No." value={snap("Transporter Person Contact No.")} />
+              <Field label="Transporter Address" value={snap("Transporter Address")} />
+            </Section>
+          )}
+
           <TableCard
-            title="S.O Dispatches"
+            title={isTaxInvoice ? "All SO's of this Tax Invoice" : "S.O Dispatches"}
             count={dispatches.length}
             rows={dispatches}
             getRowKey={(row) => row.transportSoId || row.orderId}
@@ -271,7 +345,7 @@ export function TripDetail() {
           />
 
           <TableCard
-            title="S.O Items Dispatches"
+            title={isTaxInvoice ? "All Products of this Tax Invoice" : "S.O Items Dispatches"}
             count={items.length}
             rows={items}
             getRowKey={(row, i) => `${row.partNo}-${i}`}
@@ -285,6 +359,34 @@ export function TripDetail() {
               { header: "Load Boxes", render: (row) => row.loadBoxes || "—" },
             ]}
           />
+
+          {isTaxInvoice && (
+            <>
+              <Section title="Billing Address">
+                <Field label="Billing Address Line 1" value={snap("Billing Address Line 1")} />
+                <Field label="Billing Address Line 2" value={snap("Billing Address Line 2")} />
+                <Field label="Billing State" value={snap("Billing State")} />
+                <Field label="Billing Pin code" value={snap("Billing Pin code")} />
+                <Field label="Billing Country" value={snap("Billing Country")} />
+              </Section>
+
+              <Section title="Shipping Address">
+                <Field label="Is Shipping Address Same" value={snap("Is Shipping Address Same")} />
+                <Field label="Shipping Address Line 1" value={snap("Shipping Address Line 1")} />
+                <Field label="Shipping Address Line 2" value={snap("Shipping Address Line 2")} />
+                <Field label="Shipping State" value={snap("Shipping State")} />
+                <Field label="Shipping Pin code" value={snap("Shipping Pin code")} />
+                <Field label="Shipping Country" value={snap("Shipping Country")} />
+              </Section>
+
+              <Section title="Consignee Details">
+                <Field label="Consignee Name" value={snap("Consignee Name")} />
+                <Field label="Consignee GSTIN" value={snap("Consignee GSTIN")} />
+                <Field label="Consignee Contact No." value={snap("Consignee Contact No.")} />
+                <Field label="Consignee Email" value={snap("Consignee Email")} />
+              </Section>
+            </>
+          )}
         </div>
       </div>
 

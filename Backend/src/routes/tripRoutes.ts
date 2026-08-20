@@ -380,13 +380,21 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     // failed (e.g. right after attachOrders) is by seeing the column still blank when the
     // trip is read again — same revert-on-read reasoning used throughout this app.
     // ensureDispatchGatePass no-ops instantly if a value already exists.
-    const [attached, productRows, stockReleaseIds, taxInvoiceIds, gatePassFileId] = await Promise.all([
+    const [attached, productRows, soRows, stockReleaseIds, taxInvoiceIds, gatePassFileId] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
+      readTable(env.sheets.transactions, "Transport_SO"),
       getTransportIdsWithStockRelease(),
       getTransportIdsWithTaxInvoice(),
       ensureDispatchGatePass(req.params.transportId),
     ]);
+    // The FIRST attached order's own Transport_SO row — carries the buyer/billing/shipping/
+    // consignee/logistics snapshot exactly as it was at attach time (Freight Paid by/at,
+    // Transporter GSTIN/PAN/Person Name/Contact/Address, Marka Code — several fields
+    // ORDER_PUNCH itself doesn't have, since these are per-trip choices, not order defaults).
+    // A trip carrying several orders just shows the first, same assumption the pending-list
+    // join makes (see GET /transport-trips's own snapshotByTrip).
+    const orderSnapshot = soRows.find((r) => r.Transport_ID === req.params.transportId) ?? null;
     // Stock Release / Tax Invoice run in parallel (see TRIP_STAGES' completionTab comment in
     // tripStages.ts) — TripDetail needs to know per-branch completion directly since
     // transport.Status alone can't distinguish "still pending this branch" from "done this
@@ -411,7 +419,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
         unit: r["Unit"] || "",
         loadBoxes: r["Load Boxes"] || "",
       }));
-    res.json({ transport, orders: attached.map((o) => o.order), dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, stockReleaseDone, taxInvoiceDone, gatePassFileId });
   } catch (err) {
     next(err);
   }
