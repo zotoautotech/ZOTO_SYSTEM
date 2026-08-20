@@ -140,9 +140,6 @@ async function getTransportRow(transportId: string) {
  * for the rest of its own item's quantity, to be decided. Gating on the order-level
  * ORDER_PUNCH.STATUS ("PRE TRANSPORT COMPLETED", only set once EVERY item is fully decided
  * and PDI'd) is what used to hold a finished 20 SET hostage to an undecided 10.
- *
- * "Already on a trip" is matched by Disp Conf Item ID against Transport_Products, so the
- * same item's second round stays eligible after its first round has shipped.
  */
 async function unattachedPdiRounds(): Promise<SheetRow[]> {
   const [pdiRows, productRows] = await Promise.all([
@@ -213,9 +210,13 @@ tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
       return;
     }
 
-    // One row per approved+PDI'd ROUND still waiting for a vehicle — see unattachedPdiRounds
-    // above for why this is deliberately NOT gated on the order-level STATUS. A finished
-    // 20 SET travels now even though the item's other 10 SET is still undecided upstream.
+    // Reads the PDI tab's own COMPLETED rows rather than ORDER_ITEMS. Dispatch Approval can
+    // approve part of an item's order quantity (10 of 12) across several rounds, and each
+    // approved round gets its own PDI row carrying only that round's quantity — so PDI is
+    // the only source that knows what's actually cleared to travel. Going via ORDER_ITEMS
+    // instead showed the item's FULL order quantity (12, not the approved 10) and, worse,
+    // listed items that were never approved or PDI'd at all just because a sibling item
+    // pushed the order's STATUS forward.
     const [punchRowsRaw, rounds] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.map(punchFromSheet)),
       unattachedPdiRounds(),
@@ -296,7 +297,22 @@ tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
       return res.json(products);
     }
 
-    res.json(filtered);
+    // Joins in a "Customer Name" per trip (Transport_SO is the only trip-family tab still
+    // keyed on the live sheet's un-fixed "Cutomer Name" spelling — see CLAUDE.md) so the
+    // frontend can group the pending queue by party instead of Send Through, matching the
+    // old CRR reference's own Pending Tax Invoice list. TRANSPORT itself carries no customer
+    // column (a trip can span several orders/customers at once), so this reads it off the
+    // FIRST attached order for that trip — good enough for the common one-customer-per-trip
+    // case the reference view assumes; a genuinely multi-customer trip just shows the first.
+    const tripIds = new Set(filtered.map((r) => r.Transport_ID));
+    const soRows = (await readTable(env.sheets.transactions, "Transport_SO")).filter((r) => tripIds.has(r.Transport_ID));
+    const customerByTrip = new Map<string, string>();
+    for (const row of soRows) {
+      if (!customerByTrip.has(row.Transport_ID)) customerByTrip.set(row.Transport_ID, row["Cutomer Name"] || row["Customer Name"] || "");
+    }
+    const enriched = filtered.map((r) => ({ ...r, "Customer Name": customerByTrip.get(r.Transport_ID) || "" }));
+
+    res.json(enriched);
   } catch (err) {
     next(err);
   }
@@ -447,9 +463,6 @@ const attachOrdersSchema = z.object({
         // chosen quantity rather than the item's full order quantity. Omitted (or an order
         // with no items array at all) keeps the old whole-order-at-full-quantity behavior.
         items: z.array(z.object({ itemId: z.string().min(1), qty: z.number().positive(), loadBoxes: z.number().optional(),
-          // Which approved Dispatch Approval round this pick represents. Carried onto
-          // Transport_Products so a later round of the SAME item stays eligible after
-          // this one has shipped.
           dispConfItemId: z.string().optional() })).optional(),
         // The Transport Form's own Logistic Details tab — editable per order, not just
         // copied from the order's own preferred fields (matching the old CRR reference).
@@ -518,8 +531,7 @@ tripsRouter.post("/:transportId/orders", requireModule("transport"), async (req,
 
       const orderItems = allItems.filter((it) => it.ORDER_ID === entry.orderId).map(itemFromSheet);
       // One entry per PICK, not per order item — an item split across two Dispatch Approval
-      // rounds can legitimately appear twice here, each with its own quantity and its own
-      // Disp Conf Item ID. Keying a Map by itemId would silently collapse those into one.
+      // rounds can legitimately appear twice here, each with its own quantity and round id.
       const picks = entry.items ?? orderItems.map((it) => ({ itemId: it.ITEM_ID, qty: Number(it.QTY || 0), loadBoxes: undefined as number | undefined, dispConfItemId: undefined as string | undefined }));
       const itemById = new Map(orderItems.map((it) => [it.ITEM_ID, it]));
       const pdIds = await nextIds("TPTPD", "Transport_Products", "Transport_Pd_ID", Math.max(picks.length, 1));

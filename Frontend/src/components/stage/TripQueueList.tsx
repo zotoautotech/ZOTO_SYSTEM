@@ -60,7 +60,7 @@ export function TripQueueList({
   const { query } = useSearch();
   const queryClient = useQueryClient();
   const [showCompleted, setShowCompleted] = useState(false);
-  const [activeSendThrough, setActiveSendThrough] = useState<string | null>(null);
+  const [activeParty, setActiveParty] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkForm, setShowBulkForm] = useState(false);
@@ -110,10 +110,13 @@ export function TripQueueList({
   });
   const isLoading = ownCompletedView ? stageRowsLoading : itemLevelPending ? pendingItemsLoading : tripsLoading;
 
-  const sendThroughOptions = useMemo(() => {
+  // Party (customer) sidebar, matching the old CRR reference's own Pending Tax Invoice view —
+  // the trip-level list now carries a "Customer Name" per trip (joined server-side off the
+  // first attached order, since TRANSPORT itself has no customer column) for exactly this.
+  const partyOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of trips) {
-      const name = row["Send Through"] || "Unknown";
+      const name = row["Customer Name"] || "Unknown";
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
@@ -121,11 +124,11 @@ export function TripQueueList({
 
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = trips.filter((t) => {
-    const matchesSendThrough = !activeSendThrough || (t["Send Through"] || "Unknown") === activeSendThrough;
-    const matchesSearch = !normalizedQuery || [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"]].some((v) =>
+    const matchesParty = !activeParty || (t["Customer Name"] || "Unknown") === activeParty;
+    const matchesSearch = !normalizedQuery || [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"], t["Customer Name"]].some((v) =>
       (v || "").toLowerCase().includes(normalizedQuery)
     );
-    return matchesSendThrough && matchesSearch;
+    return matchesParty && matchesSearch;
   });
 
   // Item-level pending view filters by Customer Name instead of Send Through — matches the
@@ -154,6 +157,7 @@ export function TripQueueList({
     { key: "status", header: "Status", render: (t) => <StatusBadge status={t.Status || "OPEN"} label={pendingStatusLabel} /> },
     { key: "timestamp", header: "Timestamp", render: (t) => formatTimestamp(t.Timestamp) },
     { key: "transportId", header: "Transport ID", render: (t) => t.Transport_ID },
+    { key: "customerName", header: "Customer Name", render: (t) => t["Customer Name"] || "—" },
     { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (t) => t["Vehicle Arrange for"] || "—" },
     { key: "sendThrough", header: "Send Through", render: (t) => t["Send Through"] || "—" },
     { key: "transporterName", header: "Transporter Name", render: (t) => t["Transporter Name"] || "—" },
@@ -303,7 +307,7 @@ export function TripQueueList({
         (itemLevelPending ? (
           <CustomerFilterPanel customers={itemCustomerOptions} active={activeItemCustomer} onSelect={setActiveItemCustomer} />
         ) : (
-          <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+          <CustomerFilterPanel customers={partyOptions} active={activeParty} onSelect={setActiveParty} />
         ))}
       <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: ownCompletedView ? undefined : "1px solid var(--color-border)" }}>
         {ownCompletedView ? (
