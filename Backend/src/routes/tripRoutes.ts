@@ -312,11 +312,21 @@ tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
       readTable(env.sheets.transactions, ORDER_TAB),
     ]);
     const punchByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, punchFromSheet(r)]));
+    // Every order id attached to a trip, not just the first — a trip can carry several
+    // orders, and a doer searching by ORDER_ID should find the trip regardless of which of
+    // its attached orders that id belongs to.
+    const orderIdsByTrip = new Map<string, string[]>();
+    for (const row of soRows) {
+      if (!tripIds.has(row.Transport_ID) || !row.ORDER_ID) continue;
+      if (!orderIdsByTrip.has(row.Transport_ID)) orderIdsByTrip.set(row.Transport_ID, []);
+      orderIdsByTrip.get(row.Transport_ID)!.push(row.ORDER_ID);
+    }
     const snapshotByTrip = new Map<string, SheetRow>();
     for (const row of soRows) {
       if (!tripIds.has(row.Transport_ID) || snapshotByTrip.has(row.Transport_ID)) continue;
       const order = punchByOrderId.get(row.ORDER_ID);
       snapshotByTrip.set(row.Transport_ID, {
+        "Order IDs": (orderIdsByTrip.get(row.Transport_ID) ?? []).join(" "),
         "Customer Name": row["Cutomer Name"] || row["Customer Name"] || "",
         "Buyer GSTIN No.": row["Buyer GSTIN No."] || "",
         "Freight Paid by": row["Freight Paid by"] || "",

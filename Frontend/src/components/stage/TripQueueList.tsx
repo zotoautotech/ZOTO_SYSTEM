@@ -129,7 +129,10 @@ export function TripQueueList({
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = trips.filter((t) => {
     const matchesParty = !activeParty || (t["Customer Name"] || "Unknown") === activeParty;
-    const matchesSearch = !normalizedQuery || [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"], t["Customer Name"]].some((v) =>
+    // "Order IDs" is a space-joined list of every order attached to the trip (backend join,
+    // see tripRoutes.ts) — lets a doer search a Punch/Sale Order id and land on the trip
+    // carrying it, not just Transport_ID/vehicle/driver identity.
+    const matchesSearch = !normalizedQuery || [t.Transport_ID, t["Vehicle No."], t["Transporter Name"], t["Driver Name"], t["Customer Name"], t["Order IDs"]].some((v) =>
       (v || "").toLowerCase().includes(normalizedQuery)
     );
     return matchesParty && matchesSearch;
