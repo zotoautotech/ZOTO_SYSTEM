@@ -26,6 +26,7 @@ export function TripQueueList({
   stageTab,
   completedColumns,
   pendingItemColumns,
+  pendingColumns,
   pendingStatusLabel,
   bulkForm,
   bulkFormLabel,
@@ -43,6 +44,9 @@ export function TripQueueList({
   completedColumns?: StageColumn[];
   /** When given, the PENDING view goes item-level too — see tripStages.ts. */
   pendingItemColumns?: StageColumn[];
+  /** Replaces the default vehicle-focused pending column set with this stage's own — see
+   * tripStages.ts for details. */
+  pendingColumns?: StageColumn[];
   /** Shown in the pending (non-Completed) trip table's Status column instead of the raw
    * TRANSPORT.Status value — see tripStages.ts for why this needs to be per-stage. */
   pendingStatusLabel?: string;
@@ -158,12 +162,23 @@ export function TripQueueList({
     { key: "timestamp", header: "Timestamp", render: (t) => formatTimestamp(t.Timestamp) },
     { key: "transportId", header: "Transport ID", render: (t) => t.Transport_ID },
     { key: "customerName", header: "Customer Name", render: (t) => t["Customer Name"] || "—" },
-    { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (t) => t["Vehicle Arrange for"] || "—" },
-    { key: "sendThrough", header: "Send Through", render: (t) => t["Send Through"] || "—" },
-    { key: "transporterName", header: "Transporter Name", render: (t) => t["Transporter Name"] || "—" },
-    { key: "vehicleType", header: "Vehicle type", render: (t) => t["Vehicle type"] || "—" },
-    { key: "vehicleNo", header: "Vehicle No.", render: (t) => t["Vehicle No."] || "—" },
-    { key: "driverName", header: "Driver Name", render: (t) => t["Driver Name"] || "—" },
+    ...(pendingColumns ?? []).map((c) => ({
+      key: c.field,
+      header: c.header,
+      render: (t: TripRecord) => t[c.field] || "—",
+    })),
+    // Default vehicle columns — skipped when a stage supplies its own pendingColumns (Tax
+    // Invoice), so its table shows its own field set instead of these generic ones too.
+    ...(pendingColumns
+      ? []
+      : [
+          { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (t: TripRecord) => t["Vehicle Arrange for"] || "—" },
+          { key: "sendThrough", header: "Send Through", render: (t: TripRecord) => t["Send Through"] || "—" },
+          { key: "transporterName", header: "Transporter Name", render: (t: TripRecord) => t["Transporter Name"] || "—" },
+          { key: "vehicleType", header: "Vehicle type", render: (t: TripRecord) => t["Vehicle type"] || "—" },
+          { key: "vehicleNo", header: "Vehicle No.", render: (t: TripRecord) => t["Vehicle No."] || "—" },
+          { key: "driverName", header: "Driver Name", render: (t: TripRecord) => t["Driver Name"] || "—" },
+        ]),
   ];
 
   function itemRowKey(r: Record<string, string>) {

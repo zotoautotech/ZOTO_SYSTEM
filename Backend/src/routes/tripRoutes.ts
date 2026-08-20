@@ -297,20 +297,39 @@ tripsRouter.get("/", anyOrderModule, async (req, res, next) => {
       return res.json(products);
     }
 
-    // Joins in a "Customer Name" per trip (Transport_SO is the only trip-family tab still
-    // keyed on the live sheet's un-fixed "Cutomer Name" spelling — see CLAUDE.md) so the
-    // frontend can group the pending queue by party instead of Send Through, matching the
-    // old CRR reference's own Pending Tax Invoice list. TRANSPORT itself carries no customer
-    // column (a trip can span several orders/customers at once), so this reads it off the
-    // FIRST attached order for that trip — good enough for the common one-customer-per-trip
-    // case the reference view assumes; a genuinely multi-customer trip just shows the first.
+    // Joins in the order-level fields the old CRR reference's own pending queues show
+    // (Customer Name, Buyer GSTIN, Freight Paid by/at, Transport Mode, Transporter GSTIN,
+    // Invoice Discount/Basic/Tax/Total Amount) per trip — TRANSPORT itself only carries the
+    // vehicle-level snapshot (Vehicle type/No./Freight Charge etc., already on `filtered`),
+    // never anything order-specific, since a trip can carry several orders at once. Reads the
+    // FIRST attached order for that trip (via Transport_SO, then ORDER_PUNCH for the amount
+    // fields Transport_SO doesn't carry) — good enough for the common one-customer-per-trip
+    // case these reference views assume; a genuinely multi-order trip just shows the first.
+    // "Cutomer Name" (typo) is Transport_SO's own live header — see CLAUDE.md.
     const tripIds = new Set(filtered.map((r) => r.Transport_ID));
-    const soRows = (await readTable(env.sheets.transactions, "Transport_SO")).filter((r) => tripIds.has(r.Transport_ID));
-    const customerByTrip = new Map<string, string>();
+    const [soRows, punchRows] = await Promise.all([
+      readTable(env.sheets.transactions, "Transport_SO"),
+      readTable(env.sheets.transactions, ORDER_TAB),
+    ]);
+    const punchByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, punchFromSheet(r)]));
+    const snapshotByTrip = new Map<string, SheetRow>();
     for (const row of soRows) {
-      if (!customerByTrip.has(row.Transport_ID)) customerByTrip.set(row.Transport_ID, row["Cutomer Name"] || row["Customer Name"] || "");
+      if (!tripIds.has(row.Transport_ID) || snapshotByTrip.has(row.Transport_ID)) continue;
+      const order = punchByOrderId.get(row.ORDER_ID);
+      snapshotByTrip.set(row.Transport_ID, {
+        "Customer Name": row["Cutomer Name"] || row["Customer Name"] || "",
+        "Buyer GSTIN No.": row["Buyer GSTIN No."] || "",
+        "Freight Paid by": row["Freight Paid by"] || "",
+        "Freight Paid at": row["Freight Paid at"] || "",
+        "Transport Mode": row["Preferred Transportation Mode"] || "",
+        "Transporter GSTIN": row["Transporter GSTIN"] || "",
+        "Invoice Discount (Rs)": order?.INVOICE_DISCOUNT_RS || "",
+        "Basic Amount": order?.BASIC_AMOUNT || "",
+        "Tax Amount": order?.TAX_AMOUNT || "",
+        "Total Amount": order?.TOTAL_AMOUNT || "",
+      });
     }
-    const enriched = filtered.map((r) => ({ ...r, "Customer Name": customerByTrip.get(r.Transport_ID) || "" }));
+    const enriched = filtered.map((r) => ({ ...r, ...(snapshotByTrip.get(r.Transport_ID) ?? { "Customer Name": "" }) }));
 
     res.json(enriched);
   } catch (err) {

@@ -47,6 +47,15 @@ export interface TripStageDef {
    * `!showCompleted`, since the Completed view already shows this stage's own recorded data
    * instead of the raw trip Status. */
   pendingStatusLabel?: string;
+  /** Replaces the trip-level pending table's default column set (Vehicle Arrange for/Send
+   * Through/Transporter Name/Vehicle type/Vehicle No./Driver Name) with this stage's own —
+   * matching the old CRR reference's own per-stage pending list, e.g. Tax Invoice showing
+   * Buyer GSTIN/Freight Paid by/Basic-Tax-Total Amount instead of generic vehicle columns.
+   * `field` is the literal key GET /transport-trips already enriches every trip row with —
+   * see tripRoutes.ts's `snapshotByTrip` join. Status/Timestamp/Transport ID always render
+   * first regardless, same as the default column set. Only set where actually asked for
+   * (currently just tax-invoice) — every other stage keeps the generic vehicle columns. */
+  pendingColumns?: StageColumn[];
 }
 
 /**
@@ -119,6 +128,24 @@ export const TRIP_STAGES: TripStageDef[] = [
       { header: "E-Way Bill Applicable", field: "E-Way Bill Applicable" },
       { header: "E-Way Bill No.", field: "E-Way Bill No." },
       { header: "Vehicle No.", field: "Vehicle No." },
+    ],
+    pendingColumns: [
+      { header: "Buyer GSTIN No.", field: "Buyer GSTIN No." },
+      { header: "Freight Paid by", field: "Freight Paid by" },
+      { header: "Freight Paid at", field: "Freight Paid at" },
+      { header: "Transport Mode", field: "Transport Mode" },
+      { header: "Transporter Name", field: "Transporter Name" },
+      { header: "Transporter GSTIN", field: "Transporter GSTIN" },
+      { header: "Vehicle type", field: "Vehicle type" },
+      { header: "Vehicle No.", field: "Vehicle No." },
+      { header: "Vehicle Size (Ft)", field: "Vehicle Size (Ft)" },
+      { header: "Freight Applicable", field: "Freight Applicable On Invoice?" },
+      { header: "Freight Charge", field: "Freight Charge" },
+      { header: "Freight GST Applicable", field: "Freight GST Applicable" },
+      { header: "Invoice Discount (Rs)", field: "Invoice Discount (Rs)" },
+      { header: "Basic Amount", field: "Basic Amount" },
+      { header: "Tax Amount", field: "Tax Amount" },
+      { header: "Total Amount", field: "Total Amount" },
     ],
   },
   {
