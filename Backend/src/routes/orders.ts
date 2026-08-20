@@ -535,7 +535,20 @@ ordersRouter.get("/dispatch-approvals/items", requireModule("dispatch-approval")
       readTable(env.sheets.transactions, "Dispatch Items Approval"),
     ]);
     const punchRows = await revertOrphanedDispatchApproval(punchRowsRaw.map(punchFromSheet));
-    const orders = punchRows.filter((o) => o.STATUS === "DISPATCH APPROVAL");
+    // A strict STATUS === "DISPATCH APPROVAL" check silently hid an item's still-undecided
+    // balance the moment ANY round of ANY item on that same order cleared PDI and got
+    // attached to a trip — trip attachment cascades ORDER_PUNCH.STATUS forward for the whole
+    // order (by design, a cleared round travels on its own without waiting on its siblings,
+    // see tripRoutes.ts's unattachedPdiRounds), which can push STATUS straight past "DISPATCH
+    // APPROVAL COMPLETED" to "TRANSPORT ASSIGNED"/"TRANSPORT REACHED"/etc. even while a
+    // DIFFERENT item — or the same item's own remaining balance — was never decided at all.
+    // Broadened the same way this project's other STATUS-drift bugs were fixed (Punch Order's
+    // Completed filter, this same file's dispatch-approvals trip-level GET): exclude only the
+    // statuses an order genuinely hasn't reached Dispatch Approval at yet, not everything past
+    // one specific status value.
+    const orders = punchRows.filter(
+      (o) => !["", "PENDING", "PENDING SALE ORDER", "SALE ORDER", "CANCELLED"].includes(o.STATUS || "")
+    );
     const orderById = new Map(orders.map((o) => [o.ORDER_ID, o]));
     // Dispatch Approval is per-item — an order can sit at STATUS "DISPATCH APPROVAL" with
     // some of its items already fully decided (order only flips to COMPLETED once every
