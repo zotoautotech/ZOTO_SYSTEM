@@ -59,7 +59,7 @@ export function TripSubTableView({ kind }: { kind: "dispatches" | "items" }) {
       ) : moduleKey === "tax-invoice" ? (
         <DataTable
           columns={TAX_INVOICE_ITEM_COLUMNS}
-          rows={data.taxInvoiceItems}
+          rows={data.taxInvoiceItems ?? []}
           getRowKey={(row) => `${row.partName}-${row.qty}-${row.price}`}
         />
       ) : (

@@ -76,7 +76,10 @@ export async function getTrip(transportId: string) {
     orderSnapshot: Record<string, string> | null;
     dispatches: TripDispatchRow[];
     items: TripItemDispatchRow[];
-    taxInvoiceItems: TripTaxInvoiceItemRow[];
+    // Optional defensively — absent entirely if this request happens to hit a backend
+    // deploy older than this frontend bundle (two separate Vercel projects, deployed
+    // separately). Every consumer defaults this to [] rather than assuming it's present.
+    taxInvoiceItems?: TripTaxInvoiceItemRow[];
     stockReleaseDone: boolean;
     taxInvoiceDone: boolean;
     gatePassFileId?: string;

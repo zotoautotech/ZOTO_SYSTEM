@@ -187,7 +187,11 @@ export function TripDetail() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!data) return <p className="text-muted">Trip not found</p>;
 
-  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
+  // taxInvoiceItems defaults to [] defensively — if the backend serving this request is on
+  // an older deploy than this frontend bundle (a real ordering hazard across two separate
+  // Vercel projects), the field would be missing entirely and every .reduce/.length call
+  // below would throw, white-screening the whole page with no error boundary to catch it.
+  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems = [], stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
   const stage = getTripStage(moduleKey);
   const order = orders[0];
   // orderSnapshot (Transport_SO's own row) carries several fields ORDER_PUNCH doesn't —
