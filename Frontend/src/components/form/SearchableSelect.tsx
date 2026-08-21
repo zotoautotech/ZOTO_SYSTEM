@@ -219,7 +219,13 @@ export function SearchableSelect({
           )}
           {filtered.length === 0 && (
             <div style={{ padding: 14, fontSize: 13, color: "var(--color-text-muted)" }}>
-              No matches
+              {/* The collapsed trigger already shows "Loading…" while the parent query is in
+                  flight (see the closed-state render above), but that text disappears the
+                  instant the dropdown is opened — leaving "No matches" as the only visible
+                  message even while the real list just hasn't arrived yet. A doer opening
+                  this before the ~5-7s cold customer-master fetch resolves would read that
+                  as "there are no customers," not "still loading." */}
+              {loading ? "Loading…" : "No matches"}
             </div>
           )}
           {filtered.map((opt, i) => {
