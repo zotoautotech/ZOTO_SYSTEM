@@ -125,6 +125,18 @@ checklistRouter.post("/tasks", async (req, res, next) => {
   }
 });
 
+/** Every Planned/date-ish cell in this sheet is entered as IST wall-clock time (ZOTO is an
+ * Indian company) — but Vercel's Node runtime defaults to UTC, so `new Date(y, m, d, h, mi,
+ * s)` (which interprets its arguments in the *server's* local timezone) silently reads a
+ * sheet value like "20/08/2026 09:40:00 IST" as if it were 09:40 UTC instead of the true
+ * 04:10 UTC — a 5.5-hour error that can make an already-overdue task look "not due yet" for
+ * hours after IST midnight, or the reverse near IST evening. `IST_OFFSET_MS` corrects this:
+ * build the wall-clock value as if it were UTC (`Date.UTC`, unambiguous, no server-timezone
+ * dependency) then subtract the offset to land on the real UTC instant that IST moment
+ * actually is. Every Planned-date comparison in this file must go through here — never
+ * `new Date(y, m, d, ...)` / bare `Date.parse` directly on a sheet value again. */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 /** Google Sheets returns date/datetime cell values as plain text, but NOT always in one
  * consistent format — some rows come back as an ISO-ish string `Date.parse` can read fine
  * ("2026-01-09T10:56:00"), others as a locale-formatted "DD/MM/YYYY HH:mm:ss" plain string
@@ -135,7 +147,9 @@ checklistRouter.post("/tasks", async (req, res, next) => {
  * was being treated as "always due" as a fail-safe, which is exactly how November/December/
  * future-dated rows leaked into the pending list — the fail-safe fired on every row in the
  * locale format, not just genuinely blank ones. Explicit day-first parsing fixes both bugs
- * at once instead of trusting Date.parse's ambiguous guessing. */
+ * at once instead of trusting Date.parse's ambiguous guessing. Both branches below build the
+ * instant via `Date.UTC` + `IST_OFFSET_MS`, not the server-local `new Date(...)`/bare
+ * `Date.parse` — see that constant's own comment for why. */
 function parsePlannedDate(planned: string): number | null {
   if (!planned) return null;
 
@@ -150,7 +164,27 @@ function parsePlannedDate(planned: string): number | null {
       if (isPm && hour < 12) hour += 12;
       if (!isPm && hour === 12) hour = 0;
     }
-    const ms = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, Number(min), Number(sec ?? 0)).getTime();
+    const ms =
+      Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd), hour, Number(min), Number(sec ?? 0)) - IST_OFFSET_MS;
+    return Number.isNaN(ms) ? null : ms;
+  }
+
+  // ISO-ish strings from Sheets ("2026-01-09T10:56:00") carry no timezone suffix, so they're
+  // still an IST wall-clock value, not UTC — same correction applies. A string that DOES
+  // carry an explicit offset/`Z` (rare from this source, but possible) is trusted as-is.
+  const hasExplicitOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(planned.trim());
+  if (hasExplicitOffset) {
+    const parsed = Date.parse(planned);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  const isoMatch = planned.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (isoMatch) {
+    const [, yyyy, mm, dd, hh, min, sec] = isoMatch;
+    const ms =
+      Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min), Number(sec ?? 0)) -
+      IST_OFFSET_MS;
     return Number.isNaN(ms) ? null : ms;
   }
 

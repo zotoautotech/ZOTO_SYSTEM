@@ -89,6 +89,22 @@ instead of trusting `Date.parse`'s guessing — an unparseable row used to fail-
 pending list. Reuse `parsePlannedDate()` (or its pattern) anywhere else this app reads a
 Planned/date-ish cell back from Sheets.
 
+**Every Planned timestamp is IST wall-clock time, not UTC — `parsePlannedDate()` must build
+it via `Date.UTC(...) - IST_OFFSET_MS`, never `new Date(y, m, d, ...)` or bare
+`Date.parse`.** `new Date(year, month, day, hour, min, sec)` interprets its arguments in the
+*server's* local timezone — Vercel's Node runtime defaults to UTC — so a sheet value like
+`"20/08/2026 09:40:00"` (meant as 09:40 **IST**) was silently read as 09:40 **UTC**, a
+5.5-hour error. This made an already-overdue task look "not due yet" for hours after IST
+midnight (a real production report: a doer insisted "today is 21/08" while the app still
+showed nothing pending for a task planned `20/08/2026 09:40:00`). `IST_OFFSET_MS = 5.5 *
+60 * 60 * 1000` now gets subtracted after building the instant with the unambiguous
+`Date.UTC()` (no server-timezone dependency) — applied to both the day-first-regex branch
+and a new ISO-string branch (`"2026-01-09T10:56:00"` has no timezone suffix either, so it's
+just as much an IST value and needs the exact same correction; only a string carrying an
+explicit `Z`/`±HH:MM` offset is trusted as-is). **Any future code that reads a Planned/date
+cell must go through `parsePlannedDate()`/`isDueNow()` — never construct a `Date` from a raw
+sheet string directly**, or this exact timezone bug reappears.
+
 ## Admin permission model — `Backend/src/routes/checklistPermissions.ts`
 
 This app has its **own** `USERS` tab, live inside `ZOTO/CHECKLIST MASTER-FY26-27` itself
