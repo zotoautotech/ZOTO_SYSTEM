@@ -1,8 +1,8 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DataTable, type Column } from "../../components/DataTable";
-import { getTrip, type TripDispatchRow, type TripItemDispatchRow } from "../../lib/tripsApi";
-import { formatTimestamp } from "../../lib/format";
+import { getTrip, type TripDispatchRow, type TripItemDispatchRow, type TripTaxInvoiceItemRow } from "../../lib/tripsApi";
+import { formatTimestamp, formatCurrency } from "../../lib/format";
 
 const DISPATCH_COLUMNS: Column<TripDispatchRow>[] = [
   { key: "customer", header: "Cutomer Name", render: (row) => row.customerName || row.orderId },
@@ -17,6 +17,19 @@ const ITEM_COLUMNS: Column<TripItemDispatchRow>[] = [
   { key: "qty", header: "Quantity", render: (row) => row.loadQty || "—" },
   { key: "unit", header: "Unit", render: (row) => row.unit || "—" },
   { key: "boxes", header: "Load Boxes", render: (row) => row.loadBoxes || "—" },
+];
+
+// Matches TripDetail.tsx's own "All Products of this Tax Invoice" TableCard columns exactly —
+// this is that same card's Expand target, just for the tax-invoice stage specifically.
+const TAX_INVOICE_ITEM_COLUMNS: Column<TripTaxInvoiceItemRow>[] = [
+  { key: "partName", header: "Part Name", render: (row) => row.partName || "—" },
+  { key: "qty", header: "Qty", render: (row) => row.qty || "—" },
+  { key: "unit", header: "UOM", render: (row) => row.unit || "—" },
+  { key: "price", header: "Price", render: (row) => formatCurrency(row.price) },
+  { key: "basicAmount", header: "Basic Amount", render: (row) => formatCurrency(row.basicAmount) },
+  { key: "taxAmount", header: "Tax Amount", render: (row) => formatCurrency(row.taxAmount) },
+  { key: "totalAmount", header: "Total Amount", render: (row) => formatCurrency(row.totalAmount) },
+  { key: "remarks", header: "Remarks", render: (row) => row.remarks || "—" },
 ];
 
 /** Full-page "Expand" view for TripDetail.tsx's S.O Dispatches / S.O Items Dispatches table
@@ -43,6 +56,12 @@ export function TripSubTableView({ kind }: { kind: "dispatches" | "items" }) {
       </button>
       {kind === "dispatches" ? (
         <DataTable columns={DISPATCH_COLUMNS} rows={data.dispatches} getRowKey={(row) => row.transportSoId || row.orderId} />
+      ) : moduleKey === "tax-invoice" ? (
+        <DataTable
+          columns={TAX_INVOICE_ITEM_COLUMNS}
+          rows={data.taxInvoiceItems}
+          getRowKey={(row) => `${row.partName}-${row.qty}-${row.price}`}
+        />
       ) : (
         <DataTable columns={ITEM_COLUMNS} rows={data.items} getRowKey={(row) => `${row.partNo}-${row.loadQty}-${row.loadBoxes}`} />
       )}

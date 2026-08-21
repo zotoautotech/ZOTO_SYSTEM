@@ -359,6 +359,7 @@ export function TripDetail() {
               count={taxInvoiceItems.length}
               rows={taxInvoiceItems}
               getRowKey={(row, i) => `${row.partName}-${i}`}
+              onExpand={() => navigate(`/modules/${moduleKey}/${transportId}/items`)}
               columns={[
                 { header: "Part Name", render: (row) => row.partName || "—" },
                 { header: "Qty", render: (row) => row.qty || "—" },
