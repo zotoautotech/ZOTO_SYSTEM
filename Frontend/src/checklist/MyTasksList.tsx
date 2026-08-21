@@ -108,6 +108,14 @@ export function MyTasksList() {
 
   return (
     <div>
+      {/* TEMPORARY debug banner — remove once the per-doer scoping mismatch is confirmed
+          fixed. Always visible (not just on empty) so we can tell whether the server is
+          actually running the per-doer-scoped code or an older unfiltered build. */}
+      {data && (
+        <p style={{ background: "#fff3cd", border: "1px solid #e0c060", padding: "6px 10px", fontSize: 12, marginBottom: 12 }}>
+          DEBUG: employeeId="{data._debugEmployeeId}" isAdmin={String(data._debugIsAdmin)} rowCount={rawTasks.length}
+        </p>
+      )}
       {isMobile ? (
         <div style={{ padding: "8px 0 24px" }}>
           {tasks.map((row) => (
