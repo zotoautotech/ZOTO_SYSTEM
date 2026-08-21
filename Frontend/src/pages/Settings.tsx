@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { isAxiosError } from "axios";
+import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 function PersonIcon() {
@@ -318,6 +319,22 @@ export function Settings() {
         <InfoRow icon={<MailIcon />} label="ID" value={user?.employeeId} />
         <InfoRow icon={<BadgeIcon />} label="Role" value={role} />
       </div>
+
+      {user?.modules === "ALL" && (
+        <div className="card" style={{ padding: "8px 24px 24px" }}>
+          <div style={{ padding: "16px 0", borderBottom: "1px solid var(--color-border)" }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Admin</h3>
+            <p className="text-muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+              Tools only visible to Admin accounts.
+            </p>
+          </div>
+          <div style={{ paddingTop: 16 }}>
+            <Link to="/settings/permission-audit" className="btn">
+              Permission Audit
+            </Link>
+          </div>
+        </div>
+      )}
 
       <ChangePasswordCard />
     </div>

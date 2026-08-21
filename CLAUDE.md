@@ -323,6 +323,29 @@ If a future stage genuinely needs a "wider module view, narrower module write" s
 driven `requireModule` gate — but don't add it without being asked; the sheet-defined
 permission is meant to be the single source of truth for who can do what in a module.
 
+**HOME tile visibility (parent) and actual app access (child) are two separate,
+independently hand-edited permission sources that can silently drift out of sync** — this is
+a real, confirmed production bug pattern, not a hypothetical. HOME's own `ZOTO HOME` sheet
+(`Backend/src/routes/home.ts`, `Email Permisssions/ Employee ID` column) only controls
+whether an employee sees/can click a HOME tile at all; it has **no relationship** to whether
+`requireModule`/`requireAnyModule` will actually let them use the app once inside — that's
+governed entirely separately by the Sales CRR transactions sheet's own `USERS
+.Permissions_Process`. An employee can be listed in HOME's allowlist for an app (parent: yes)
+while their `Permissions_Process` doesn't grant that module (child: no) — they see and click
+the tile, then every API call inside 403s silently, and the resulting empty state looks
+identical to a legitimate "nothing to show" result. This exact case hit **five different
+doers** (Abhishek Sharma, Jyoti, Kashish, Sumit Kumar, Deepak) for the Checklist app
+simultaneously before being caught — confirmed live via `GET /api/v1/admin/permission-audit`
+(admin-only, `Backend/src/routes/permissionAudit.ts`; UI at `/settings/permission-audit`,
+linked from an Admin-only section in `Settings.tsx`). This is a **read-only report, not an
+editor** — the fix for a flagged mismatch is still hand-editing the relevant
+`Permissions_Process` cell, same convention as every other permission column in this app;
+don't build an in-app permission editor without being asked. The audit currently only covers
+Sales CRR and Checklist (the two HOME apps with a real module system behind them) — extend
+`AUDITED_APPS` in `permissionAudit.ts` (one line: `homeNamePrefix` + a `hasChildAccess`
+predicate) once another HOME app graduates from "Coming Soon" to a real app with its own
+module keys.
+
 ## Google Sheets (source of truth)
 
 Four spreadsheets, IDs in `Backend/.env` (`ZOTO_TRANSACTIONS_SHEET_ID`,

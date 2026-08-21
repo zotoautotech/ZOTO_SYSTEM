@@ -8,6 +8,7 @@ import { Login } from "./pages/Login";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { TermsOfUse } from "./pages/TermsOfUse";
 import { Settings } from "./pages/Settings";
+import { PermissionAudit } from "./pages/PermissionAudit";
 import { useAuth } from "./lib/auth";
 import { OrderPunchList } from "./modules/order-punch/OrderPunchList";
 import { OrderPunchForm } from "./modules/order-punch/OrderPunchForm";
@@ -59,6 +60,7 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="home/:view" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="settings/permission-audit" element={<PermissionAudit />} />
         <Route path="checklist" element={<MyTasksList />} />
         <Route path="checklist/assigned" element={<AssignedChecklistList />} />
         <Route path="checklist/dashboard" element={<DashboardList />} />
