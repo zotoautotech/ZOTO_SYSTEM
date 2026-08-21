@@ -197,6 +197,15 @@ export function TripDetail() {
   // field entirely (Payment Type, Basic/Tax/Total/Invoice Discount amounts).
   const snap = (field: string) => orderSnapshot?.[field] || "";
   const isTaxInvoice = stage?.key === "tax-invoice";
+  // order.BASIC_AMOUNT/TAX_AMOUNT/TOTAL_AMOUNT are the ORDER's own lifetime totals across ALL
+  // its items at their FULL order quantity — correct for "what this order is worth overall,"
+  // but wrong for "what THIS invoice covers" whenever a dispatch is split across rounds (an
+  // item can have some of its quantity on this trip's invoice and the rest on a future one).
+  // taxInvoiceItems is already scaled per-item to this trip's own load quantity (see
+  // tripRoutes.ts's scaledItemFields), so summing those gives this invoice's real total.
+  const invoiceBasicAmount = taxInvoiceItems.reduce((sum, it) => sum + (Number(it.basicAmount) || 0), 0);
+  const invoiceTaxAmount = taxInvoiceItems.reduce((sum, it) => sum + (Number(it.taxAmount) || 0), 0);
+  const invoiceTotalAmount = taxInvoiceItems.reduce((sum, it) => sum + (Number(it.totalAmount) || 0), 0);
   const StageForm = stage ? STAGE_FORM_BY_KEY[stage.key] : undefined;
   // Stock Release / Tax Invoice run in parallel off the same REACHED status — Status alone
   // can't tell "still pending this branch" apart from "done this branch, other one still
@@ -251,11 +260,11 @@ export function TripDetail() {
           {isTaxInvoice && (
             <Section title="GST Details">
               <Field label="Invoice Discount (Rs)" value={formatCurrency(order?.INVOICE_DISCOUNT_RS)} />
-              <Field label="Basic Amount" value={formatCurrency(order?.BASIC_AMOUNT)} />
-              {/* Blank on System 2 (tax-free) — order.TAX_AMOUNT only exists on System 1's
-                  ORDER_PUNCH, not fabricated here. */}
-              <Field label="Tax Amount" value={formatCurrency(order?.TAX_AMOUNT)} />
-              <Field label="Total Amount" value={formatCurrency(order?.TOTAL_AMOUNT)} />
+              <Field label="Basic Amount" value={formatCurrency(invoiceBasicAmount)} />
+              {/* Blank on System 2 (tax-free) — Tax Amount only ever has anything to sum on
+                  System 1's ORDER_ITEMS, not fabricated here. */}
+              <Field label="Tax Amount" value={formatCurrency(invoiceTaxAmount)} />
+              <Field label="Total Amount" value={formatCurrency(invoiceTotalAmount)} />
             </Section>
           )}
 
