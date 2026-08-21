@@ -5,7 +5,7 @@ import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
-import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { getDelayColor, listMyTasksDebug, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 
 /** The department's task queue (Accounts department, for now) — one row per task instance
@@ -32,11 +32,12 @@ export function MyTasksList() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
 
-  const { data: rawTasks = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["checklist", "mine", showCompleted],
-    queryFn: () => listMyTasks(showCompleted ? "COMPLETED" : undefined),
+    queryFn: () => listMyTasksDebug(showCompleted ? "COMPLETED" : undefined),
     placeholderData: keepPreviousData,
   });
+  const rawTasks = data?.tasks ?? [];
   // Hides stray blank rows (empty Task/no data at all) — Sheets sometimes has trailing
   // blank rows or rows left over from bulk edits that shouldn't render as real tasks.
   const tasks = rawTasks.filter((t) => t.TASK?.trim());
@@ -103,7 +104,7 @@ export function MyTasksList() {
     ? "Loading…"
     : showCompleted
     ? "No completed tasks yet."
-    : "No pending tasks — you're all caught up.";
+    : `No pending tasks — you're all caught up. (debug: employeeId="${data?._debugEmployeeId}" isAdmin=${data?._debugIsAdmin})`;
 
   return (
     <div>
