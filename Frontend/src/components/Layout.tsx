@@ -255,7 +255,9 @@ export function Layout() {
         ? [{ label: "HOME", to: "/" }]
         : pathSegments[0] === "checklist"
           ? [{ label: "CHECKLIST", to: "/checklist" }]
-          : [{ label: "SALES CRR", to: "/modules" }];
+          : pathSegments[0] === "settings"
+            ? [{ label: "HOME", to: "/" }]
+            : [{ label: "SALES CRR", to: "/modules" }];
   // Dispatch Approval doers shouldn't be able to click through to the full order (see
   // plans/pure-puzzling-gray.md) — the order-financials view is hidden there now, but the
   // intermediate "ORD-xxxx" / "Order Punch Items View" crumbs on this module's own per-item
