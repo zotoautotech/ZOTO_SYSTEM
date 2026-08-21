@@ -138,6 +138,23 @@ a Sales CRR Admin flag does not carry over. This split was a deliberate user dec
 though both apps share the same login session — don't collapse the two permission sources
 into one without asking again.
 
+**Base access to `/checklist/*` at all is gated separately, by the Sales CRR sheet's own
+`USERS.Permissions_Process` containing `"Checklist"`** (`requireModule("checklist")` on the
+router, reading `env.sheets.transactions`'s `USERS` tab via `getPermissions()` —
+`Backend/src/services/permissions.ts`) — **not** the Checklist-specific `USERS` tab above,
+which only ever governs the admin-only-views flag. A doer can look correctly set up in the
+Checklist app's own `USERS` tab (e.g. `"Home,Checklist"`) while their real Sales CRR
+`USERS` row's `Permissions_Process` is missing `"Checklist"` entirely — every
+`/checklist/*` request then 403s for them, and the frontend's empty-state ("No pending
+tasks — you're all caught up.") looks exactly like a legitimate empty result, giving no
+visible sign anything is wrong. This cost a long debugging session (chasing timezone/
+row-filter bugs that were real but irrelevant, since the request was being rejected before
+reaching any of that code) before `DevTools → Network → mine → Status 403` surfaced the
+actual cause. **If a doer reports seeing nothing in Checklist, check the Network tab for a
+403 on `/tasks/mine` before assuming a data/logic bug** — then fix it by adding `,Checklist`
+to that doer's `Permissions_Process` cell in the real Sales CRR `USERS` tab, not by editing
+any code.
+
 ## Frontend — `Frontend/src/checklist/`
 
 Routes (`App.tsx`):

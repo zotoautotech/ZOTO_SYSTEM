@@ -266,11 +266,7 @@ checklistRouter.get("/tasks/mine", async (req, res, next) => {
       }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
-    // TEMPORARY diagnostic fields (remove once the per-doer scoping mismatch is confirmed
-    // fixed) — surfaces exactly what employeeId/admin flag the server resolved for this
-    // caller, since the data itself checks out clean but a specific doer still sees zero
-    // rows in production.
-    res.json({ tasks: rows, _debugEmployeeId: employeeId, _debugIsAdmin: admin });
+    res.json({ tasks: rows });
   } catch (err) {
     next(err);
   }

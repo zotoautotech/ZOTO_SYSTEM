@@ -59,18 +59,6 @@ export async function listMyTasks(status?: "COMPLETED") {
   return res.data.tasks;
 }
 
-// TEMPORARY — remove once the per-doer scoping mismatch is confirmed fixed (see
-// checklist.ts's matching _debugEmployeeId/_debugIsAdmin fields). Surfaces exactly what
-// employeeId/admin flag the server resolved for the current session, visible in the UI
-// without needing DevTools.
-export async function listMyTasksDebug(status?: "COMPLETED") {
-  const res = await api.get<{ tasks: ChecklistTaskRecord[]; _debugEmployeeId: string; _debugIsAdmin: boolean }>(
-    "/checklist/tasks/mine",
-    { params: status ? { status } : undefined }
-  );
-  return res.data;
-}
-
 export interface CompleteTaskPayload {
   status: string;
   attachment: "Yes" | "No";
