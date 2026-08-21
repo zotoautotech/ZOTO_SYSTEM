@@ -24,6 +24,11 @@ export interface ChecklistTaskRecord {
   ATTACHMENT_FILE: string;
   DELETE_STATUS: string;
   TASK_LIST_ID: string;
+  /** `NOW() - Planned` in milliseconds as a string (backend-computed, IST-aware — see
+   * checklist.ts's delayMs()/parsePlannedDate()) — positive once overdue, negative while
+   * there's still time before the deadline. Feed this to getDelayColor(), don't re-parse
+   * PLANNED client-side. */
+  DELAY_MS: string;
   [key: string]: string;
 }
 
@@ -113,4 +118,22 @@ export interface FollowUpPayload {
 export async function submitFollowUp(taskId: string, payload: FollowUpPayload) {
   const res = await api.post(`/checklist/tasks/${encodeURIComponent(taskId)}/followup`, payload);
   return res.data;
+}
+
+/** Old AppSheet reference's own Delay Duration conditional-format rule, ported literally:
+ * `SHOW YELLOW WHEN AND([Delay Duration] > "-000:15:00", [Delay Duration] <= "000:00:00")`,
+ * `SHOW RED WHEN [Delay Duration] > "000:00:00"` — i.e. yellow inside the 15-minute window
+ * before the deadline, red once actually overdue, no color otherwise. Reads the backend's
+ * pre-computed `DELAY_MS` (see checklistApi's `ChecklistTaskRecord.DELAY_MS` doc) rather
+ * than re-parsing `PLANNED` here — that parsing is IST-timezone-sensitive (see
+ * `Backend/src/routes/checklist.ts`'s `parsePlannedDate()`), and duplicating it client-side
+ * would just be a second place for that exact bug class to reappear. */
+export function getDelayColor(delayMsRaw: string | undefined): string | undefined {
+  if (!delayMsRaw) return undefined;
+  const delayMs = Number(delayMsRaw);
+  if (Number.isNaN(delayMs)) return undefined;
+  const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+  if (delayMs > 0) return "var(--color-error)"; // the app's one established red/error token
+  if (delayMs > -FIFTEEN_MIN_MS) return "#b98900"; // no --color-warning token exists yet
+  return undefined;
 }

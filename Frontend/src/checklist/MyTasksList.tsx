@@ -5,7 +5,7 @@ import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
-import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 
 /** The department's shared task queue (Accounts department, for now) — one row per task
@@ -46,7 +46,18 @@ export function MyTasksList() {
   const columns: Column<ChecklistTaskRecord>[] = [
     { key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" },
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
-    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
+    {
+      key: "delayDuration",
+      header: "Delay Duration",
+      render: (row) => {
+        const color = getDelayColor(row.DELAY_MS);
+        return color ? (
+          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
+        ) : (
+          row.DELAY_DURATION || "—"
+        );
+      },
+    },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
     { key: "frequency", header: "Task Frequency", render: (row) => row.FREQUENCY || "—" },
     ...(showCompleted

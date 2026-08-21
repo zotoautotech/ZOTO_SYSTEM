@@ -105,6 +105,20 @@ explicit `Z`/`±HH:MM` offset is trusted as-is). **Any future code that reads a 
 cell must go through `parsePlannedDate()`/`isDueNow()` — never construct a `Date` from a raw
 sheet string directly**, or this exact timezone bug reappears.
 
+**Delay Duration cell coloring** — the old AppSheet reference's own conditional-format rule,
+ported literally: `SHOW YELLOW WHEN AND([Delay Duration] > "-000:15:00", [Delay Duration] <=
+"000:00:00")`, `SHOW RED WHEN [Delay Duration] > "000:00:00"` (yellow inside the 15-minute
+window before the deadline, red once actually overdue, no color otherwise). Backend now also
+computes `delayMs()` (raw `NOW() - Planned` in ms, reusing the same IST-aware
+`parsePlannedDate()`) alongside the existing human-readable `delayDuration()` string, exposed
+as `DELAY_MS` on every row `GET /tasks/mine` and `GET /admin/pending/:doerId` return.
+Frontend's `getDelayColor(row.DELAY_MS)` (`checklistApi.ts`) applies the yellow/red threshold
+— **always read `DELAY_MS`, never re-parse `PLANNED` client-side**, since that parsing is the
+exact IST-timezone-sensitive logic the bug above was about; duplicating it in the frontend
+would just create a second place for it to silently drift out of sync. Applied to the "Delay
+Duration" column in `MyTasksList.tsx`, `DoerPendingList.tsx`, and
+`AccountPendingDataList.tsx` — any future table showing this column should do the same.
+
 ## Admin permission model — `Backend/src/routes/checklistPermissions.ts`
 
 This app has its **own** `USERS` tab, live inside `ZOTO/CHECKLIST MASTER-FY26-27` itself

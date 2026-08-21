@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DataTable, type Column } from "../components/DataTable";
 import { formatTimestamp } from "../lib/format";
 import { useIsMobile } from "../lib/responsive";
-import { listPendingForDoer, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { getDelayColor, listPendingForDoer, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { FollowUpForm } from "./FollowUpForm";
 
 /** Admin drill-down from the Dashboard — one doer's pending task instances, matching the
@@ -27,7 +27,18 @@ export function DoerPendingList() {
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
     { key: "frequency", header: "Frequency", render: (row) => row.FREQUENCY || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
-    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
+    {
+      key: "delayDuration",
+      header: "Delay Duration",
+      render: (row) => {
+        const color = getDelayColor(row.DELAY_MS);
+        return color ? (
+          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
+        ) : (
+          row.DELAY_DURATION || "—"
+        );
+      },
+    },
     {
       key: "updateRemark",
       header: "",

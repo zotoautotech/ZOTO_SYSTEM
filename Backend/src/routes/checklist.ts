@@ -203,6 +203,18 @@ function isDueNow(planned: string): boolean {
   return plannedMs <= Date.now();
 }
 
+/** Raw `NOW() - Planned` in milliseconds — positive once overdue, negative while there's
+ * still time before the deadline, `null` when unparseable. This is what the frontend's
+ * Delay Duration color rule (yellow within 15 min of due, red once overdue — the old
+ * AppSheet reference's own conditional-format rule, ported literally) keys off, rather than
+ * re-parsing `Planned` a second time client-side — this file already owns the one correct,
+ * IST-aware parse (see `parsePlannedDate()`/`IST_OFFSET_MS`); duplicating that logic in the
+ * frontend would just be a second place for the exact timezone bug fixed above to recur. */
+function delayMs(planned: string): number | null {
+  const plannedMs = parsePlannedDate(planned);
+  return plannedMs === null ? null : Date.now() - plannedMs;
+}
+
 /** Formats a "days/hours overdue" style string from Planned -> now, matching the old
  * AppSheet "Delay Duration" virtual column (=NOW()-[Planned]) shown on the CHECKLIST
  * Account pending view. Blank once the task instance has no parseable Planned date. */
@@ -242,6 +254,7 @@ checklistRouter.get("/tasks/mine", async (req, res, next) => {
         ...r,
         FULL_NAME: nameLookup.get(r.EMAIL?.trim() ?? "") ?? r.EMAIL ?? "",
         DELAY_DURATION: delayDuration(r.PLANNED),
+        DELAY_MS: String(delayMs(r.PLANNED) ?? ""),
       }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
@@ -382,7 +395,14 @@ checklistRouter.get("/admin/pending/:doerId", requireChecklistAdmin, async (req,
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
       .filter((r) => r.EMAIL?.trim() === doerId && !r.STATUS?.trim() && isDueNow(r.PLANNED))
-      .map((r): SheetRow => ({ ...r, FULL_NAME: fullName, DELAY_DURATION: delayDuration(r.PLANNED) }));
+      .map(
+        (r): SheetRow => ({
+          ...r,
+          FULL_NAME: fullName,
+          DELAY_DURATION: delayDuration(r.PLANNED),
+          DELAY_MS: String(delayMs(r.PLANNED) ?? ""),
+        })
+      );
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
     res.json({ tasks: rows });

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
 import { formatTimestamp } from "../lib/format";
 import { useIsMobile } from "../lib/responsive";
-import { listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { FollowUpForm } from "./FollowUpForm";
 
 /** Drill-down data table from `AccountDashboardExpand.tsx`'s "Data" button — every pending
@@ -28,7 +28,18 @@ export function AccountPendingDataList() {
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
     { key: "frequency", header: "Frequency", render: (row) => row.FREQUENCY || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
-    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
+    {
+      key: "delayDuration",
+      header: "Delay Duration",
+      render: (row) => {
+        const color = getDelayColor(row.DELAY_MS);
+        return color ? (
+          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
+        ) : (
+          row.DELAY_DURATION || "—"
+        );
+      },
+    },
     {
       key: "updateRemark",
       header: "",
