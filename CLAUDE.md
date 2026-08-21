@@ -929,6 +929,32 @@ trip and exposed via `openAttachment()` (same "View attachment" pattern as every
 attachment in this app) on `TripDetail.tsx`'s Vehicle Details section — no new viewer UI was
 needed since it's just a normal PDF fileId by that point.
 
+**Large orders can hit the Docs API's write-quota rate limit** — `fillRow`/`fillItemTable`
+deliberately do one `documents.get` + one `batchUpdate` per cell (re-fetching before every
+edit is the only way to keep index math correct as earlier edits shift later indices), which
+for a 20-item order is 300+ sequential Docs API calls. Confirmed live: a real trip's gate
+pass was silently failing with a 429 `rateLimitExceeded` ("write operations per minute per
+user"), caught by `ensureDispatchGatePass`'s own outer try/catch and turned into a `null`
+that looked identical to "never generated" — nothing surfaced the real cause anywhere in the
+app. Fixed with `docsCall()` (`gatePass.ts`): a `DOCS_CALL_MIN_GAP_MS = 350` proactive
+throttle between every Docs API call (backoff-after-the-fact alone wasn't enough — the quota
+stayed saturated continuously across that many calls, not just tripped once) plus
+exponential-backoff retry on any 429 that still slips through. **Do not "fix" this by
+batching multiple cells into fewer API calls** — that would reintroduce the exact
+stale-index bug the per-cell refetch exists to prevent; throttling/retrying is the correct
+fix, not restructuring the fill algorithm.
+
+**This throttling makes gate pass generation slow for large orders — confirmed ~133s for a
+20-item order** — which is well past Vercel's default serverless function timeout (10s on
+Hobby, 60s on Pro by default). `Backend/vercel.json` now sets `functions["api/index.ts"]
+.maxDuration: 300` to cover this; Vercel silently clamps this down to whatever the actual
+plan allows if 300s exceeds it, so this is safe to leave even on a lower-tier plan, but
+means a large enough order could still time out mid-generation on a Hobby plan specifically.
+If gate passes for very large orders keep failing after this fix, the next lever is either a
+higher Vercel plan/`maxDuration`, or moving generation out of the request/response cycle
+entirely (a background job) — not a smaller retry budget or per-call delay, since those
+would just reintroduce the original 429 failures.
+
 ## Per-stage Transport queue views
 
 Each of the 6 TRIP_STAGES now has its OWN Completed view showing the fields that stage

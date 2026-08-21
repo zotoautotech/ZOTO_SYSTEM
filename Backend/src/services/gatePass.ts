@@ -18,6 +18,52 @@ const ITEM_TABLE_HEADER_ANCHOR = "SR. NO.";
 const ITEM_ROW_COLUMN_COUNT = 8;
 const FIRST_ITEM_ROW_INDEX = 1; // row 0 is the header row
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Minimum gap enforced before every Docs API call, on top of retry-on-429 below. Needed
+ * because `fillRow`/`fillItemTable` deliberately make one `documents.get` + one
+ * `batchUpdate` per cell (re-fetching before every edit is what keeps index math correct as
+ * earlier edits shift later indices — see the file-level comment on `ITEM_TABLE_HEADER_ANCHOR`
+ * above) — for a 20-item order that's 300+ sequential Docs API calls, and confirmed live
+ * that backoff-after-the-fact alone isn't enough: the quota stays saturated continuously
+ * across that many calls, not just tripped once, so a real trip's gate pass still failed
+ * after exhausting retries. Proactively spacing calls out keeps us under Google's
+ * "write operations per minute per user" quota in the first place; retry-on-429 remains a
+ * safety net for whatever still slips through. */
+const DOCS_CALL_MIN_GAP_MS = 350;
+
+/** Runs a Docs API call, enforcing `DOCS_CALL_MIN_GAP_MS` since the last call and retrying
+ * on a 429 rate-limit error with exponential backoff (confirmed live: a real trip's gate
+ * pass was silently failing with exactly this 429 `rateLimitExceeded` error, caught by
+ * `ensureDispatchGatePass`'s own outer try/catch and turned into a `null` that just looked
+ * like "never generated" from the caller's side, with nothing in the app surfacing the real
+ * cause). Retrying/throttling is the right fix here, not batching multiple cells into one
+ * API call — that would reintroduce the exact stale-index bug the per-cell refetch exists
+ * to avoid. */
+let lastDocsCallAt = 0;
+async function docsCall<T>(fn: () => Promise<T>, maxAttempts = 6): Promise<T> {
+  const wait = lastDocsCallAt + DOCS_CALL_MIN_GAP_MS - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastDocsCallAt = Date.now();
+
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = (err as { code?: number; response?: { status?: number } })?.code
+        ?? (err as { response?: { status?: number } })?.response?.status;
+      attempt += 1;
+      if (status !== 429 || attempt >= maxAttempts) throw err;
+      const delayMs = 1000 * 2 ** attempt; // 2s, 4s, 8s, 16s, 32s
+      await sleep(delayMs);
+      lastDocsCallAt = Date.now();
+    }
+  }
+}
+
 interface GatePassItem {
   partNo: string;
   partName: string;
@@ -72,7 +118,7 @@ function valueForCell(item: GatePassItem, srNo: number, cellIndex: number): stri
  * correct once earlier cells/rows have already been edited in this same pass. */
 async function fillRow(docs: docs_v1.Docs, documentId: string, rowIndex: number, item: GatePassItem, srNo: number) {
   for (let cellIndex = ITEM_ROW_COLUMN_COUNT - 1; cellIndex >= 0; cellIndex--) {
-    const doc = (await docs.documents.get({ documentId })).data;
+    const doc = (await docsCall(() => docs.documents.get({ documentId }))).data;
     const { table } = locateItemTable(doc);
     const cell = table.tableRows![rowIndex].tableCells![cellIndex];
     const contentStart = cell.content?.[0]?.startIndex;
@@ -91,7 +137,7 @@ async function fillRow(docs: docs_v1.Docs, documentId: string, rowIndex: number,
       requests.push({ insertText: { location: { index: contentStart }, text: value } });
     }
     if (requests.length === 0) continue;
-    await docs.documents.batchUpdate({ documentId, requestBody: { requests } });
+    await docsCall(() => docs.documents.batchUpdate({ documentId, requestBody: { requests } }));
   }
 }
 
@@ -102,21 +148,23 @@ async function fillItemTable(docs: docs_v1.Docs, documentId: string, items: Gate
 
   let lastRowIndex = FIRST_ITEM_ROW_INDEX;
   for (let i = 1; i < items.length; i++) {
-    const doc = (await docs.documents.get({ documentId })).data;
+    const doc = (await docsCall(() => docs.documents.get({ documentId }))).data;
     const { tableStartIndex } = locateItemTable(doc);
-    await docs.documents.batchUpdate({
-      documentId,
-      requestBody: {
-        requests: [
-          {
-            insertTableRow: {
-              tableCellLocation: { tableStartLocation: { index: tableStartIndex }, rowIndex: lastRowIndex, columnIndex: 0 },
-              insertBelow: true,
+    await docsCall(() =>
+      docs.documents.batchUpdate({
+        documentId,
+        requestBody: {
+          requests: [
+            {
+              insertTableRow: {
+                tableCellLocation: { tableStartLocation: { index: tableStartIndex }, rowIndex: lastRowIndex, columnIndex: 0 },
+                insertBelow: true,
+              },
             },
-          },
-        ],
-      },
-    });
+          ],
+        },
+      })
+    );
     lastRowIndex += 1;
     await fillRow(docs, documentId, lastRowIndex, items[i], i + 1);
   }
@@ -212,14 +260,16 @@ export async function ensureDispatchGatePass(transportId: string, opts: { force?
         "<<sum(select(Transport Items[Load Qty],[Transport ID]=[_Thisrow].[Transport ID]))>>": sumNumeric(items, "loadQty"),
         "<<sum(select(Transport Items[Load Boxes],[Transport ID]=[_Thisrow].[Transport ID]))>>": sumNumeric(items, "loadBoxes"),
       };
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: Object.entries(scalarReplacements).map(([find, replace]) => ({
-            replaceAllText: { containsText: { text: find, matchCase: true }, replaceText: replace },
-          })),
-        },
-      });
+      await docsCall(() =>
+        docs.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: Object.entries(scalarReplacements).map(([find, replace]) => ({
+              replaceAllText: { containsText: { text: find, matchCase: true }, replaceText: replace },
+            })),
+          },
+        })
+      );
 
       const pdfExport = await drive.files.export(
         { fileId: documentId, mimeType: "application/pdf" },
