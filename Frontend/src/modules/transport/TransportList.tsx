@@ -12,6 +12,7 @@ import { CreateTripModal } from "./CreateTripModal";
 
 const TRIP_COLUMNS: Column<TripRecord>[] = [
   { key: "timestamp", header: "Timestamp", render: (row) => (row.Timestamp ? formatTimestamp(row.Timestamp) : "—") },
+  { key: "customerName", header: "Customer Name", render: (row) => row["Customer Name"] || "—" },
   { key: "vehicleArrangeFor", header: "Vehicle Arrange for", render: (row) => row["Vehicle Arrange for"] || "—" },
   { key: "sendThrough", header: "Send Through", render: (row) => row["Send Through"] || "—" },
   { key: "transporterName", header: "Transporter Name", render: (row) => row["Transporter Name"] || "—" },
@@ -70,24 +71,24 @@ export function TransportList() {
     return matchesCustomer && matchesSearch;
   });
 
-  // "Send Through" filter sidebar for Completed Transport — matches the old CRR reference's
-  // own Completed Transport sidebar exactly (Courier/Cust. Vehicle/Local Vehicle/Porter/
-  // Transporter with counts), sorted alphabetically the same way that reference view is.
-  const sendThroughOptions = useMemo(() => {
+  // Party (customer) sidebar for Completed Transport too, matching the Pending view's own
+  // customer-grouped sidebar — GET /transport-trips already enriches every trip with a
+  // "Customer Name" (see tripRoutes.ts's snapshotByTrip join), so no extra fetch is needed.
+  const completedPartyOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of trips) {
-      const name = row["Send Through"] || "Unknown";
+      const name = row["Customer Name"] || "Unknown";
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
   }, [trips]);
 
   const filteredTrips = trips.filter((row) => {
-    const matchesSendThrough = !activeSendThrough || (row["Send Through"] || "Unknown") === activeSendThrough;
-    const matchesSearch = !normalizedQuery || [row.Transport_ID, row["Transporter Name"], row["Vehicle No."], row["Driver Name"]].some(
+    const matchesParty = !activeSendThrough || (row["Customer Name"] || "Unknown") === activeSendThrough;
+    const matchesSearch = !normalizedQuery || [row.Transport_ID, row["Transporter Name"], row["Vehicle No."], row["Driver Name"], row["Customer Name"]].some(
       (value) => (value || "").toLowerCase().includes(normalizedQuery)
     );
-    return matchesSendThrough && matchesSearch;
+    return matchesParty && matchesSearch;
   });
 
   const columns: Column<EligibleItemRow>[] = [
@@ -132,7 +133,7 @@ export function TransportList() {
   const table = showCompleted ? (
     isMobile ? (
       <div>
-        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+        <CustomerFilterPanel customers={completedPartyOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
         <div style={{ padding: "8px 0 24px" }}>
           {filteredTrips.map((row) => (
             <div
@@ -156,7 +157,7 @@ export function TransportList() {
       </div>
     ) : (
       <div style={{ display: "flex", minHeight: "calc(100vh - 128px)" }}>
-        <CustomerFilterPanel customers={sendThroughOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
+        <CustomerFilterPanel customers={completedPartyOptions} active={activeSendThrough} onSelect={setActiveSendThrough} />
         <div style={{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
           <DataTable
             columns={TRIP_COLUMNS}
