@@ -406,7 +406,18 @@ tripsRouter.get("/stage-rows", anyOrderModule, async (req, res, next) => {
     if (!tab || !STAGE_ROW_TABS.has(tab)) {
       return res.status(400).json({ error: { code: "BAD_REQUEST", message: "Unknown or missing stage tab" } });
     }
-    res.json(await readTable(env.sheets.transactions, tab));
+    const rows = await readTable(env.sheets.transactions, tab);
+    // Several of these six tabs carry ORDER_ID but not a Customer Name column of their own
+    // (Transport_Reached is one) — join it in from ORDER_PUNCH so the Completed view's
+    // sidebar can group by party the same way every other queue in this app now does. A
+    // no-op for tabs with no ORDER_ID column at all (LR/DELIVERY key off Dispatch ID
+    // instead) — those rows just come back without a Customer Name, same as before.
+    if (rows.some((r) => r.ORDER_ID)) {
+      const punchRows = await readTable(env.sheets.transactions, ORDER_TAB);
+      const customerByOrderId = new Map(punchRows.map((r) => [r.ORDER_ID, r["Customer Name"] || ""]));
+      return res.json(rows.map((r) => ({ ...r, "Customer Name": r["Customer Name"] || customerByOrderId.get(r.ORDER_ID) || "" })));
+    }
+    res.json(rows);
   } catch (err) {
     next(err);
   }

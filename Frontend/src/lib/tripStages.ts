@@ -72,6 +72,7 @@ export const TRIP_STAGES: TripStageDef[] = [
     action: "reached",
     tab: "Transport_Reached",
     completedColumns: [
+      { header: "Customer Name", field: "Customer Name" },
       { header: "Transport ID", field: "Transport_ID" },
       { header: "Transport Reached", field: "Transport Reached" },
       { header: "Same Vehicle", field: "Same Vehicle" },

@@ -65,6 +65,7 @@ export function TripQueueList({
   const queryClient = useQueryClient();
   const [showCompleted, setShowCompleted] = useState(false);
   const [activeParty, setActiveParty] = useState<string | null>(null);
+  const [activeStageParty, setActiveStageParty] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkForm, setShowBulkForm] = useState(false);
@@ -301,11 +302,23 @@ export function TripQueueList({
       render: (r: Record<string, string>) => r[c.field] || "—",
     })),
   ];
-  const filteredStageRows = normalizedQuery
-    ? stageRows.filter((r) =>
-        stageColumns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(normalizedQuery))
-      )
-    : stageRows;
+  // Party (customer) sidebar for the Completed view too — GET /transport-trips/stage-rows
+  // now joins in a Customer Name via ORDER_ID for whichever of these six tabs don't already
+  // carry one of their own (see tripRoutes.ts), so every stage's Completed view can group by
+  // party the same way its own Pending view already does.
+  const stagePartyOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of stageRows) {
+      const name = row["Customer Name"] || "Unknown";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [stageRows]);
+  const filteredStageRows = stageRows.filter((r) => {
+    const matchesParty = !activeStageParty || (r["Customer Name"] || "Unknown") === activeStageParty;
+    const matchesSearch = !normalizedQuery || stageColumns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(normalizedQuery));
+    return matchesParty && matchesSearch;
+  });
 
   // Item-level pending columns — plain literal Transport_Products headers, same shape as
   // stageColumns above. Rows still open the TRIP (Transport_ID), since this stage's own
@@ -321,13 +334,14 @@ export function TripQueueList({
 
   return (
     <div style={isMobile ? undefined : { display: "flex", minHeight: "calc(100vh - 128px)" }}>
-      {!ownCompletedView &&
-        (itemLevelPending ? (
-          <CustomerFilterPanel customers={itemCustomerOptions} active={activeItemCustomer} onSelect={setActiveItemCustomer} />
-        ) : (
-          <CustomerFilterPanel customers={partyOptions} active={activeParty} onSelect={setActiveParty} />
-        ))}
-      <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: ownCompletedView ? undefined : "1px solid var(--color-border)" }}>
+      {ownCompletedView ? (
+        <CustomerFilterPanel customers={stagePartyOptions} active={activeStageParty} onSelect={setActiveStageParty} />
+      ) : itemLevelPending ? (
+        <CustomerFilterPanel customers={itemCustomerOptions} active={activeItemCustomer} onSelect={setActiveItemCustomer} />
+      ) : (
+        <CustomerFilterPanel customers={partyOptions} active={activeParty} onSelect={setActiveParty} />
+      )}
+      <div style={isMobile ? undefined : { flex: 1, minWidth: 0, borderLeft: "1px solid var(--color-border)" }}>
         {ownCompletedView ? (
           <DataTable
             columns={stageColumns}
