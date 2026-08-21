@@ -8,17 +8,24 @@ import { openAttachment } from "../lib/attachments";
 import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 
-/** The department's shared task queue (Accounts department, for now) — one row per task
- * instance from Master Accounts, NOT filtered to the logged-in user. Confirmed directly
- * against the old AppSheet reference (previewed as both an admin email and a regular doer
- * email — both saw the identical full list) that this is a shared department-wide board,
- * not a personal "my tasks" inbox; anyone with Checklist access sees and can complete any
- * row here, not just their own. Same list pattern as PdiList.tsx otherwise: Completed
- * toggle, DataTable desktop / card list mobile. Admin-only "Assigned Checklist"/"Dashboard"
- * links live in the sidebar (Layout.tsx), not here — indented under the Checklist nav item,
- * shown only while inside this app. Punching a new task also only happens from Assigned
- * Checklist's own "+ Add" now (matching the old app: doers complete tasks here, admins
- * assign them there) — this page has no punch form. */
+/** The department's task queue (Accounts department, for now) — one row per task instance
+ * from Master Accounts. **A non-admin doer only sees their own rows; a Checklist admin sees
+ * every doer's rows** — the actual filter is server-side (`GET /tasks/mine`, see
+ * `Backend/src/routes/checklist.ts`), this page just renders whatever comes back. This
+ * supersedes an earlier "shared department-wide board, not a personal inbox" design
+ * (confirmed against the old AppSheet reference at the time) — a later, explicit user
+ * request changed it to per-doer scoping with an Admin exception; see docs/CHECKLIST.md.
+ * Same list pattern as PdiList.tsx otherwise: Completed toggle, DataTable desktop / card
+ * list mobile. Admin-only "Assigned Checklist"/"Dashboard" links live in the sidebar
+ * (Layout.tsx), not here — indented under the Checklist nav item, shown only while inside
+ * this app. Punching a new task also only happens from Assigned Checklist's own "+ Add" now
+ * (matching the old app: doers complete tasks here, admins assign them there) — this page
+ * has no punch form.
+ *
+ * Every row is colored by its Delay Duration (`getDelayColor`, ported from the old
+ * AppSheet reference's own conditional-format rule: yellow within 15 min of the deadline,
+ * red once overdue) — applied to the WHOLE row via `DataTable`'s `getRowStyle`, not just
+ * the Delay Duration cell, per explicit user request. */
 export function MyTasksList() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -46,18 +53,7 @@ export function MyTasksList() {
   const columns: Column<ChecklistTaskRecord>[] = [
     { key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" },
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
-    {
-      key: "delayDuration",
-      header: "Delay Duration",
-      render: (row) => {
-        const color = getDelayColor(row.DELAY_MS);
-        return color ? (
-          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
-        ) : (
-          row.DELAY_DURATION || "—"
-        );
-      },
-    },
+    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
     { key: "frequency", header: "Task Frequency", render: (row) => row.FREQUENCY || "—" },
     ...(showCompleted
@@ -141,6 +137,10 @@ export function MyTasksList() {
           getRowKey={(row) => row.TASK_ID}
           onRowClick={showCompleted ? undefined : (row) => setActiveTask(row)}
           emptyMessage={emptyMessage}
+          getRowStyle={(row) => {
+            const color = getDelayColor(row.DELAY_MS);
+            return color ? { color, fontWeight: 600 } : undefined;
+          }}
         />
       )}
 

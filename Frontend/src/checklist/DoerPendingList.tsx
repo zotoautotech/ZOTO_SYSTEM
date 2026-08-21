@@ -27,18 +27,7 @@ export function DoerPendingList() {
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
     { key: "frequency", header: "Frequency", render: (row) => row.FREQUENCY || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
-    {
-      key: "delayDuration",
-      header: "Delay Duration",
-      render: (row) => {
-        const color = getDelayColor(row.DELAY_MS);
-        return color ? (
-          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
-        ) : (
-          row.DELAY_DURATION || "—"
-        );
-      },
-    },
+    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     {
       key: "updateRemark",
       header: "",
@@ -82,7 +71,16 @@ export function DoerPendingList() {
           {!isLoading && tasks.length === 0 && <p className="text-muted">No pending tasks.</p>}
         </div>
       ) : (
-        <DataTable columns={columns} rows={tasks} getRowKey={(row) => row.TASK_ID} emptyMessage={isLoading ? "Loading…" : "No pending tasks."} />
+        <DataTable
+          columns={columns}
+          rows={tasks}
+          getRowKey={(row) => row.TASK_ID}
+          emptyMessage={isLoading ? "Loading…" : "No pending tasks."}
+          getRowStyle={(row) => {
+            const color = getDelayColor(row.DELAY_MS);
+            return color ? { color, fontWeight: 600 } : undefined;
+          }}
+        />
       )}
 
       {activeTask && <FollowUpForm task={activeTask} onClose={() => setActiveTask(null)} onSaved={() => setActiveTask(null)} />}

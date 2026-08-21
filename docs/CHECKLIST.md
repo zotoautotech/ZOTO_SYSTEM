@@ -53,15 +53,20 @@ with Checklist in their Sales CRR `USERS.Permissions_Process` gets in).
   `UNQ-<8 hex>` id via `nextUniqueId()` (same random-id + collision-check convention as
   `services/ids.ts`, just parameterized by spreadsheetId since that helper hardcodes the
   Sales-CRR transactions sheet).
-- `GET /tasks/mine?status=COMPLETED` — **department-wide shared queue, not a personal
-  inbox** (confirmed by previewing the old app as both an admin and a regular doer — both
-  saw the identical full list; the old Show_If only gated the *menu item*, never which
-  *rows* a viewer sees). Endpoint path kept as "mine" to avoid a wider rename, but it isn't
-  filtered to the caller. Pending = `Status` blank **and** `Planned <= now` (`isDueNow()`)
-  — the recurrence engine bulk-generates a task's whole range up front, so without the date
-  filter a doer's queue floods with instances scheduled weeks/months ahead. Completed =
-  `Status` set (Done/Rejected/leave types), no date filter. `FULL_NAME`/`DELAY_DURATION`
-  are synthesized per row (virtual/formula columns in the old schema).
+- `GET /tasks/mine?status=COMPLETED` — **scoped to the caller: a non-admin doer only sees
+  their own rows (`EMAIL === req.user.employeeId`), a Checklist admin (`isChecklistAdmin`)
+  sees every doer's rows.** This supersedes an earlier "department-wide shared queue, not a
+  personal inbox" design (confirmed at the time by previewing the old app as both an admin
+  and a regular doer email — both saw the identical full list) — a later, explicit user
+  request changed it to this per-doer-with-admin-exception scoping instead. Endpoint path
+  kept as "mine" even though the un-scoped behavior it originally described is gone.
+  Pending = `Status` blank **and** `Planned <= now` (`isDueNow()`) — the recurrence engine
+  bulk-generates a task's whole range up front, so without the date filter a doer's queue
+  floods with instances scheduled weeks/months ahead. Completed = `Status` set
+  (Done/Rejected/leave types), no date filter. `FULL_NAME`/`DELAY_DURATION`/`DELAY_MS` are
+  synthesized per row (`FULL_NAME`/`DELAY_DURATION` are virtual/formula columns in the old
+  schema; `DELAY_MS` is new — the raw `NOW() - Planned` in ms, feeding the frontend's
+  Delay Duration color rule, see below).
 - `POST /tasks/:taskId/complete` — updates the doer's own `Master Accounts` row (matched by
   `Task ID`) with Done/Rejected/leave-type + attachment Yes/No + remarks. Only ever touches
   that one row.
@@ -105,7 +110,7 @@ explicit `Z`/`±HH:MM` offset is trusted as-is). **Any future code that reads a 
 cell must go through `parsePlannedDate()`/`isDueNow()` — never construct a `Date` from a raw
 sheet string directly**, or this exact timezone bug reappears.
 
-**Delay Duration cell coloring** — the old AppSheet reference's own conditional-format rule,
+**Delay Duration row coloring** — the old AppSheet reference's own conditional-format rule,
 ported literally: `SHOW YELLOW WHEN AND([Delay Duration] > "-000:15:00", [Delay Duration] <=
 "000:00:00")`, `SHOW RED WHEN [Delay Duration] > "000:00:00"` (yellow inside the 15-minute
 window before the deadline, red once actually overdue, no color otherwise). Backend now also
@@ -115,8 +120,10 @@ as `DELAY_MS` on every row `GET /tasks/mine` and `GET /admin/pending/:doerId` re
 Frontend's `getDelayColor(row.DELAY_MS)` (`checklistApi.ts`) applies the yellow/red threshold
 — **always read `DELAY_MS`, never re-parse `PLANNED` client-side**, since that parsing is the
 exact IST-timezone-sensitive logic the bug above was about; duplicating it in the frontend
-would just create a second place for it to silently drift out of sync. Applied to the "Delay
-Duration" column in `MyTasksList.tsx`, `DoerPendingList.tsx`, and
+would just create a second place for it to silently drift out of sync. **Applied to the
+WHOLE row via `DataTable`'s `getRowStyle`, not just the Delay Duration cell** — a first pass
+colored only that one cell, changed to the full row per explicit user request ("apply this
+colour rule in all columns"). Applied in `MyTasksList.tsx`, `DoerPendingList.tsx`, and
 `AccountPendingDataList.tsx` — any future table showing this column should do the same.
 
 ## Admin permission model — `Backend/src/routes/checklistPermissions.ts`

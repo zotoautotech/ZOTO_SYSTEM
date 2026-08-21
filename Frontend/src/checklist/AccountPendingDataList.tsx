@@ -7,12 +7,15 @@ import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/chec
 import { FollowUpForm } from "./FollowUpForm";
 
 /** Drill-down data table from `AccountDashboardExpand.tsx`'s "Data" button — every pending
- * task instance across every doer (`GET /tasks/mine`, the same real department-wide query
- * `MyTasksList.tsx` uses), not filtered to one doer like `DoerPendingList.tsx` is. Each
- * row's "Update Remark" opens the same `PcFollowUp` form used everywhere else in this app
- * (`FollowUpForm.tsx`) — kept as an always-visible column button rather than the reference's
- * hover-only reveal, matching this app's existing `DoerPendingList.tsx` row-action
- * convention instead of adding a one-off hover micro-interaction. */
+ * task instance across every doer (`GET /tasks/mine`). This page is itself only reachable
+ * through the admin-only Dashboard flow, so the caller here is always an admin — `/tasks/mine`
+ * still returns every doer's rows for an admin caller even though it now scopes non-admin
+ * callers to just their own (see `checklist.ts`), so this page's "every doer" behavior is
+ * unaffected by that change. Each row's "Update Remark" opens the same `PcFollowUp` form
+ * used everywhere else in this app (`FollowUpForm.tsx`) — kept as an always-visible column
+ * button rather than the reference's hover-only reveal, matching this app's existing
+ * `DoerPendingList.tsx` row-action convention instead of adding a one-off hover
+ * micro-interaction. */
 export function AccountPendingDataList() {
   const isMobile = useIsMobile();
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
@@ -28,18 +31,7 @@ export function AccountPendingDataList() {
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
     { key: "frequency", header: "Frequency", render: (row) => row.FREQUENCY || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
-    {
-      key: "delayDuration",
-      header: "Delay Duration",
-      render: (row) => {
-        const color = getDelayColor(row.DELAY_MS);
-        return color ? (
-          <span style={{ color, fontWeight: 600 }}>{row.DELAY_DURATION || "—"}</span>
-        ) : (
-          row.DELAY_DURATION || "—"
-        );
-      },
-    },
+    { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     {
       key: "updateRemark",
       header: "",
@@ -76,7 +68,16 @@ export function AccountPendingDataList() {
           {!isLoading && tasks.length === 0 && <p className="text-muted">No pending tasks.</p>}
         </div>
       ) : (
-        <DataTable columns={columns} rows={tasks} getRowKey={(row) => row.TASK_ID} emptyMessage={isLoading ? "Loading…" : "No pending tasks."} />
+        <DataTable
+          columns={columns}
+          rows={tasks}
+          getRowKey={(row) => row.TASK_ID}
+          emptyMessage={isLoading ? "Loading…" : "No pending tasks."}
+          getRowStyle={(row) => {
+            const color = getDelayColor(row.DELAY_MS);
+            return color ? { color, fontWeight: 600 } : undefined;
+          }}
+        />
       )}
 
       {activeTask && <FollowUpForm task={activeTask} onClose={() => setActiveTask(null)} onSaved={() => setActiveTask(null)} />}

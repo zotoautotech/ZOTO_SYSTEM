@@ -241,15 +241,23 @@ function delayDuration(planned: string): string {
  * just mean "no status yet"); Completed = Status set (Done/Rejected/leave types), no date
  * filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're virtual/formula
  * columns in the old schema (Full Name = lookup from Doer List by Email, Delay Duration =
- * NOW()-Planned) — looked up per row now since rows span every doer, not the caller alone. */
+ * NOW()-Planned) — looked up per row now since rows span every doer, not the caller alone.
+ *
+ * SUPERSEDES the department-wide-shared-queue behavior this endpoint used to have: a
+ * non-admin doer now only sees their OWN rows (`EMAIL === req.user.employeeId`), Admin
+ * (per `isChecklistAdmin`) still sees every doer's rows — an explicit, deliberate change
+ * from the earlier "confirmed against the old AppSheet reference" shared-board design (see
+ * docs/CHECKLIST.md). Don't revert this without checking that doc/the user again first. */
 checklistRouter.get("/tasks/mine", async (req, res, next) => {
   try {
     const wantCompleted = req.query.status === "COMPLETED";
-    const nameLookup = await buildDoerNameLookup();
+    const [nameLookup, admin] = await Promise.all([buildDoerNameLookup(), isChecklistAdmin(req.user!.employeeId)]);
+    const employeeId = req.user!.employeeId.trim();
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
       .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && isDueNow(r.PLANNED)))
+      .filter((r) => admin || r.EMAIL?.trim() === employeeId)
       .map((r): SheetRow => ({
         ...r,
         FULL_NAME: nameLookup.get(r.EMAIL?.trim() ?? "") ?? r.EMAIL ?? "",
