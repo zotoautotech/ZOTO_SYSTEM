@@ -135,6 +135,8 @@ const HOME_NAV_ITEM = { to: "/", icon: HomeIcon, label: "Home", end: true };
 // below Home while you're actually inside that app, not a permanently pinned list of every
 // app at once (that was tried and explicitly rejected: HOME's own tile grid is the one place
 // a doer switches apps). Add a new app's own entry here when it gets its own top-level route.
+// Exception: on Settings (a neutral, cross-app utility page with no tile grid of its own),
+// every entry here IS shown as a shortcut — see the navItems computation below.
 const APP_SECTIONS: Record<string, { to: string; label: string }> = {
   modules: { to: "/modules", label: "Sales CRR" },
   checklist: { to: "/checklist", label: "Checklist" },
@@ -247,7 +249,16 @@ export function Layout() {
             ]
           : []),
       ]
-    : [HOME_NAV_ITEM];
+    : // No single app is "current" here — Settings is neutral ground with no HOME tile grid
+      // of its own to switch apps from, so (unlike inside an app, where only that one app's
+      // section is pinned per the note above) both app shortcuts are shown so a doer isn't
+      // stranded needing to go all the way back to "/" just to jump into one.
+      pathSegments[0] === "settings"
+      ? [
+          HOME_NAV_ITEM,
+          ...Object.values(APP_SECTIONS).map((s) => ({ to: s.to, icon: AppSectionIcon, label: s.label, end: false })),
+        ]
+      : [HOME_NAV_ITEM];
   const crumbs: { label: string; to: string }[] =
     location.pathname === "/"
       ? [{ label: "HOME", to: "/" }]
