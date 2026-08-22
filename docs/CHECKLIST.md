@@ -45,8 +45,12 @@ unchanged; only what value goes into it changed.
 
 ## Backend — `Backend/src/routes/checklist.ts`
 
-Mounted with `requireAuth, requireModule("checklist")` on every route (base gate — anyone
-with Checklist in their Sales CRR `USERS.Permissions_Process` gets in).
+Mounted with `requireAuth, requireChecklistAccess` on every route — `requireChecklistAccess`
+(defined in this file) is a **Checklist-specific** gate, not the generic Sales CRR
+`requireModule("checklist")`: it calls `hasChecklistAccess()` (`checklistPermissions.ts`),
+which reads the Checklist app's OWN sheet (`CHECKLIST MASTER-FY26-27`'s own permissions
+tab), not the Sales CRR transactions sheet. See that file's own doc comment and the "Base
+access" note under Admin permission model below for why.
 
 - `GET /doers` — Doer List tab, filtered to rows with an Employee Id.
 - `POST /tasks` — punches a new task template into `Task List Master`. Mints a
@@ -128,32 +132,36 @@ colour rule in all columns"). Applied in `MyTasksList.tsx`, `DoerPendingList.tsx
 
 ## Admin permission model — `Backend/src/routes/checklistPermissions.ts`
 
-This app has its **own** `USERS` tab, live inside `ZOTO/CHECKLIST MASTER-FY26-27` itself
-(`CHECKLIST_MASTER_SHEET_ID`) — **separate from the Sales CRR `USERS` sheet** that gates
-the base `requireModule("checklist")` login/module check. `isChecklistAdmin(employeeId)`
-matches the row by Employee Id (case-insensitive) and checks `Permissions_`/
-`Permissions_Process` (trimmed) `=== "admin"`. Only `"Admin"` **here** unlocks the three
-admin-only views (Assigned Checklist, Dashboard - Pending Checklist, follow-up remarks) —
-a Sales CRR Admin flag does not carry over. This split was a deliberate user decision even
-though both apps share the same login session — don't collapse the two permission sources
-into one without asking again.
+This app has its **own** permissions tab, live inside `ZOTO/CHECKLIST MASTER-FY26-27` itself
+(`CHECKLIST_MASTER_SHEET_ID`) — **the tab is literally named `"CHECKLIST USERS"` on the live
+sheet, not `"USERS"`** (it was renamed at some point after this code was first written,
+which silently broke `isChecklistAdmin()` for every employee at once — `readTable`
+tolerates a missing tab by treating it as empty, so the lookup just found nobody and
+everyone's check quietly went from correct to always-false with no error anywhere; caught
+only because Admin himself stopped seeing any pending tasks. **Dump the live tab list
+before assuming this name is still right if this ever breaks again.**
 
-**Base access to `/checklist/*` at all is gated separately, by the Sales CRR sheet's own
-`USERS.Permissions_Process` containing `"Checklist"`** (`requireModule("checklist")` on the
-router, reading `env.sheets.transactions`'s `USERS` tab via `getPermissions()` —
-`Backend/src/services/permissions.ts`) — **not** the Checklist-specific `USERS` tab above,
-which only ever governs the admin-only-views flag. A doer can look correctly set up in the
-Checklist app's own `USERS` tab (e.g. `"Home,Checklist"`) while their real Sales CRR
-`USERS` row's `Permissions_Process` is missing `"Checklist"` entirely — every
-`/checklist/*` request then 403s for them, and the frontend's empty-state ("No pending
-tasks — you're all caught up.") looks exactly like a legitimate empty result, giving no
-visible sign anything is wrong. This cost a long debugging session (chasing timezone/
-row-filter bugs that were real but irrelevant, since the request was being rejected before
-reaching any of that code) before `DevTools → Network → mine → Status 403` surfaced the
-actual cause. **If a doer reports seeing nothing in Checklist, check the Network tab for a
-403 on `/tasks/mine` before assuming a data/logic bug** — then fix it by adding `,Checklist`
-to that doer's `Permissions_Process` cell in the real Sales CRR `USERS` tab, not by editing
-any code.
+**Both base access to `/checklist/*` at all, and the admin-only-views flag, now read this
+SAME tab** (`checklistPermissions.ts`'s `hasChecklistAccess()` / `isChecklistAdmin()`) —
+`Permissions_Process` containing `"Checklist"` (or `"Admin"`) grants base access,
+`"Admin"` alone additionally unlocks the three admin-only views (Assigned Checklist,
+Dashboard - Pending Checklist, follow-up remarks). `checklist.ts`'s router uses a
+Checklist-specific `requireChecklistAccess` middleware for this — **not** the generic Sales
+CRR `requireModule("checklist")` any more.
+
+**This was originally split the other way** — base access gated by the Sales CRR
+transactions sheet's own `USERS.Permissions_Process`, only the admin flag read from this
+Checklist-specific tab — and that split caused a real, confirmed production bug: a doer
+could be fully set up in this Checklist-specific tab (`"Home,Checklist"`) while their
+*separate* Sales CRR `Permissions_Process` simply never had `"Checklist"` added to it,
+403ing every `/checklist/*` call for them with no visible cause — the frontend's empty
+state ("No pending tasks — you're all caught up.") looked exactly like a legitimate empty
+result. Switched to this single Checklist-owned source per explicit user decision once that
+drift was found — **don't split base access and the admin flag across two different sheets
+again**; the Checklist app's own tab is now the one and only authoritative permission
+source for everything inside it. The Permission Audit page
+(`Backend/src/routes/permissionAudit.ts`) checks this same tab for its Checklist
+child-access check, not the Sales CRR sheet, for the same reason.
 
 ## Frontend — `Frontend/src/checklist/`
 

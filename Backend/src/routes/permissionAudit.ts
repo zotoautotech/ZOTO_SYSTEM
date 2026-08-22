@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPermissions, parseModules } from "../services/permissions.js";
 import { HOME_TAB, parseHomeAllowlist } from "./home.js";
+import { hasChecklistAccess } from "./checklistPermissions.js";
 
 export const permissionAuditRouter = Router();
 
@@ -13,29 +14,41 @@ const USERS_TAB = "USERS";
  * populated — see docs/CHECKLIST.md and CLAUDE.md's Auth & Permissions section for the
  * full story. `homeNamePrefix` matches a `ZOTO HOME` row's `Name` (same
  * startsWith-"SALES CRR" convention `Frontend/src/pages/Home.tsx`'s `hrefFor()` already
- * uses to special-case the Sales CRR tile). `hasChildAccess` decides, from the employee's
- * already-parsed Sales CRR `modules` (via the real `parseModules()` — never a second,
- * hand-rolled parser that could drift from the actual gate), whether they'd actually be
- * able to use the app once inside it. Add a third entry here once another HOME app is
- * real (not a "Coming Soon" placeholder) — this stays a one-line addition. */
+ * uses to special-case the Sales CRR tile). `hasChildAccess` decides whether a given
+ * employee would actually be able to use the app once inside it — each app reads its OWN
+ * authoritative permission source, not necessarily the Sales CRR sheet:
+ * - Sales CRR: the Sales CRR transactions sheet's own `USERS.Permissions_Process`, via the
+ *   real `parseModules()` (never a second, hand-rolled parser that could drift from the
+ *   actual `requireModule` gate). Any real module granted (or Admin/"ALL") counts, since
+ *   no single "salescrr" module key survives `parseModules()` — it's a grouping label the
+ *   parser deliberately strips.
+ * - Checklist: the Checklist app's OWN sheet (`hasChecklistAccess`,
+ *   `checklistPermissions.ts`) — this is the actual gate `/checklist/*` uses
+ *   (`requireChecklistAccess` in `checklist.ts`), not the Sales CRR sheet. This was
+ *   deliberately switched here (previously checked the Sales CRR sheet's
+ *   `Permissions_Process` for a `"checklist"` token) once it was confirmed the Checklist
+ *   app's own sheet is the actual source of truth its own gate reads — auditing against
+ *   the Sales CRR sheet instead would talk past the real gate and could flag/miss the
+ *   wrong things entirely.
+ * Add a third entry here once another HOME app is real (not a "Coming Soon" placeholder) —
+ * this stays a small, self-contained addition. */
 const AUDITED_APPS: {
   app: string;
   homeNamePrefix: string;
-  hasChildAccess: (modules: string[] | "ALL") => boolean;
+  hasChildAccess: (employeeId: string, salesCrrUser: import("../services/sheets.js").SheetRow) => boolean | Promise<boolean>;
 }[] = [
   {
     app: "Sales CRR",
     homeNamePrefix: "SALES CRR",
-    // No single "salescrr" module key survives parseModules() — it's a grouping label
-    // parseModules() deliberately strips (see permissions.ts). Any real module granted
-    // (or Admin/"ALL") is what actually lets someone do anything once inside, so that's
-    // the meaningful proxy for "has base Sales CRR access" here.
-    hasChildAccess: (modules) => modules === "ALL" || modules.length > 0,
+    hasChildAccess: (_employeeId, salesCrrUser) => {
+      const modules = parseModules(salesCrrUser.Permissions_Process);
+      return modules === "ALL" || modules.length > 0;
+    },
   },
   {
     app: "Checklist",
     homeNamePrefix: "CHECKLIST",
-    hasChildAccess: (modules) => modules === "ALL" || modules.includes("checklist"),
+    hasChildAccess: (employeeId) => hasChecklistAccess(employeeId),
   },
 ];
 
@@ -47,13 +60,13 @@ interface PermissionMismatch {
 }
 
 /** GET /api/v1/admin/permission-audit — read-only report of employees whose HOME tile
- * visibility (parent, `ZOTO HOME` sheet) and actual app access (child,
- * `USERS.Permissions_Process` on the Sales CRR transactions sheet) disagree. Admin-only
- * (Sales CRR `Permissions_Process` containing "Admin", i.e. `perms.modules === "ALL"` —
- * this audit spans apps, so it's gated on the Sales CRR Admin flag directly rather than
- * any single `requireModule` key). Purely informational — no edit affordance; the actual
- * fix is still hand-editing the relevant sheet cell, same as every other permission column
- * in this app (see CLAUDE.md's Auth & Permissions section). */
+ * visibility (parent, `ZOTO HOME` sheet) and actual app access (child — each app's own
+ * authoritative permission source, see `AUDITED_APPS` above) disagree. Admin-only (Sales
+ * CRR `Permissions_Process` containing "Admin", i.e. `perms.modules === "ALL"` — this audit
+ * spans apps, so it's gated on the Sales CRR Admin flag directly rather than any single
+ * `requireModule` key). Purely informational — no edit affordance; the actual fix is still
+ * hand-editing the relevant sheet cell, same as every other permission column in this app
+ * (see CLAUDE.md's Auth & Permissions section). */
 permissionAuditRouter.get("/permission-audit", requireAuth, async (req, res, next) => {
   try {
     const perms = await getPermissions(req.user!.employeeId);
@@ -88,8 +101,7 @@ permissionAuditRouter.get("/permission-audit", requireAuth, async (req, res, nex
       // data-quality issue this audit doesn't try to catch.
       for (const [employeeId, user] of userByEmployeeId) {
         const hasParent = !parentAllowlist || parentAllowlist.has(employeeId);
-        const modules = parseModules(user.Permissions_Process);
-        const hasChild = hasChildAccess(modules);
+        const hasChild = await hasChildAccess(user["Employee Id"]!, user);
 
         if (hasParent && !hasChild) {
           mismatches.push({ employeeId: user["Employee Id"]!, name: user.Name ?? "", app, issue: "missing-child" });

@@ -3,8 +3,8 @@ import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { appendRow, readTable, updateRow, type SheetRow } from "../services/sheets.js";
-import { requireAuth, requireModule } from "../middleware/auth.js";
-import { isChecklistAdmin } from "./checklistPermissions.js";
+import { requireAuth } from "../middleware/auth.js";
+import { hasChecklistAccess, isChecklistAdmin } from "./checklistPermissions.js";
 import {
   doerFromSheet,
   masterAccountsFromSheet,
@@ -19,7 +19,25 @@ const DOER_LIST_TAB = "Doer List";
 const MASTER_ACCOUNTS_TAB = "Master Accounts";
 const PC_FOLLOWUP_TAB = "PcFollowUp";
 
-checklistRouter.use(requireAuth, requireModule("checklist"));
+/** Base access to /checklist/* — gated by the Checklist app's OWN sheet
+ * (checklistPermissions.ts's hasChecklistAccess), not the generic Sales CRR
+ * requireModule("checklist"). Per explicit user decision: that sheet's own
+ * Permissions_Process is this app's authoritative "child" permission — see
+ * checklistPermissions.ts's own doc comment for why this replaced the earlier
+ * requireModule("checklist") gate. */
+async function requireChecklistAccess(req: Request, res: Response, next: NextFunction) {
+  try {
+    const allowed = await hasChecklistAccess(req.user!.employeeId);
+    if (!allowed) {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "No access to Checklist" } });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+checklistRouter.use(requireAuth, requireChecklistAccess);
 
 /** Gates the three admin-only views (Assigned Checklist, pending dashboard, follow-up
  * remarks) behind the Checklist app's own USERS tab — see checklistPermissions.ts. */
