@@ -5,7 +5,7 @@ import { formatTimestamp } from "../lib/format";
 import { useSetHeaderActions, useSetHeaderLeft } from "../lib/headerActions";
 import { useIsMobile } from "../lib/responsive";
 import { openAttachment } from "../lib/attachments";
-import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { checkIsChecklistAdmin, getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 import { BulkTaskCompleteForm } from "./BulkTaskCompleteForm";
 
@@ -60,6 +60,14 @@ export function MyTasksList() {
     queryFn: () => listMyTasks(showCompleted ? "COMPLETED" : undefined),
     placeholderData: keepPreviousData,
   });
+  // A plain doer only ever sees their OWN rows here (server-filtered), so "Full Name" is
+  // always their own name — redundant. Only an Admin, who sees every doer's rows, needs it
+  // to tell rows apart. Same isChecklistAdmin check Layout.tsx already uses for the
+  // Assigned Checklist/Dashboard sidebar links.
+  const { data: isAdmin = false } = useQuery({
+    queryKey: ["checklist", "admin", "check"],
+    queryFn: checkIsChecklistAdmin,
+  });
   // Hides stray blank rows (empty Task/no data at all) — Sheets sometimes has trailing
   // blank rows or rows left over from bulk edits that shouldn't render as real tasks.
   const tasks = rawTasks.filter((t) => t.TASK?.trim());
@@ -78,8 +86,10 @@ export function MyTasksList() {
   // (Full Name, Task, Delay Duration, Planned, Task Frequency, grouped by Date/sorted by
   // Planned) plus the completion fields (Status/Delay Status/Attachment/Remark's) once a
   // task has actually been completed, matching "CHECKLIST Completed Account".
+  // Full Name is dropped entirely for a plain doer (isAdmin false) — every row they see is
+  // already their own, so the column just repeats the same name down the whole table.
   const columns: Column<ChecklistTaskRecord>[] = [
-    { key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" },
+    ...(isAdmin ? [{ key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" } as Column<ChecklistTaskRecord>] : []),
     { key: "task", header: "Task", render: (row) => row.TASK || "—" },
     { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
@@ -221,9 +231,11 @@ export function MyTasksList() {
                   <span style={{ fontWeight: 700 }}>{row.TASK || "—"}</span>
                   <span className="text-muted" style={{ fontSize: 12 }}>{row.PLANNED ? formatTimestamp(row.PLANNED) : "—"}</span>
                 </div>
-                <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
-                  {row.FULL_NAME || "—"}
-                </div>
+                {isAdmin && (
+                  <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
+                    {row.FULL_NAME || "—"}
+                  </div>
+                )}
                 <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
                   {row.FREQUENCY} · {row.DELAY_DURATION || (row.STATUS || "Pending")}
                 </div>
