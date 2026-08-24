@@ -406,7 +406,15 @@ tripsRouter.get("/stage-rows", anyOrderModule, async (req, res, next) => {
     if (!tab || !STAGE_ROW_TABS.has(tab)) {
       return res.status(400).json({ error: { code: "BAD_REQUEST", message: "Unknown or missing stage tab" } });
     }
-    const rows = await readTable(env.sheets.transactions, tab);
+    let rows = await readTable(env.sheets.transactions, tab);
+    // STOCK_RELEASE and TAX_INVOICE get a blank placeholder row the instant Transport Reached
+    // is submitted (see isStockReleaseRowDone/isTaxInvoiceRowDone above) — without filtering,
+    // this endpoint returned those still-blank placeholder rows too, so the Completed toggle
+    // showed rows still reading "Stock Release Pending"/no Tax Invoice No. as if they were
+    // done. The other four tabs here have no such placeholder convention — every row in them
+    // really is a completed action, so they're left as-is.
+    if (tab === "STOCK_RELEASE") rows = rows.filter(isStockReleaseRowDone);
+    if (tab === "TAX_INVOICE") rows = rows.filter(isTaxInvoiceRowDone);
     // Several of these six tabs carry ORDER_ID but not a Customer Name column of their own
     // (Transport_Reached is one) — join it in from ORDER_PUNCH so the Completed view's
     // sidebar can group by party the same way every other queue in this app now does. A
