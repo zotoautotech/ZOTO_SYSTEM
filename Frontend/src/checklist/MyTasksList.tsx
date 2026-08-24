@@ -89,8 +89,10 @@ export function MyTasksList() {
   // Full Name is dropped entirely for a plain doer (isAdmin false) — every row they see is
   // already their own, so the column just repeats the same name down the whole table.
   const columns: Column<ChecklistTaskRecord>[] = [
-    ...(isAdmin ? [{ key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—" } as Column<ChecklistTaskRecord>] : []),
-    { key: "task", header: "Task", render: (row) => row.TASK || "—" },
+    ...(isAdmin
+      ? [{ key: "fullName", header: "Full Name", render: (row) => row.FULL_NAME || "—", width: 170 } as Column<ChecklistTaskRecord>]
+      : []),
+    { key: "task", header: "Task", render: (row) => row.TASK || "—", width: 320 },
     { key: "delayDuration", header: "Delay Duration", render: (row) => row.DELAY_DURATION || "—" },
     { key: "planned", header: "Planned", render: (row) => (row.PLANNED ? formatTimestamp(row.PLANNED) : "—") },
     { key: "frequency", header: "Task Frequency", render: (row) => row.FREQUENCY || "—" },
@@ -258,6 +260,12 @@ export function MyTasksList() {
           selectable={selectMode && !showCompleted}
           selectedKeys={selectedIds}
           onToggleRow={toggleRow}
+          // Completed view has 7-9 columns (Full Name…Task…Delay Duration…Planned…Task
+          // Frequency…Status…Delay Status…Attachment…Remark's) — wide enough that scrolling
+          // right to read Status/Remarks previously scrolled Task itself out of view, so you
+          // lost track of which row you were even looking at. Freezes Full Name (admin only)
+          // + Task so they stay put while everything else scrolls underneath.
+          stickyColumns={showCompleted ? (isAdmin ? 2 : 1) : 0}
         />
       )}
 

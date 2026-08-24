@@ -4,6 +4,9 @@ export interface Column<T> {
   key: string;
   header: string;
   render: (row: T) => React.ReactNode;
+  /** Fixed pixel width — required for any column covered by `stickyColumns` (its sticky
+   * `left` offset is computed from these), optional everywhere else. */
+  width?: number;
 }
 
 interface DataTableProps<T> {
@@ -19,6 +22,11 @@ interface DataTableProps<T> {
   /** Extra inline style merged onto a row's <tr> — used for e.g. the old CRR's
    * strikethrough-red cancelled-row treatment (see SoConfirmationList.tsx). */
   getRowStyle?: (row: T) => React.CSSProperties | undefined;
+  /** Freezes the first N columns (must each declare a `width`) so they stay visible while
+   * scrolling right through a wide table — added for the Checklist Completed view, which has
+   * enough columns (Task…Delay Duration…Status…Remark's) that scrolling right otherwise loses
+   * track of which task/row you're even looking at. */
+  stickyColumns?: number;
 }
 
 export function DataTable<T>({
@@ -31,8 +39,19 @@ export function DataTable<T>({
   selectedKeys,
   onToggleRow,
   getRowStyle,
+  stickyColumns = 0,
 }: DataTableProps<T>) {
   const isMobile = useIsMobile();
+
+  // Cumulative left offset for each sticky column (plus the checkbox column's own width,
+  // when present, since sticky columns sit to its right).
+  const checkboxWidth = selectable ? 40 : 0;
+  const stickyLeft = columns.map((_, i) => {
+    if (i >= stickyColumns) return 0;
+    let left = checkboxWidth;
+    for (let j = 0; j < i; j++) left += columns[j].width ?? 0;
+    return left;
+  });
 
   // A phone can't show 7-9 nowrap columns without sideways scrolling, which made every queue
   // unreadable on mobile (you had to drag horizontally just to read one record). Same data,
@@ -109,10 +128,13 @@ export function DataTable<T>({
                   width: 40,
                   padding: "12px 16px",
                   borderBottom: "1px solid var(--color-border)",
+                  ...(stickyColumns > 0
+                    ? { position: "sticky", left: 0, zIndex: 2, background: "var(--color-bg)" }
+                    : undefined),
                 }}
               />
             )}
-            {columns.map((col) => (
+            {columns.map((col, i) => (
               <th
                 key={col.key}
                 style={{
@@ -121,6 +143,18 @@ export function DataTable<T>({
                   borderBottom: "1px solid var(--color-border)",
                   fontWeight: 500,
                   whiteSpace: "nowrap",
+                  ...(i < stickyColumns
+                    ? {
+                        position: "sticky",
+                        left: stickyLeft[i],
+                        zIndex: 2,
+                        background: "var(--color-bg)",
+                        width: col.width,
+                        maxWidth: col.width,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }
+                    : undefined),
                 }}
               >
                 {col.header}
@@ -160,18 +194,48 @@ export function DataTable<T>({
                 }}
               >
                 {selectable && (
-                  <td style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-border)" }}>
+                  <td
+                    style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid var(--color-border)",
+                      ...(stickyColumns > 0
+                        ? {
+                            position: "sticky",
+                            left: 0,
+                            zIndex: 1,
+                            background: checked ? "var(--color-primary-tint)" : "var(--color-bg)",
+                          }
+                        : undefined),
+                    }}
+                  >
                     <input type="checkbox" checked={!!checked} readOnly style={{ cursor: "pointer" }} />
                   </td>
                 )}
-                {columns.map((col) => (
+                {columns.map((col, i) => (
                   <td
                     key={col.key}
                     style={{
                       padding: "12px 16px",
                       borderBottom: "1px solid var(--color-border)",
                       whiteSpace: "nowrap",
+                      ...(i < stickyColumns
+                        ? {
+                            position: "sticky",
+                            left: stickyLeft[i],
+                            zIndex: 1,
+                            width: col.width,
+                            maxWidth: col.width,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            background: checked ? "var(--color-primary-tint)" : "var(--color-bg)",
+                          }
+                        : undefined),
                     }}
+                    title={
+                      i < stickyColumns && ["string", "number"].includes(typeof col.render(row))
+                        ? String(col.render(row))
+                        : undefined
+                    }
                   >
                     {col.render(row)}
                   </td>
