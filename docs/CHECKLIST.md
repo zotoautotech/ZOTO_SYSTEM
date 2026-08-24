@@ -167,7 +167,15 @@ child-access check, not the Sales CRR sheet, for the same reason.
 
 Routes (`App.tsx`):
 - `/checklist` → `MyTasksList.tsx` — the shared department pending/completed queue
-  (`GET /tasks/mine`), "Give Task Form" opens `TaskCompleteForm.tsx`.
+  (`GET /tasks/mine`), row click opens `TaskCompleteForm.tsx` (one task at a time). A
+  "Select" toggle (pending view only, not Completed) switches to bulk mode — same
+  select/bulk-form pattern `DispatchApprovalList.tsx` established first (header-left
+  "N Selected" pill with a ✕ to exit, `DataTable`'s own checkbox column via `selectable`)
+  — and opens `BulkTaskCompleteForm.tsx`, which applies one completion decision to every
+  selected task by calling the same single-task `POST /checklist/tasks/:taskId/complete`
+  once per task sequentially (never a new bulk endpoint), showing a per-task Saved/Failed
+  result list and auto-closing only on a clean sweep (a partial failure keeps it open so the
+  failure reasons stay visible) — same shape as `BulkReachedForm.tsx`.
 - `/checklist/assigned` → `AssignedChecklistList.tsx` — admin-only, every punched template
   across every doer. Layout: `CustomerFilterPanel` doer-grouped sidebar (All + one row per
   doer with a count badge) + resizable divider (drag to resize 160–480px, double-click
