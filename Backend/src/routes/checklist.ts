@@ -18,6 +18,7 @@ const TASK_LIST_MASTER_TAB = "Task List Master";
 const DOER_LIST_TAB = "Doer List";
 const MASTER_ACCOUNTS_TAB = "Master Accounts";
 const PC_FOLLOWUP_TAB = "PcFollowUp";
+const NOTEPAD_REPORT_TAB = "Doer wise Notepad report";
 
 /** Base access to /checklist/* — gated by the Checklist app's OWN sheet
  * (checklistPermissions.ts's hasChecklistAccess), not the generic Sales CRR
@@ -236,6 +237,18 @@ function isDueNow(planned: string): boolean {
   const plannedMs = parsePlannedDate(planned);
   if (plannedMs === null) return true;
   return plannedMs <= endOfTodayIstMs();
+}
+
+/** True only when Planned falls on TODAY's own IST calendar date — narrower than isDueNow()
+ * (which also matches anything overdue from earlier days). Used by the Today's Report
+ * button below, which should summarize just today's tasks, not roll in every stale overdue
+ * task from previous days too. A row with no parseable Planned date is excluded (unlike
+ * isDueNow's fail-open "treat as due") since there's no date to call "today" here. */
+function isPlannedToday(planned: string): boolean {
+  const plannedMs = parsePlannedDate(planned);
+  if (plannedMs === null) return false;
+  const startOfTodayIst = endOfTodayIstMs() - 24 * 60 * 60 * 1000 + 1;
+  return plannedMs >= startOfTodayIst && plannedMs <= endOfTodayIstMs();
 }
 
 /** Raw `NOW() - Planned` in milliseconds — positive once overdue, negative while there's
@@ -494,6 +507,68 @@ checklistRouter.post("/tasks/:taskId/followup", requireChecklistAdmin, async (re
     });
 
     res.status(201).json({ remarkId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Builds the "Today's Report" text: every one of the logged-in doer's own task instances
+ * whose Planned falls on today's IST calendar date (isPlannedToday, not isDueNow — this
+ * report is specifically about today, not a rolling overdue list), split into Completed vs
+ * Pending sections. Shared by both routes below so the GET preview and the POST save always
+ * see identical wording. */
+async function buildTodayReportText(employeeId: string): Promise<string> {
+  const rows = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
+    .map(masterAccountsFromSheet)
+    .filter((r) => r.EMAIL?.trim() === employeeId && isPlannedToday(r.PLANNED));
+
+  const completed = rows.filter((r) => r.STATUS?.trim());
+  const pending = rows.filter((r) => !r.STATUS?.trim());
+
+  const todayIst = new Date(Date.now() + IST_OFFSET_MS);
+  const dateLabel = `${String(todayIst.getUTCDate()).padStart(2, "0")}/${String(todayIst.getUTCMonth() + 1).padStart(2, "0")}/${todayIst.getUTCFullYear()}`;
+
+  const lines: string[] = [`Today's Report - ${dateLabel}`, ""];
+  lines.push(`Completed (${completed.length})`);
+  if (completed.length === 0) lines.push("  —");
+  else completed.forEach((r, i) => lines.push(`  ${i + 1}. ${r.TASK || "—"} (${r.STATUS})`));
+  lines.push("");
+  lines.push(`Pending (${pending.length})`);
+  if (pending.length === 0) lines.push("  —");
+  else pending.forEach((r, i) => lines.push(`  ${i + 1}. ${r.TASK || "—"}`));
+
+  return lines.join("\n");
+}
+
+/** GET /checklist/today-report — auto-generates the report text (see buildTodayReportText
+ * above) for the "Today's Report" button on MyTasksList.tsx to show in its notepad popup.
+ * Read-only — nothing is written until the doer actually saves it via the POST below. */
+checklistRouter.get("/today-report", async (req, res, next) => {
+  try {
+    const text = await buildTodayReportText(req.user!.employeeId.trim());
+    res.json({ text });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const saveTodayReportSchema = z.object({ text: z.string().min(1) });
+
+/** POST /checklist/today-report — appends the doer's (possibly hand-edited) report text as
+ * one new row to "Doer wise Notepad report" — always a fresh append, never updates a prior
+ * row, so re-saving the same day keeps a full history of each update rather than
+ * overwriting the last one. "Doer" stores the Employee Id, matching every other "Doer"/
+ * "Email" column in this app (Task List Master's Doer, Master Accounts' Email) — never a
+ * display name. */
+checklistRouter.post("/today-report", async (req, res, next) => {
+  try {
+    const body = saveTodayReportSchema.parse(req.body);
+    await appendRow(env.sheets.checklistMaster, NOTEPAD_REPORT_TAB, {
+      Doer: req.user!.employeeId,
+      Timestemp: new Date().toISOString(),
+      "Today Report": body.text,
+    });
+    res.status(201).json({ ok: true });
   } catch (err) {
     next(err);
   }

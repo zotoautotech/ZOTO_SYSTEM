@@ -8,6 +8,7 @@ import { openAttachment } from "../lib/attachments";
 import { checkIsChecklistAdmin, getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { TaskCompleteForm } from "./TaskCompleteForm";
 import { BulkTaskCompleteForm } from "./BulkTaskCompleteForm";
+import { TodayReportForm } from "./TodayReportForm";
 
 /** The department's task queue (Accounts department, for now) — one row per task instance
  * from Master Accounts. **A non-admin doer only sees their own rows; a Checklist admin sees
@@ -40,6 +41,7 @@ export function MyTasksList() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkForm, setShowBulkForm] = useState(false);
+  const [showTodayReport, setShowTodayReport] = useState(false);
 
   function exitSelectMode() {
     setSelectMode(false);
@@ -161,6 +163,13 @@ export function MyTasksList() {
       </button>
     ) : (
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Auto-generates today's Completed/Pending summary and opens it as an editable
+         * notepad popup (TodayReportForm) — see Backend/src/routes/checklist.ts's
+         * GET/POST /checklist/today-report. Shown regardless of the Completed toggle since
+         * it's about today specifically, not whichever view is currently open. */}
+        <button className="btn" onClick={() => setShowTodayReport(true)}>
+          Today's Report
+        </button>
         <button
           className="btn btn-primary"
           onClick={() => setShowCompleted((current) => !current)}
@@ -286,6 +295,10 @@ export function MyTasksList() {
           onClose={closeBulkFormAndExit}
           onSaved={refresh}
         />
+      )}
+
+      {showTodayReport && (
+        <TodayReportForm onClose={() => setShowTodayReport(false)} onSaved={() => {}} />
       )}
     </div>
   );

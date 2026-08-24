@@ -71,6 +71,16 @@ export async function completeTask(taskId: string, payload: CompleteTaskPayload)
   return res.data;
 }
 
+export async function getTodayReport() {
+  const res = await api.get<{ text: string }>("/checklist/today-report");
+  return res.data.text;
+}
+
+export async function saveTodayReport(text: string) {
+  const res = await api.post("/checklist/today-report", { text });
+  return res.data;
+}
+
 // --- Admin-only (gated server-side by the Checklist app's own USERS tab) ---
 
 export async function checkIsChecklistAdmin() {
