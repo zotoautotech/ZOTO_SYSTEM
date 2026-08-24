@@ -240,7 +240,7 @@ function isDueNow(planned: string): boolean {
 }
 
 /** True only when Planned falls on TODAY's own IST calendar date — narrower than isDueNow()
- * (which also matches anything overdue from earlier days). Used by the Today's Report
+ * (which also matches anything overdue from earlier days). Used by the Today's Update
  * button below, which should summarize just today's tasks, not roll in every stale overdue
  * task from previous days too. A row with no parseable Planned date is excluded (unlike
  * isDueNow's fail-open "treat as due") since there's no date to call "today" here. */
@@ -512,7 +512,7 @@ checklistRouter.post("/tasks/:taskId/followup", requireChecklistAdmin, async (re
   }
 });
 
-/** Builds the "Today's Report" text: every one of the logged-in doer's own task instances
+/** Builds the "Today's Update" text: every one of the logged-in doer's own task instances
  * whose Planned falls on today's IST calendar date (isPlannedToday, not isDueNow — this
  * report is specifically about today, not a rolling overdue list), split into Completed vs
  * Pending sections. Shared by both routes below so the GET preview and the POST save always
@@ -528,7 +528,7 @@ async function buildTodayReportText(employeeId: string): Promise<string> {
   const todayIst = new Date(Date.now() + IST_OFFSET_MS);
   const dateLabel = `${String(todayIst.getUTCDate()).padStart(2, "0")}/${String(todayIst.getUTCMonth() + 1).padStart(2, "0")}/${todayIst.getUTCFullYear()}`;
 
-  const lines: string[] = [`Today's Report - ${dateLabel}`, ""];
+  const lines: string[] = [`Today's Update - ${dateLabel}`, ""];
   lines.push(`Completed (${completed.length})`);
   if (completed.length === 0) lines.push("  —");
   else completed.forEach((r, i) => lines.push(`  ${i + 1}. ${r.TASK || "—"} (${r.STATUS})`));
@@ -540,8 +540,8 @@ async function buildTodayReportText(employeeId: string): Promise<string> {
   return lines.join("\n");
 }
 
-/** GET /checklist/today-report — auto-generates the report text (see buildTodayReportText
- * above) for the "Today's Report" button on MyTasksList.tsx to show in its notepad popup.
+/** GET /checklist/today-report — auto-generates the update text (see buildTodayReportText
+ * above) for the "Today's Update" button on MyTasksList.tsx to show in its notepad popup.
  * Read-only — nothing is written until the doer actually saves it via the POST below. */
 checklistRouter.get("/today-report", async (req, res, next) => {
   try {

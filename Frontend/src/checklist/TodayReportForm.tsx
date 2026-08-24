@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { FormModal } from "../components/form/FormModal";
 import { getTodayReport, saveTodayReport } from "./lib/checklistApi";
 
-/** "Today's Report" notepad popup — opened from MyTasksList.tsx's header button. Fetches
+/** "Today's Update" notepad popup — opened from MyTasksList.tsx's header button. Fetches
  * the auto-generated Completed/Pending summary (GET /checklist/today-report) the instant it
  * mounts and shows it in an editable textarea; the doer can add to/edit the auto-generated
  * text before saving. Save always appends a brand-new row to "Doer wise Notepad report"
@@ -21,7 +21,7 @@ export function TodayReportForm({ onClose, onSaved }: { onClose: () => void; onS
         if (!cancelled) setText(t);
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't generate the report. Try again.");
+        if (!cancelled) setError("Couldn't generate the update. Try again.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -40,24 +40,24 @@ export function TodayReportForm({ onClose, onSaved }: { onClose: () => void; onS
       onSaved();
       onClose();
     } catch {
-      setError("Couldn't save the report. Try again.");
+      setError("Couldn't save the update. Try again.");
       setSaving(false);
     }
   }
 
   return (
-    <FormModal title="Today's Report" onClose={onClose} size="standard">
+    <FormModal title="Today's Update" onClose={onClose} size="standard">
       <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: 16, gap: 12 }}>
         {loading ? (
           <p className="text-muted" style={{ margin: "auto" }}>
-            Generating today's report…
+            Generating today's update…
           </p>
         ) : (
           <>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Today's report…"
+              placeholder="Today's update…"
               style={{
                 flex: 1,
                 width: "100%",
@@ -80,7 +80,7 @@ export function TodayReportForm({ onClose, onSaved }: { onClose: () => void; onS
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving || !text.trim()}>
-                {saving ? "Saving…" : "Save Report"}
+                {saving ? "Saving…" : "Save Update"}
               </button>
             </div>
           </>

@@ -168,7 +168,7 @@ export function MyTasksList() {
          * GET/POST /checklist/today-report. Shown regardless of the Completed toggle since
          * it's about today specifically, not whichever view is currently open. */}
         <button className="btn" onClick={() => setShowTodayReport(true)}>
-          Today's Report
+          Today's Update
         </button>
         <button
           className="btn btn-primary"
