@@ -64,13 +64,25 @@ access" note under Admin permission model below for why.
   and a regular doer email — both saw the identical full list) — a later, explicit user
   request changed it to this per-doer-with-admin-exception scoping instead. Endpoint path
   kept as "mine" even though the un-scoped behavior it originally described is gone.
-  Pending = `Status` blank **and** `Planned <= now` (`isDueNow()`) — the recurrence engine
-  bulk-generates a task's whole range up front, so without the date filter a doer's queue
-  floods with instances scheduled weeks/months ahead. Completed = `Status` set
+  Pending = `Status` blank **and** `Planned` falls today or earlier by IST calendar date
+  (`isDueNow()`, via `endOfTodayIstMs()`) — **not** "the exact time has already passed".
+  A task scheduled for later this afternoon still shows up now, so a doer sees their whole
+  day's list at a glance rather than only what's already overdue; it just won't be colored
+  red/yellow yet (see `DELAY_MS`/`getDelayColor` below — that's the actual near-due/overdue
+  signal, separate from whether the row shows up at all). Verified live: with real IST
+  "now" mid-morning, tasks planned for later that same afternoon/evening correctly appeared
+  in the pending set. `isDueNow()` was originally a bare `Planned <= now` check — widened to
+  "today or earlier" per explicit user request ("show today all task"). The recurrence
+  engine bulk-generates a task's whole range up front, so this still can't mean "no status
+  yet" or a doer's queue would flood with instances scheduled weeks/months ahead — the
+  boundary only moved out to "today", not further. Completed = `Status` set
   (Done/Rejected/leave types), no date filter. `FULL_NAME`/`DELAY_DURATION`/`DELAY_MS` are
   synthesized per row (`FULL_NAME`/`DELAY_DURATION` are virtual/formula columns in the old
   schema; `DELAY_MS` is new — the raw `NOW() - Planned` in ms, feeding the frontend's
-  Delay Duration color rule, see below).
+  Delay Duration color rule, see below). Coloring updates automatically roughly every 30s
+  without a manual reload via the app's existing global `AUTO_SYNC_MS` poll
+  (`Frontend/src/lib/sync.tsx`, a blanket `invalidateQueries()` — already covers Checklist's
+  queries, no extra wiring needed for this).
 - `POST /tasks/:taskId/complete` — updates the doer's own `Master Accounts` row (matched by
   `Task ID`) with Done/Rejected/leave-type + attachment Yes/No + remarks. Only ever touches
   that one row.

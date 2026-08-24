@@ -210,15 +210,32 @@ function parsePlannedDate(planned: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/** Pending = Status blank AND Planned <= now (due today or overdue) — the recurrence engine
- * bulk-generates every instance for a task's whole range up front, so "pending" can't just
- * mean "no status yet" or a doer's queue would flood with tasks scheduled weeks ahead. A row
+/** End of "today" (IST calendar day) as a real UTC instant — the boundary isDueNow() checks
+ * against. Built the same way parsePlannedDate() builds any IST wall-clock instant: read
+ * today's Y/M/D as IST fields (by adding IST_OFFSET_MS before using the UTC getters, the
+ * same "fake UTC" trick), find the start of tomorrow in that IST timeline via Date.UTC, then
+ * subtract IST_OFFSET_MS to land back on the real UTC instant — minus 1ms for the last
+ * instant of today rather than the first instant of tomorrow. */
+function endOfTodayIstMs(): number {
+  const nowIst = new Date(Date.now() + IST_OFFSET_MS);
+  const startOfTomorrowIst = Date.UTC(nowIst.getUTCFullYear(), nowIst.getUTCMonth(), nowIst.getUTCDate() + 1);
+  return startOfTomorrowIst - IST_OFFSET_MS - 1;
+}
+
+/** Pending = Status blank AND Planned falls today or earlier (IST calendar day) — not just
+ * "the exact time has already passed". A task scheduled for later this afternoon is still
+ * shown now (so a doer sees their whole day's list at a glance, not just what's already
+ * overdue), it just won't be colored red/yellow yet — see getDelayColor() on the frontend,
+ * which reads DELAY_MS and only colors once actually within 15 min of due or overdue. The
+ * recurrence engine bulk-generates every instance for a task's whole range up front, so
+ * "pending" still can't mean "no status yet" or a doer's queue would flood with tasks
+ * scheduled weeks ahead — this only pulls the boundary in to "today", not further. A row
  * with no parseable Planned date is treated as due (shows up) rather than silently hidden —
  * but see parsePlannedDate() above for why "unparseable" must be judged correctly first. */
 function isDueNow(planned: string): boolean {
   const plannedMs = parsePlannedDate(planned);
   if (plannedMs === null) return true;
-  return plannedMs <= Date.now();
+  return plannedMs <= endOfTodayIstMs();
 }
 
 /** Raw `NOW() - Planned` in milliseconds — positive once overdue, negative while there's
