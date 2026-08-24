@@ -971,7 +971,7 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
         "Release Quantity": p.Quantity ?? "",
         Description: body.remarks,
         Attachment: body.attachmentUrl,
-        Status: "RELEASED",
+        Status: "Stock Release Completed",
       });
     }
     if (toCreate.length > 0) {
@@ -1002,7 +1002,7 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
           "Release Quantity": p.Quantity ?? "",
           Description: body.remarks,
           Attachment: body.attachmentUrl,
-          Status: "RELEASED",
+          Status: "Stock Release Completed",
         }))
       );
     }
