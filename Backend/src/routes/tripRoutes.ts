@@ -989,7 +989,12 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
         From: body.releaseFrom,
         "Release Quantity": p.Quantity ?? "",
         Description: body.remarks,
-        Attachment: body.attachmentUrl,
+        // Live sheet's column is "Signature", not "Attachment" — was renamed at some point
+        // (dumped live headers directly to confirm, same header-drift class of bug called
+        // out repeatedly in CLAUDE.md). Writing "Attachment" was silently dropped by
+        // appendRow/updateRow's header-match, so every doer-uploaded Stock Release
+        // attachment was lost from the moment of that rename until this fix.
+        Signature: body.attachmentUrl,
         Status: "Stock Release Completed",
       });
     }
@@ -1020,7 +1025,7 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
           From: body.releaseFrom,
           "Release Quantity": p.Quantity ?? "",
           Description: body.remarks,
-          Attachment: body.attachmentUrl,
+          Signature: body.attachmentUrl,
           Status: "Stock Release Completed",
         }))
       );

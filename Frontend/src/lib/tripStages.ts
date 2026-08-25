@@ -5,6 +5,9 @@
 export interface StageColumn {
   header: string;
   field: string;
+  /** Renders a "View" button (opens via the shared attachment viewer) instead of the raw
+   * cell text — the field holds a Drive fileId, not something readable on its own. */
+  isAttachment?: boolean;
 }
 
 export interface TripStageDef {
@@ -110,6 +113,7 @@ export const TRIP_STAGES: TripStageDef[] = [
       { header: "Type", field: "Type" },
       { header: "From", field: "From" },
       { header: "Vehicle No.", field: "Vehicle No." },
+      { header: "Attachment", field: "Signature", isAttachment: true },
     ],
   },
   {

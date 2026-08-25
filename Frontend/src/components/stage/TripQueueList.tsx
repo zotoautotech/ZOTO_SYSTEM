@@ -7,6 +7,7 @@ import { CustomerFilterPanel } from "../CustomerFilterPanel";
 import { formatTimestamp } from "../../lib/format";
 import { listTrips, listTripItems, listStageRows, type TripRecord } from "../../lib/tripsApi";
 import type { StageColumn } from "../../lib/tripStages";
+import { openAttachment } from "../../lib/attachments";
 import { useSearch } from "../../lib/search";
 import { useSetHeaderActions, useSetHeaderLeft } from "../../lib/headerActions";
 import { useIsMobile } from "../../lib/responsive";
@@ -299,7 +300,21 @@ export function TripQueueList({
     ...(completedColumns ?? []).map((c) => ({
       key: c.field,
       header: c.header,
-      render: (r: Record<string, string>) => r[c.field] || "—",
+      render: (r: Record<string, string>) =>
+        c.isAttachment && r[c.field] ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openAttachment(r[c.field]);
+            }}
+            style={{ color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+          >
+            View
+          </button>
+        ) : (
+          r[c.field] || "—"
+        ),
     })),
   ];
   // Party (customer) sidebar for the Completed view too — GET /transport-trips/stage-rows
