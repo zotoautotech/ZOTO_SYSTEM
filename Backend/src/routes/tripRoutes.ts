@@ -415,6 +415,17 @@ tripsRouter.get("/stage-rows", anyOrderModule, async (req, res, next) => {
     // really is a completed action, so they're left as-is.
     if (tab === "STOCK_RELEASE") rows = rows.filter(isStockReleaseRowDone);
     if (tab === "TAX_INVOICE") rows = rows.filter(isTaxInvoiceRowDone);
+    // STOCK_RELEASE has no Transport_ID column of its own (see CLAUDE.md — it's the only
+    // item-level tab of the six), which meant its Completed rows could never be clicked
+    // through to the trip (TripQueueList.tsx's onRowClick is gated on r.Transport_ID) — a
+    // doer had no way to open a released item's trip from this view at all. Joins one in via
+    // Transport_Products (which DOES carry both Transport_ID and Transport_Pd_ID) the same
+    // way Customer Name gets joined in below.
+    if (tab === "STOCK_RELEASE" && rows.length > 0) {
+      const productRows = await readTable(env.sheets.transactions, "Transport_Products");
+      const transportIdByPdId = new Map(productRows.map((r) => [r.Transport_Pd_ID, r.Transport_ID]));
+      rows = rows.map((r) => ({ ...r, Transport_ID: r.Transport_ID || transportIdByPdId.get(r.Transport_Pd_ID) || "" }));
+    }
     // Several of these six tabs carry ORDER_ID but not a Customer Name column of their own
     // (Transport_Reached is one) — join it in from ORDER_PUNCH so the Completed view's
     // sidebar can group by party the same way every other queue in this app now does. A
