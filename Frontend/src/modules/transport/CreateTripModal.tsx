@@ -9,16 +9,7 @@ import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders } from "../../lib/tripsApi";
 import { listPdiItems, type OrderRecord } from "../../lib/ordersApi";
-
-interface PickedItem {
-  itemId: string;
-  /** Which approved Dispatch Approval round this pick is. */
-  dispConfItemId: string;
-  partName: string;
-  qty: number;
-  unit: string;
-  loadBoxes?: number;
-}
+import { TransportItemPicker, type PickedItem } from "./TransportItemPicker";
 
 interface QueuedSaleOrder {
   orderId: string;
@@ -57,11 +48,13 @@ const DEFAULT_ZOTO_VEHICLE_ID = "VEH-001";
  * Dispatch and the logistics fields taken off the order itself. Save then creates the trip
  * and attaches every queued order in one attachOrders() call.
  *
- * This replaced a three-deep nested modal flow (Transport Form → Load Limit Details, one
- * pass per item) that existed only to re-enter values the order already carried. Its one
- * genuine capability was a Load Qty below the full quantity; the user asked for that to go
- * too, so partial loads are deliberately not supported here — restoring them means bringing
- * back a per-item quantity input, not just re-adding a button. */
+ * Ticking a box auto-queues the order's full PDI-approved quantity AND immediately opens
+ * TransportItemPicker.tsx so the doer can deselect items or cut a quantity down for a
+ * partial load right there — re-added by explicit user request after an earlier redesign
+ * had deliberately dropped per-item selection to simplify this exact three-deep nested
+ * modal flow. Clicking an already-queued order's Items cell reopens the same picker to
+ * adjust the pick. Don't drop this again without checking with the user first — this
+ * capability has now gone back and forth once already. */
 export function CreateTripModal({ onClose, onCreated }: Props) {
   // Opening defaults — the overwhelmingly common case is ZOTO's own vehicle going straight to
   // a customer with freight off-invoice, so the doer only touches these when it's an
@@ -85,6 +78,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const [error, setError] = useState("");
   const [queuedOrders, setQueuedOrders] = useState<QueuedSaleOrder[]>([]);
   const [loadingOrderId, setLoadingOrderId] = useState("");
+  const [pickerOrder, setPickerOrder] = useState<OrderRecord | null>(null);
 
   const { data: transporters = [] } = useQuery({ queryKey: ["masters", "transporters"], queryFn: listTransporters });
   const transporterOptions = transportersToOptions(transporters);
@@ -112,12 +106,13 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }, [zotoVehicles, zotoVehicleId, sendThrough]);
 
   /** Ticking an order's box queues it whole — every item at its full order quantity, and the
-   * logistics fields taken straight off the order's own preferred values. That's what the
-   * nested Transport Form / Load Limit Details flow was collecting by hand for the ordinary
-   * "ship all of it" case; that flow is still available below for a partial load. */
-  async function toggleOrder(order: OrderRecord, checked: boolean) {
+   * logistics fields taken straight off the order's own preferred values — then immediately
+   * opens TransportItemPicker.tsx (see pickerOrder below) so the doer can adjust down to a
+   * partial load right away instead of needing a separate step to find that option. */
+  async function toggleOrder(order: OrderRecord, checked: boolean, openPicker = true) {
     if (!checked) {
       setQueuedOrders((prev) => prev.filter((q) => q.orderId !== order.ORDER_ID));
+      if (pickerOrder?.ORDER_ID === order.ORDER_ID) setPickerOrder(null);
       return;
     }
     setLoadingOrderId(order.ORDER_ID);
@@ -158,6 +153,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           freightPaidAt: freightPaidBy === "Customer" ? "Pay at Customer" : "",
         },
       ]);
+      if (openPicker) setPickerOrder(order);
     } catch {
       setError(`Could not load items for ${order.CUSTOMER_NAME || order.ORDER_ID} — please try again.`);
     } finally {
@@ -170,7 +166,9 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
       setQueuedOrders([]);
       return;
     }
-    for (const order of unqueuedEligibleOrders) await toggleOrder(order, true);
+    // openPicker: false — "select all" queuing every order at once shouldn't pop open N
+    // pickers in a row; the doer can still click any queued order's Items cell to adjust one.
+    for (const order of unqueuedEligibleOrders) await toggleOrder(order, true, false);
   }
 
   function handleTransporterSelect(value: string, option?: { value: string; label: string }) {
@@ -242,6 +240,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   }
 
   return (
+    <>
     <FormModal title="Arrange Vehicle Form" onClose={onClose} size="standard" sectionLabel="Vehicle Details">
         <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
           <ToggleGroup
@@ -379,7 +378,19 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
                       <td style={{ padding: "8px 10px" }}>{o.PREFERRED_DELIVERY_MODE || "—"}</td>
                       <td style={{ padding: "8px 10px" }}>{o.FREIGHT_PAID_BY || "—"}</td>
                       <td style={{ padding: "8px 10px" }}>
-                        {loading ? "Loading…" : queued ? `${queued.items.length} (${queued.items.reduce((n, it) => n + it.qty, 0)} qty)` : "—"}
+                        {loading ? (
+                          "Loading…"
+                        ) : queued ? (
+                          <button
+                            type="button"
+                            onClick={() => setPickerOrder(o)}
+                            style={{ color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+                          >
+                            {queued.items.length} ({queued.items.reduce((n, it) => n + it.qty, 0)} qty) · Edit
+                          </button>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   );
@@ -401,5 +412,18 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           </button>
         </div>
     </FormModal>
+
+    {pickerOrder && (
+      <TransportItemPicker
+        customerName={pickerOrder.CUSTOMER_NAME || pickerOrder.ORDER_ID}
+        pdiItems={completedPdiItems.filter((r) => r.ORDER_ID === pickerOrder.ORDER_ID && Number(r.QTY || 0) > 0)}
+        initialItems={queuedOrders.find((q) => q.orderId === pickerOrder.ORDER_ID)?.items ?? []}
+        onClose={() => setPickerOrder(null)}
+        onSave={(items) =>
+          setQueuedOrders((prev) => prev.map((q) => (q.orderId === pickerOrder.ORDER_ID ? { ...q, items } : q)))
+        }
+      />
+    )}
+    </>
   );
 }
