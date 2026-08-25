@@ -113,7 +113,7 @@ export const TRIP_STAGES: TripStageDef[] = [
       { header: "Type", field: "Type" },
       { header: "From", field: "From" },
       { header: "Vehicle No.", field: "Vehicle No." },
-      { header: "Attachment", field: "Signature", isAttachment: true },
+      { header: "Attachment", field: "Attachment", isAttachment: true },
     ],
   },
   {

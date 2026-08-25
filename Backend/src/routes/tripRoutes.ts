@@ -450,13 +450,14 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     // failed (e.g. right after attachOrders) is by seeing the column still blank when the
     // trip is read again — same revert-on-read reasoning used throughout this app.
     // ensureDispatchGatePass no-ops instantly if a value already exists.
-    const [attached, productRows, soRows, stockReleaseIds, taxInvoiceIds, gatePassFileId] = await Promise.all([
+    const [attached, productRows, soRows, stockReleaseIds, taxInvoiceIds, gatePassFileId, stockReleaseRows] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
       readTable(env.sheets.transactions, "Transport_SO"),
       getTransportIdsWithStockRelease(),
       getTransportIdsWithTaxInvoice(),
       ensureDispatchGatePass(req.params.transportId),
+      readTable(env.sheets.transactions, "STOCK_RELEASE"),
     ]);
     // The FIRST attached order's own Transport_SO row — carries the buyer/billing/shipping/
     // consignee/logistics snapshot exactly as it was at attach time (Freight Paid by/at,
@@ -480,6 +481,14 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
       timestamp: a.order.CREATED_AT || "",
     }));
     const tripProductRows = productRows.filter((r) => r.Transport_ID === req.params.transportId);
+    // STOCK_RELEASE has no Transport_ID column of its own (item-level tab, keyed on
+    // Transport_Pd_ID — see CLAUDE.md) — joins through Transport_Products' own Transport_Pd_ID
+    // to find this trip's rows. One shared attachment covers every item released together
+    // (StockReleaseForm.tsx takes one "Attach Document" field for the whole submission, not
+    // per item), so any one row's own Attachment is "the" attachment for this trip.
+    const tripPdIds = new Set(tripProductRows.map((r) => r.Transport_Pd_ID));
+    const stockReleaseAttachmentFileId =
+      stockReleaseRows.find((r) => tripPdIds.has(r.Transport_Pd_ID) && r.Attachment)?.Attachment || "";
     const items = tripProductRows.map((r) => ({
       partNo: r["Part No."] || "",
       partName: r["Part Name"] || "",
@@ -511,7 +520,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
         remarks: r["Additional Notes"] || "",
       };
     });
-    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId });
   } catch (err) {
     next(err);
   }
@@ -989,12 +998,11 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
         From: body.releaseFrom,
         "Release Quantity": p.Quantity ?? "",
         Description: body.remarks,
-        // Live sheet's column is "Signature", not "Attachment" — was renamed at some point
-        // (dumped live headers directly to confirm, same header-drift class of bug called
-        // out repeatedly in CLAUDE.md). Writing "Attachment" was silently dropped by
-        // appendRow/updateRow's header-match, so every doer-uploaded Stock Release
-        // attachment was lost from the moment of that rename until this fix.
-        Signature: body.attachmentUrl,
+        // Live column was briefly renamed to "Signature" (caught and fixed once already —
+        // see git history) and has since been renamed BACK to "Attachment" by a live sheet
+        // edit. Re-dump live headers before touching this again if attachments ever go
+        // missing — this column name has already drifted twice.
+        Attachment: body.attachmentUrl,
         Status: "Stock Release Completed",
       });
     }
@@ -1025,7 +1033,7 @@ tripsRouter.post("/:transportId/stock-release", requireModule("stock-release"), 
           From: body.releaseFrom,
           "Release Quantity": p.Quantity ?? "",
           Description: body.remarks,
-          Signature: body.attachmentUrl,
+          Attachment: body.attachmentUrl,
           Status: "Stock Release Completed",
         }))
       );

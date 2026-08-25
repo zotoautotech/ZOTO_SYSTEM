@@ -83,6 +83,7 @@ export async function getTrip(transportId: string) {
     stockReleaseDone: boolean;
     taxInvoiceDone: boolean;
     gatePassFileId?: string;
+    stockReleaseAttachmentFileId?: string;
   }>(`/transport-trips/${transportId}`);
   return res.data;
 }

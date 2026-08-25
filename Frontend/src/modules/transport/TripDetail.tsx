@@ -132,7 +132,7 @@ function Field({ label, value }: { label: string; value?: string }) {
 /** Same "View attachment" link pattern as OrderDetail.tsx's own FieldFile — reused here
  * unchanged for the auto-generated Dispatch Gate Pass PDF, which is stored as a normal
  * private Drive file by the time this renders (see Backend/src/services/gatePass.ts). */
-function FieldFile({ label, fileId }: { label: string; fileId?: string }) {
+function FieldFile({ label, fileId, linkLabel }: { label: string; fileId?: string; linkLabel?: string }) {
   if (!fileId) return null;
   return (
     <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
@@ -145,7 +145,7 @@ function FieldFile({ label, fileId }: { label: string; fileId?: string }) {
           onClick={() => openAttachment(fileId)}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
         >
-          View Gate Pass
+          {linkLabel ?? `View ${label}`}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
             <path d="M14 2v6h6" />
@@ -191,7 +191,7 @@ export function TripDetail() {
   // an older deploy than this frontend bundle (a real ordering hazard across two separate
   // Vercel projects), the field would be missing entirely and every .reduce/.length call
   // below would throw, white-screening the whole page with no error boundary to catch it.
-  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems = [], stockReleaseDone, taxInvoiceDone, gatePassFileId } = data;
+  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems = [], stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId } = data;
   const stage = getTripStage(moduleKey);
   const order = orders[0];
   // orderSnapshot (Transport_SO's own row) carries several fields ORDER_PUNCH doesn't —
@@ -283,8 +283,20 @@ export function TripDetail() {
             <Field label="Driver Contact No." value={transport["Driver Contact No."]} />
             <Field label="Freight Applicable" value={transport["Freight Applicable On Invoice?"]} />
             <Field label="Freight Charge" value={formatCurrency(transport["Freight Charge"])} />
-            <FieldFile label="Dispatch Gate Pass" fileId={gatePassFileId} />
+            <FieldFile label="Dispatch Gate Pass" fileId={gatePassFileId} linkLabel="View Gate Pass" />
           </Section>
+
+          {/* Only shown on the Stock Release stage's own detail page — same "blank until
+              actually submitted" convention as Tax Invoice Details below. One attachment
+              covers every item released in that submission (StockReleaseForm.tsx takes one
+              shared "Attach Document" field, not per-item), so any one item's row on this
+              trip carries it — stockReleaseAttachmentFileId picks the first non-blank one. */}
+          {stage?.key === "stock-release" && (
+            <Section title="Stock Release Details">
+              <FieldFile label="Attachment" fileId={stockReleaseAttachmentFileId} linkLabel="View Attachment" />
+              {!stockReleaseAttachmentFileId && <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Not yet submitted.</p>}
+            </Section>
+          )}
 
           {isTaxInvoice && (
             <>
