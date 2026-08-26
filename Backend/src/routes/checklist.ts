@@ -557,7 +557,15 @@ checklistRouter.post("/tasks/:taskId/followup", requireChecklistAdmin, async (re
  * whose Planned falls on today's IST calendar date (isPlannedToday, not isDueNow — this
  * report is specifically about today, not a rolling overdue list), split into Completed vs
  * Pending sections. Shared by both routes below so the GET preview and the POST save always
- * see identical wording. */
+ * see identical wording.
+ *
+ * Written to read like an actual WhatsApp message a doer sends their boss, not an internal
+ * numbered "Completed (9)/Pending (10)" audit list — the first version of this did exactly
+ * that and the user pushed back on it directly. Each completed task shows its own Remark's
+ * text (what the doer actually typed on TaskCompleteForm when marking it done) instead of a
+ * bare "(Done)" tag — that remark is the substance of what got done, a bare status word
+ * isn't. A completed task with no remark just shows a checkmark and the task name; a task
+ * still pending shows plain, no decoration (nothing to report on it yet). */
 async function buildTodayReportText(employeeId: string): Promise<string> {
   const rows = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
     .map(masterAccountsFromSheet)
@@ -569,16 +577,23 @@ async function buildTodayReportText(employeeId: string): Promise<string> {
   const todayIst = new Date(Date.now() + IST_OFFSET_MS);
   const dateLabel = `${String(todayIst.getUTCDate()).padStart(2, "0")}/${String(todayIst.getUTCMonth() + 1).padStart(2, "0")}/${todayIst.getUTCFullYear()}`;
 
-  const lines: string[] = [`Today's Update - ${dateLabel}`, ""];
-  lines.push(`Completed (${completed.length})`);
-  if (completed.length === 0) lines.push("  —");
-  else completed.forEach((r, i) => lines.push(`  ${i + 1}. ${r.TASK || "—"} (${r.STATUS})`));
-  lines.push("");
-  lines.push(`Pending (${pending.length})`);
-  if (pending.length === 0) lines.push("  —");
-  else pending.forEach((r, i) => lines.push(`  ${i + 1}. ${r.TASK || "—"}`));
+  const lines: string[] = [`Today's Update – ${dateLabel}`, ""];
+  if (completed.length > 0) {
+    lines.push("✅ Completed:");
+    completed.forEach((r) => {
+      const remark = r.REMARKS?.trim();
+      lines.push(remark ? `- ${r.TASK || "—"} — ${remark}` : `- ${r.TASK || "—"}`);
+    });
+    lines.push("");
+  }
+  if (pending.length > 0) {
+    lines.push("🕓 Pending:");
+    pending.forEach((r) => lines.push(`- ${r.TASK || "—"}`));
+    lines.push("");
+  }
+  if (completed.length === 0 && pending.length === 0) lines.push("No tasks scheduled for today.");
 
-  return lines.join("\n");
+  return lines.join("\n").trimEnd();
 }
 
 /** GET /checklist/today-report — auto-generates the update text (see buildTodayReportText
