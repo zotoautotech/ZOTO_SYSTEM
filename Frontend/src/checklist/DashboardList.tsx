@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { listDashboard } from "./lib/checklistApi";
 import { DonutChart, donutColors, type DonutSegment } from "./DonutChart";
+import { useIsMobile } from "../lib/responsive";
 
 const PALETTE = [donutColors.primary, donutColors.secondary, donutColors.accent, donutColors.accentLight];
 
@@ -31,6 +32,7 @@ const OTHER_DEPARTMENTS = [
 
 export function DashboardList() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { data: doers = [], isLoading } = useQuery({
     queryKey: ["checklist", "admin", "dashboard"],
     queryFn: listDashboard,
@@ -53,8 +55,11 @@ export function DashboardList() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: 14,
+          // Fixed 4-per-row on desktop (was auto-fill at a 200px minimum, which packed 6+
+          // across on a wide screen) — each card gets more room, so the donut itself can
+          // grow too. Mobile keeps a single column rather than cramming 4 tiny cards across.
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+          gap: 18,
         }}
       >
         <DeptCard
@@ -103,10 +108,10 @@ function DeptCard({
     <div
       className="card"
       style={{
-        padding: 12,
+        padding: 18,
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: 10,
         position: "relative",
       }}
     >
@@ -132,7 +137,7 @@ function DeptCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
-        <DonutChart segments={segments ?? []} centerValue={centerValue} onClick={onDonutClick} onSegmentClick={onSegmentClick} />
+        <DonutChart segments={segments ?? []} centerValue={centerValue} size={190} strokeWidth={32} onClick={onDonutClick} onSegmentClick={onSegmentClick} />
       </div>
 
       <div style={{ position: "absolute", right: 6, bottom: 4, color: "var(--color-border)", fontSize: 10 }}>
