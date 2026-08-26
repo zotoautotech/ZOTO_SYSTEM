@@ -103,6 +103,11 @@ export interface EligibleItemRow {
   CREATED_AT: string;
   ORDER_ID: string;
   ITEM_ID: string;
+  /** The specific Dispatch Approval round this row is — the same ITEM_ID can legitimately
+   * appear more than once (one row per approved round still needing a vehicle), so this is
+   * the only field that uniquely identifies a row; blank on the Completed branch, which has
+   * no round concept of its own. */
+  DISP_CONF_ITEM_ID?: string;
   CUST_ID: string;
   CUSTOMER_NAME: string;
   PART_NO: string;

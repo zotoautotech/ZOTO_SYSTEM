@@ -7,7 +7,7 @@ import { TextField } from "../../components/form/TextField";
 import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
-import { listEligibleOrders } from "../../lib/tripsApi";
+import { listEligibleOrders, listEligibleItems } from "../../lib/tripsApi";
 import { listPdiItems, type OrderRecord } from "../../lib/ordersApi";
 import { TransportItemPicker, type PickedItem } from "./TransportItemPicker";
 
@@ -88,7 +88,17 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
   // PDI already recorded a Box Quantity per item, so auto-selecting an order can carry Load
   // Boxes over the same way the manual Load Limit Details form does.
-  const { data: completedPdiItems = [] } = useQuery({ queryKey: ["pdiItems", "COMPLETED"], queryFn: () => listPdiItems("COMPLETED") });
+  const { data: rawCompletedPdiItems = [] } = useQuery({ queryKey: ["pdiItems", "COMPLETED"], queryFn: () => listPdiItems("COMPLETED") });
+  // listPdiItems("COMPLETED") returns every PDI-completed round ever, including ones already
+  // shipped on an earlier trip — GET /transport-trips/eligible-items is the one place that
+  // actually reconciles shipped quantity against approved rounds (unattachedPdiRounds() on
+  // the backend), so cross-reference against its own round ids rather than re-deriving that
+  // logic here. Without this, a doer could re-select and double-ship an item whose round had
+  // already gone out — exactly the bug a doer reported live: the Select Items picker showed
+  // 3 rounds for one customer when only 1 was genuinely still pending.
+  const { data: eligibleItems = [] } = useQuery({ queryKey: ["transport-eligible-items"], queryFn: () => listEligibleItems() });
+  const unattachedRoundIds = new Set(eligibleItems.map((i) => i.DISP_CONF_ITEM_ID).filter(Boolean));
+  const completedPdiItems = rawCompletedPdiItems.filter((r) => unattachedRoundIds.has(r.DISP_CONF_ITEM_ID));
 
   // The vehicle master loads after first render, so the VEH-001 default can't fill its own
   // Vehicle type/No./Size/Driver fields synchronously — do it once the master arrives, and

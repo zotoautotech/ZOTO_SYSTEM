@@ -175,7 +175,7 @@ export function TransportList() {
       <div style={{ padding: "8px 0 24px" }}>
         {filteredItems.map((row) => (
           <div
-            key={row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
+            key={row.DISP_CONF_ITEM_ID || row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
             className="card"
             style={{ padding: 14, marginBottom: 10, cursor: "pointer" }}
             onClick={() => navigate(`/modules/transport/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
@@ -201,7 +201,7 @@ export function TransportList() {
         <DataTable
           columns={columns}
           rows={filteredItems}
-          getRowKey={(row) => row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
+          getRowKey={(row) => row.DISP_CONF_ITEM_ID || row.ITEM_ID || `${row.ORDER_ID}-${row.PART_NO}`}
           emptyMessage={emptyMessage}
           onRowClick={(row) => navigate(`/modules/transport/${row.ORDER_ID}/items/${row.ITEM_ID}`)}
         />
