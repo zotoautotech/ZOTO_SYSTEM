@@ -177,26 +177,58 @@ async function unattachedPdiRounds(): Promise<SheetRow[]> {
     readTable(env.sheets.transactions, "Transport_Products"),
   ]);
   const attachedRoundIds = new Set(productRows.map((r) => r["Disp Conf Item ID"]).filter(Boolean));
-  // Rows attached BEFORE this column existed carry no round id. Treating those as
-  // "unattached" would resurrect already-shipped items into the pending queue, so fall back
-  // to the old ORDER_ID+ITEM_ID identity for them only.
-  const legacyAttachedItemKeys = new Set(
-    productRows.filter((r) => !r["Disp Conf Item ID"]).map((r) => `${r.ORDER_ID}::${r.ITEM_ID}`)
-  );
-  // The legacy ORDER_ID+ITEM_ID fallback must only ever suppress a PDI row that is ITSELF
-  // legacy (no round id of its own) — real bug found live: an item split across rounds where
-  // an EARLIER round got attached before the round-id column existed (blank Disp Conf Item
-  // ID on its Transport_Products row) permanently blocked every LATER round of that same
-  // item from ever becoming eligible, even though the later round carries its own distinct,
-  // genuinely-unattached Disp Conf Item ID. A round-tracked PDI row must be judged purely on
-  // whether its own round id is attached — the item-level fallback is for rows with no round
-  // id to check against at all.
-  return pdiRows.filter((r) => {
-    if (r.Status !== "PDI Completed") return false;
-    const roundId = r["Disp Conf Item ID"];
-    if (roundId) return !attachedRoundIds.has(roundId);
-    return !legacyAttachedItemKeys.has(`${r.ORDER_ID}::${r.ITEM_ID}`);
-  });
+  // A blank-round-id Transport_Products row (the AttachOrdersModal.tsx "attach whole order"
+  // flow doesn't write a round id even today, not just historically — "legacy" isn't purely
+  // a past-tense thing) can't be matched to one specific round by id, only by ORDER_ID+
+  // ITEM_ID. Two live bugs were found trying to resolve that ambiguity with a single boolean
+  // "is this item's key present" check, in opposite directions:
+  //  - Blocking every future round of an item once ANY blank-round-id row existed for it —
+  //    wrongly held back a genuinely new, later-approved round (e.g. 15 SET approved after
+  //    an earlier 5 SET had already shipped blank-round-id).
+  //  - Only checking a round against the legacy key when the round ITSELF had no round id —
+  //    wrongly resurrected an item whose single, only round had already fully shipped via a
+  //    blank-round-id attach (the round id existing on the PDI row doesn't mean the shipment
+  //    that already happened recorded it).
+  // Neither a pure round-id check nor a pure item-key check is enough on its own — only
+  // actual QUANTITY reconciliation tells the two cases apart. For each item, sum every
+  // Transport_Products row's Quantity (round-tracked or not — a round-tracked row's own
+  // qty is also correct to count via attachedRoundIds, but summing here is simpler and
+  // equivalent), then walk that item's own PDI-completed rounds oldest-first, treating each
+  // round as "shipped" only while there's still enough summed quantity left to cover it —
+  // the first round quantity can't fully cover, and every round after it, count as
+  // genuinely unattached.
+  const attachedQtyByItem = new Map<string, number>();
+  for (const r of productRows) {
+    const key = `${r.ORDER_ID}::${r.ITEM_ID}`;
+    attachedQtyByItem.set(key, (attachedQtyByItem.get(key) ?? 0) + (Number(r.Quantity) || 0));
+  }
+
+  const completedByItem = new Map<string, SheetRow[]>();
+  for (const r of pdiRows) {
+    if (r.Status !== "PDI Completed") continue;
+    const key = `${r.ORDER_ID}::${r.ITEM_ID}`;
+    if (!completedByItem.has(key)) completedByItem.set(key, []);
+    completedByItem.get(key)!.push(r);
+  }
+
+  const unattached: SheetRow[] = [];
+  for (const [key, rounds] of completedByItem) {
+    rounds.sort((a, b) => (a.Timestamp || "").localeCompare(b.Timestamp || ""));
+    let remainingShippedQty = attachedQtyByItem.get(key) ?? 0;
+    let stillCovered = true;
+    for (const round of rounds) {
+      const roundId = round["Disp Conf Item ID"];
+      if (roundId && attachedRoundIds.has(roundId)) continue; // explicitly attached — never eligible
+      const roundQty = Number(round.Quantity) || 0;
+      if (stillCovered && remainingShippedQty >= roundQty) {
+        remainingShippedQty -= roundQty;
+        continue;
+      }
+      stillCovered = false;
+      unattached.push(round);
+    }
+  }
+  return unattached;
 }
 
 /** Orders with at least one approved+PDI'd round still waiting for a vehicle. */
