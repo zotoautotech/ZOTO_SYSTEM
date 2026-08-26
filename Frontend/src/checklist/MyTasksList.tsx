@@ -217,6 +217,11 @@ export function MyTasksList() {
         <div style={{ padding: "8px 0 24px" }}>
           {tasks.map((row) => {
             const selected = selectedIds.has(row.TASK_ID);
+            // Desktop colors the WHOLE row by Delay Duration via DataTable's getRowStyle (see
+            // below) — this custom mobile card never went through that, so overdue/near-due
+            // tasks looked identical to on-time ones on phone. Same getDelayColor rule here,
+            // applied as the card's own text/accent color so mobile matches desktop.
+            const delayColor = getDelayColor(row.DELAY_MS);
             return (
               <button
                 key={row.TASK_ID}
@@ -235,19 +240,22 @@ export function MyTasksList() {
                   cursor: showCompleted ? "default" : "pointer",
                   ...(selected
                     ? { background: "var(--color-primary-tint)", color: "var(--color-text)" }
-                    : { color: "var(--color-text)" }),
+                    : { color: delayColor ?? "var(--color-text)" }),
+                  ...(delayColor && !selected ? { borderColor: delayColor, fontWeight: 600 } : undefined),
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ fontWeight: 700 }}>{row.TASK || "—"}</span>
-                  <span className="text-muted" style={{ fontSize: 12 }}>{row.PLANNED ? formatTimestamp(row.PLANNED) : "—"}</span>
+                  <span className={delayColor ? undefined : "text-muted"} style={{ fontSize: 12, color: delayColor }}>
+                    {row.PLANNED ? formatTimestamp(row.PLANNED) : "—"}
+                  </span>
                 </div>
                 {isAdmin && (
-                  <div className="text-muted" style={{ fontSize: 13, marginTop: 5 }}>
+                  <div className={delayColor ? undefined : "text-muted"} style={{ fontSize: 13, marginTop: 5, color: delayColor }}>
                     {row.FULL_NAME || "—"}
                   </div>
                 )}
-                <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>
+                <div className={delayColor ? undefined : "text-muted"} style={{ fontSize: 13, marginTop: 2, color: delayColor }}>
                   {row.FREQUENCY} · {row.DELAY_DURATION || (row.STATUS || "Pending")}
                 </div>
               </button>
