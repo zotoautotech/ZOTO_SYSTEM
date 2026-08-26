@@ -88,6 +88,8 @@ export async function getTrip(transportId: string) {
     stockReleaseStatus?: string;
     taxInvoiceNo?: string;
     taxInvoiceDate?: string;
+    taxInvoiceAttachmentFileId?: string;
+    taxInvoiceRemarks?: string;
   }>(`/transport-trips/${transportId}`);
   return res.data;
 }

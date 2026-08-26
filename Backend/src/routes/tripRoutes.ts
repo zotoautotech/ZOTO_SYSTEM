@@ -481,6 +481,8 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     const taxInvoiceRow = taxInvoiceRows.find((r) => r.Transport_ID === req.params.transportId) ?? null;
     const taxInvoiceNo = taxInvoiceRow?.["Tax Invoice No."] || "";
     const taxInvoiceDate = taxInvoiceRow?.["Tax Invoice Date"] || "";
+    const taxInvoiceAttachmentFileId = taxInvoiceRow?.["Tax Invoice Attachment"] || "";
+    const taxInvoiceRemarks = taxInvoiceRow?.["Tax Invoice Remarks"] || "";
     // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
     // matches the old CRR reference's trip detail layout exactly.
     const dispatches = attached.map((a) => ({
@@ -536,7 +538,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
         remarks: r["Additional Notes"] || "",
       };
     });
-    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus, taxInvoiceNo, taxInvoiceDate });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus, taxInvoiceNo, taxInvoiceDate, taxInvoiceAttachmentFileId, taxInvoiceRemarks });
   } catch (err) {
     next(err);
   }

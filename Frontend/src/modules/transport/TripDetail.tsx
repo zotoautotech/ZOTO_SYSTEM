@@ -191,7 +191,7 @@ export function TripDetail() {
   // an older deploy than this frontend bundle (a real ordering hazard across two separate
   // Vercel projects), the field would be missing entirely and every .reduce/.length call
   // below would throw, white-screening the whole page with no error boundary to catch it.
-  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems = [], stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus, taxInvoiceNo, taxInvoiceDate } = data;
+  const { transport, orders, orderSnapshot, dispatches, items, taxInvoiceItems = [], stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus, taxInvoiceNo, taxInvoiceDate, taxInvoiceAttachmentFileId, taxInvoiceRemarks } = data;
   const stage = getTripStage(moduleKey);
   const order = orders[0];
   // orderSnapshot (Transport_SO's own row) carries several fields ORDER_PUNCH doesn't —
@@ -326,6 +326,8 @@ export function TripDetail() {
               <Section title="Tax Invoice Details">
                 <Field label="Tax Invoice No." value={taxInvoiceNo} />
                 <Field label="Tax Invoice Date" value={taxInvoiceDate} />
+                <FieldFile label="Tax Invoice Attachment" fileId={taxInvoiceAttachmentFileId} linkLabel="View Attachment" />
+                <Field label="Tax Invoice Remarks" value={taxInvoiceRemarks} />
                 {!taxInvoiceNo && <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Not yet submitted.</p>}
               </Section>
 
