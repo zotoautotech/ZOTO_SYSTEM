@@ -183,12 +183,20 @@ async function unattachedPdiRounds(): Promise<SheetRow[]> {
   const legacyAttachedItemKeys = new Set(
     productRows.filter((r) => !r["Disp Conf Item ID"]).map((r) => `${r.ORDER_ID}::${r.ITEM_ID}`)
   );
-  return pdiRows.filter(
-    (r) =>
-      r.Status === "PDI Completed" &&
-      !attachedRoundIds.has(r["Disp Conf Item ID"]) &&
-      !legacyAttachedItemKeys.has(`${r.ORDER_ID}::${r.ITEM_ID}`)
-  );
+  // The legacy ORDER_ID+ITEM_ID fallback must only ever suppress a PDI row that is ITSELF
+  // legacy (no round id of its own) — real bug found live: an item split across rounds where
+  // an EARLIER round got attached before the round-id column existed (blank Disp Conf Item
+  // ID on its Transport_Products row) permanently blocked every LATER round of that same
+  // item from ever becoming eligible, even though the later round carries its own distinct,
+  // genuinely-unattached Disp Conf Item ID. A round-tracked PDI row must be judged purely on
+  // whether its own round id is attached — the item-level fallback is for rows with no round
+  // id to check against at all.
+  return pdiRows.filter((r) => {
+    if (r.Status !== "PDI Completed") return false;
+    const roundId = r["Disp Conf Item ID"];
+    if (roundId) return !attachedRoundIds.has(roundId);
+    return !legacyAttachedItemKeys.has(`${r.ORDER_ID}::${r.ITEM_ID}`);
+  });
 }
 
 /** Orders with at least one approved+PDI'd round still waiting for a vehicle. */
