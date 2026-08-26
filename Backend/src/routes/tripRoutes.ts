@@ -450,7 +450,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     // failed (e.g. right after attachOrders) is by seeing the column still blank when the
     // trip is read again — same revert-on-read reasoning used throughout this app.
     // ensureDispatchGatePass no-ops instantly if a value already exists.
-    const [attached, productRows, soRows, stockReleaseIds, taxInvoiceIds, gatePassFileId, stockReleaseRows] = await Promise.all([
+    const [attached, productRows, soRows, stockReleaseIds, taxInvoiceIds, gatePassFileId, stockReleaseRows, taxInvoiceRows] = await Promise.all([
       getAttachedOrders(req.params.transportId),
       readTable(env.sheets.transactions, "Transport_Products"),
       readTable(env.sheets.transactions, "Transport_SO"),
@@ -458,6 +458,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
       getTransportIdsWithTaxInvoice(),
       ensureDispatchGatePass(req.params.transportId),
       readTable(env.sheets.transactions, "STOCK_RELEASE"),
+      readTable(env.sheets.transactions, "TAX_INVOICE"),
     ]);
     // The FIRST attached order's own Transport_SO row — carries the buyer/billing/shipping/
     // consignee/logistics snapshot exactly as it was at attach time (Freight Paid by/at,
@@ -472,6 +473,14 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     // branch, other one still pending" while both sit at REACHED.
     const stockReleaseDone = stockReleaseIds.has(req.params.transportId);
     const taxInvoiceDone = taxInvoiceIds.has(req.params.transportId);
+    // TAX_INVOICE carries its own Transport_ID column directly (unlike STOCK_RELEASE) — but
+    // TripDetail.tsx's "Tax Invoice Details" section was reading Tax Invoice No./Date off
+    // `transport` (the TRANSPORT tab's own row), which has no such columns at all, so it
+    // always showed "Not yet submitted." even for a genuinely completed invoice. Read the
+    // trip's own TAX_INVOICE row here instead.
+    const taxInvoiceRow = taxInvoiceRows.find((r) => r.Transport_ID === req.params.transportId) ?? null;
+    const taxInvoiceNo = taxInvoiceRow?.["Tax Invoice No."] || "";
+    const taxInvoiceDate = taxInvoiceRow?.["Tax Invoice Date"] || "";
     // "S.O Dispatches" (attached orders) and "S.O Items Dispatches" (their line items) —
     // matches the old CRR reference's trip detail layout exactly.
     const dispatches = attached.map((a) => ({
@@ -527,7 +536,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
         remarks: r["Additional Notes"] || "",
       };
     });
-    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus, taxInvoiceNo, taxInvoiceDate });
   } catch (err) {
     next(err);
   }

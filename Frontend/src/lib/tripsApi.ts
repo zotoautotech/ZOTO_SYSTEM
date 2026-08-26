@@ -86,6 +86,8 @@ export async function getTrip(transportId: string) {
     stockReleaseAttachmentFileId?: string;
     stockReleaseFrom?: string;
     stockReleaseStatus?: string;
+    taxInvoiceNo?: string;
+    taxInvoiceDate?: string;
   }>(`/transport-trips/${transportId}`);
   return res.data;
 }
