@@ -13,6 +13,9 @@ export interface DonutSegment {
   color: string;
   /** Shown in the hover tooltip next to this segment's value (e.g. the doer's name). */
   label?: string;
+  /** Opaque identifier a caller can use in onSegmentClick (e.g. a doer's employee id) —
+   * DonutChart never reads this itself. */
+  id?: string;
 }
 
 const COLORS = {
@@ -30,6 +33,7 @@ export function DonutChart({
   strokeWidth = 20,
   centerValue,
   onClick,
+  onSegmentClick,
 }: {
   segments: DonutSegment[];
   size?: number;
@@ -38,8 +42,14 @@ export function DonutChart({
    * the single segment's own value when there's exactly one. */
   centerValue?: number;
   /** Makes the whole ring clickable (e.g. drilling into a data table) — cursor becomes a
-   * pointer over the chart. */
+   * pointer over the chart. Fires for a click that doesn't land on any one arc (e.g. the
+   * center hole) when onSegmentClick is also given; fires for any click on the ring
+   * otherwise. */
   onClick?: () => void;
+  /** Makes each individual arc clickable with its own segment — e.g. clicking just the
+   * "Pinki" slice drills into Pinki's own data, not everyone's. Takes priority over onClick
+   * for a click that actually lands on an arc. */
+  onSegmentClick?: (seg: DonutSegment) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ seg: DonutSegment; x: number; y: number } | null>(null);
@@ -103,7 +113,15 @@ export function DonutChart({
             strokeDasharray={`${dash} ${circumference - dash}`}
             strokeDashoffset={offset}
             transform={`rotate(-90 ${center} ${center})`}
-            style={{ cursor: seg.label ? "pointer" : undefined }}
+            style={{ cursor: onSegmentClick || seg.label ? "pointer" : undefined }}
+            onClick={
+              onSegmentClick
+                ? (e) => {
+                    e.stopPropagation();
+                    onSegmentClick(seg);
+                  }
+                : undefined
+            }
             onMouseMove={seg.label ? (e) => trackMouse(seg, e) : undefined}
             onMouseLeave={seg.label ? () => setHover(null) : undefined}
           />

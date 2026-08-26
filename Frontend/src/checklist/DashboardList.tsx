@@ -45,6 +45,7 @@ export function DashboardList() {
     value: d.count,
     color: PALETTE[i % PALETTE.length],
     label: d.fullName,
+    id: d.doerId,
   }));
 
   return (
@@ -62,6 +63,7 @@ export function DashboardList() {
           centerValue={isLoading ? undefined : accountTotal}
           onExpand={() => navigate("/checklist/dashboard/account")}
           onDonutClick={doers.length > 0 ? () => navigate("/checklist/dashboard/account/data") : undefined}
+          onSegmentClick={(seg) => seg.id && navigate(`/checklist/dashboard/${encodeURIComponent(seg.id)}`)}
         />
         {OTHER_DEPARTMENTS.map((title) => (
           <DeptCard key={title} title={title} segments={undefined} />
@@ -77,6 +79,7 @@ function DeptCard({
   centerValue,
   onExpand,
   onDonutClick,
+  onSegmentClick,
 }: {
   title: string;
   /** `undefined` = no real data source yet, renders a blank gray ring. */
@@ -85,9 +88,16 @@ function DeptCard({
   /** Opens the full-page single-chart drill-down. Omit for cards with no real data source
    * yet — nothing to expand into. */
   onExpand?: () => void;
-  /** Clicking the ring itself jumps straight to the real data table, skipping the
-   * intermediate full-chart page — a shortcut alongside (not a replacement for) Expand. */
+  /** Clicking the ring itself (but not landing on a specific doer's own slice — see
+   * onSegmentClick) jumps straight to the real data table, skipping the intermediate
+   * full-chart page — a shortcut alongside (not a replacement for) Expand. */
   onDonutClick?: () => void;
+  /** Clicking a specific doer's slice drills straight into just that doer's own pending
+   * tasks (DoerPendingList.tsx) instead of everyone's — this used to be indistinguishable
+   * from onDonutClick (the whole ring fired the same generic handler regardless of which
+   * segment was clicked), which was the actual bug a doer reported: clicking their own
+   * slice in the tooltip still showed every doer's tasks. */
+  onSegmentClick?: (seg: DonutSegment) => void;
 }) {
   return (
     <div
@@ -122,7 +132,7 @@ function DeptCard({
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
-        <DonutChart segments={segments ?? []} centerValue={centerValue} onClick={onDonutClick} />
+        <DonutChart segments={segments ?? []} centerValue={centerValue} onClick={onDonutClick} onSegmentClick={onSegmentClick} />
       </div>
 
       <div style={{ position: "absolute", right: 6, bottom: 4, color: "var(--color-border)", fontSize: 10 }}>
