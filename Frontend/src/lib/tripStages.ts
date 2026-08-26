@@ -125,18 +125,6 @@ export const TRIP_STAGES: TripStageDef[] = [
     action: "tax-invoice",
     completionTab: "TAX_INVOICE",
     tab: "TAX_INVOICE",
-    // Item-level pending view, matching Transport Reached/PDI's own convention — one row per
-    // Part on the trip instead of one row per trip. Rows still open the TRIP (the Upload Tax
-    // Invoice Form action is trip-level, not per-item — same "item-level here is display
-    // only" reasoning TripQueueList.tsx's own itemColumns comment already documents).
-    pendingItemColumns: [
-      { header: "CUST ID", field: "CUST ID" },
-      { header: "Customer Name", field: "Customer Name" },
-      { header: "Part No.", field: "Part No." },
-      { header: "Part Name", field: "Part Name" },
-      { header: "Quantity", field: "Quantity" },
-      { header: "Unit", field: "Unit" },
-    ],
     completedColumns: [
       { header: "Customer Name", field: "Customer Name" },
       { header: "Tax Invoice No.", field: "Tax Invoice No." },
