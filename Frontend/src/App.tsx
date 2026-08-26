@@ -29,6 +29,7 @@ import { TransportItemDetail } from "./modules/transport/TransportItemDetail";
 import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
 import { BulkReachedForm } from "./modules/transport/forms/BulkReachedForm";
+import { BulkStockReleaseForm } from "./modules/transport/forms/BulkStockReleaseForm";
 import { Dashboard } from "./modules/dashboard/Dashboard";
 import { MyTasksList } from "./checklist/MyTasksList";
 import { AssignedChecklistList } from "./checklist/AssignedChecklistList";
@@ -121,6 +122,8 @@ export default function App() {
                 pendingStatusLabel={stage.pendingStatusLabel}
                 {...(stage.key === "transport-reached"
                   ? { bulkForm: BulkReachedForm, bulkFormLabel: "Bulk Transport Reached Form" }
+                  : stage.key === "stock-release"
+                  ? { bulkForm: BulkStockReleaseForm, bulkFormLabel: "Bulk Stock Release Form" }
                   : {})}
               />
             }

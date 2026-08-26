@@ -190,6 +190,10 @@ export function TripQueueList({
     return r.Transport_Pd_ID || `${r.Transport_ID}-${r.ITEM_ID}`;
   }
   const selectedItems = filteredPendingItems.filter((r) => selectedIds.has(itemRowKey(r)));
+  // Trip-level bulk selection (e.g. Stock Release, whose pending view has no
+  // pendingItemColumns — it's already one row per trip, no item->trip dedup needed the way
+  // BulkReachedForm.tsx has to for the item-level case above).
+  const selectedTrips = filtered.filter((t) => selectedIds.has(t.Transport_ID));
 
   function handleBulkSaved() {
     queryClient.invalidateQueries({ queryKey: ["trips", moduleKey] });
@@ -201,7 +205,7 @@ export function TripQueueList({
     exitSelectMode();
   }
 
-  const canBulkSelect = !!bulkForm && itemLevelPending;
+  const canBulkSelect = !!bulkForm && !ownCompletedView;
 
   useSetHeaderLeft(
     canBulkSelect && selectMode ? (
@@ -384,8 +388,11 @@ export function TripQueueList({
             columns={columns}
             rows={filtered}
             getRowKey={(t) => t.Transport_ID}
-            onRowClick={(t) => navigate(`/modules/${moduleKey}/${t.Transport_ID}`)}
+            onRowClick={(t) => (selectMode ? toggleRow(t.Transport_ID) : navigate(`/modules/${moduleKey}/${t.Transport_ID}`))}
             emptyMessage={emptyMessage}
+            selectable={canBulkSelect && selectMode}
+            selectedKeys={selectedIds}
+            onToggleRow={toggleRow}
           />
         )}
       </div>
@@ -393,7 +400,7 @@ export function TripQueueList({
         bulkForm &&
         (() => {
           const BulkForm = bulkForm;
-          return <BulkForm items={selectedItems} onClose={closeBulkFormAndExit} onSaved={handleBulkSaved} />;
+          return <BulkForm items={itemLevelPending ? selectedItems : selectedTrips} onClose={closeBulkFormAndExit} onSaved={handleBulkSaved} />;
         })()}
     </div>
   );

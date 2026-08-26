@@ -487,8 +487,15 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
     // (StockReleaseForm.tsx takes one "Attach Document" field for the whole submission, not
     // per item), so any one row's own Attachment is "the" attachment for this trip.
     const tripPdIds = new Set(tripProductRows.map((r) => r.Transport_Pd_ID));
-    const stockReleaseAttachmentFileId =
-      stockReleaseRows.find((r) => tripPdIds.has(r.Transport_Pd_ID) && r.Attachment)?.Attachment || "";
+    const tripStockReleaseRows = stockReleaseRows.filter((r) => tripPdIds.has(r.Transport_Pd_ID));
+    // From/Type are also shared across the whole submission (StockReleaseForm.tsx takes one
+    // "From" field for every item released together, "Type" is always "OUT" server-side) —
+    // same "any one row's own value is THE value for this trip" reasoning as the attachment.
+    // Status is per-item, but they all move in lockstep (StockReleaseForm.tsx has no
+    // per-item partial-submit path), so the first row's Status represents the submission.
+    const stockReleaseAttachmentFileId = tripStockReleaseRows.find((r) => r.Attachment)?.Attachment || "";
+    const stockReleaseFrom = tripStockReleaseRows.find((r) => r.From)?.From || "";
+    const stockReleaseStatus = tripStockReleaseRows[0]?.Status || "";
     const items = tripProductRows.map((r) => ({
       partNo: r["Part No."] || "",
       partName: r["Part Name"] || "",
@@ -520,7 +527,7 @@ tripsRouter.get("/:transportId", anyOrderModule, async (req, res, next) => {
         remarks: r["Additional Notes"] || "",
       };
     });
-    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId });
+    res.json({ transport, orders: attached.map((o) => o.order), orderSnapshot, dispatches, items, taxInvoiceItems, stockReleaseDone, taxInvoiceDone, gatePassFileId, stockReleaseAttachmentFileId, stockReleaseFrom, stockReleaseStatus });
   } catch (err) {
     next(err);
   }
