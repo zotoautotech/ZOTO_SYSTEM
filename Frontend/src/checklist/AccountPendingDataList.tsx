@@ -3,15 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
 import { formatTimestamp } from "../lib/format";
 import { useIsMobile } from "../lib/responsive";
-import { getDelayColor, listMyTasks, type ChecklistTaskRecord } from "./lib/checklistApi";
+import { getDelayColor, listAllPendingAdmin, type ChecklistTaskRecord } from "./lib/checklistApi";
 import { FollowUpForm } from "./FollowUpForm";
 
 /** Drill-down data table from `AccountDashboardExpand.tsx`'s "Data" button — every pending
- * task instance across every doer (`GET /tasks/mine`). This page is itself only reachable
- * through the admin-only Dashboard flow, so the caller here is always an admin — `/tasks/mine`
- * still returns every doer's rows for an admin caller even though it now scopes non-admin
- * callers to just their own (see `checklist.ts`), so this page's "every doer" behavior is
- * unaffected by that change. Each row's "Update Remark" opens the same `PcFollowUp` form
+ * task instance across every doer (`GET /checklist/admin/pending-all`, red-only/genuinely-
+ * overdue — a dedicated endpoint, deliberately NOT `GET /tasks/mine`: that endpoint's own
+ * Pending definition is isDueNow() for a doer's personal Checklist page, a different scope
+ * than the admin Dashboard's red-only one — see checklist.ts's own comment on why these two
+ * stayed decoupled). Each row's "Update Remark" opens the same `PcFollowUp` form
  * used everywhere else in this app (`FollowUpForm.tsx`) — kept as an always-visible column
  * button rather than the reference's hover-only reveal, matching this app's existing
  * `DoerPendingList.tsx` row-action convention instead of adding a one-off hover
@@ -21,8 +21,8 @@ export function AccountPendingDataList() {
   const [activeTask, setActiveTask] = useState<ChecklistTaskRecord | null>(null);
 
   const { data: rawTasks = [], isLoading } = useQuery({
-    queryKey: ["checklist", "mine", false],
-    queryFn: () => listMyTasks(),
+    queryKey: ["checklist", "admin", "pending-all"],
+    queryFn: listAllPendingAdmin,
   });
   const tasks = rawTasks.filter((t) => t.TASK?.trim());
 

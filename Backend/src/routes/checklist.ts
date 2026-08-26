@@ -284,16 +284,17 @@ function delayDuration(planned: string): string {
  * board, not a personal inbox: the old Show_If only gated whether the *menu item* appeared
  * (department match or an admin-email allowlist), never which *rows* a viewer could see.
  * Endpoint path kept as "mine" to avoid a wider rename; the name no longer reflects a
- * per-user filter. Pending = Status blank + genuinely overdue (delayMs(r.PLANNED) > 0 — the
- * same "red" condition the frontend's own getDelayColor() colors a row by, per explicit user
- * request that Pending only ever show what's actually red, not merely due-today-or-earlier
- * the way isDueNow() alone would include; isDueNow() is still used elsewhere, e.g. the
- * dashboard "how many tasks exist for today" bulk-generation gate, just not as this
- * endpoint's own Pending filter anymore); Completed = Status set (Done/Rejected/leave
- * types), no date filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're
- * virtual/formula columns in the old schema (Full Name = lookup from Doer List by Email,
- * Delay Duration = NOW()-Planned) — looked up per row now since rows span every doer, not
- * the caller alone.
+ * per-user filter. Pending = Status blank + due now (Planned <= today, see isDueNow — the
+ * recurrence engine bulk-generates weeks/months of future rows up front, so "pending" can't
+ * just mean "no status yet"); Completed = Status set (Done/Rejected/leave types), no date
+ * filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're virtual/formula
+ * columns in the old schema (Full Name = lookup from Doer List by Email, Delay Duration =
+ * NOW()-Planned) — looked up per row now since rows span every doer, not the caller alone.
+ * **A "red only" (delayMs > 0) narrowing was tried here once and reverted** — the user's
+ * intent was for that to apply only to the admin Dashboard's counts/drill-down (see
+ * GET /admin/dashboard and GET /admin/pending/:doerId below), not this endpoint, which is
+ * every doer's own personal Pending view and stays on isDueNow(). Don't reapply a delayMs
+ * filter here without checking with the user again first.
  *
  * SUPERSEDES the department-wide-shared-queue behavior this endpoint used to have: a
  * non-admin doer now only sees their OWN rows (`EMAIL === req.user.employeeId`), Admin
@@ -308,7 +309,7 @@ checklistRouter.get("/tasks/mine", async (req, res, next) => {
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && (delayMs(r.PLANNED) ?? 0) > 0))
+      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && isDueNow(r.PLANNED)))
       .filter((r) => admin || r.EMAIL?.trim() === employeeId)
       .map((r): SheetRow => ({
         ...r,
@@ -448,8 +449,11 @@ checklistRouter.get("/admin/dashboard", requireChecklistAdmin, async (_req, res,
 });
 
 /** GET /checklist/admin/pending/:doerId — one doer's pending task instances, for admins
- * drilling into a dashboard entry (same shape as GET /tasks/mine's pending branch, just
- * parameterized by an arbitrary doer instead of the logged-in user). */
+ * drilling into one dashboard donut segment. "Pending" here means genuinely overdue
+ * (delayMs > 0, the "red" condition — see GET /admin/dashboard's own comment for why this
+ * stays decoupled from GET /tasks/mine's own isDueNow()-based Pending, per explicit user
+ * request: the red-only definition applies only to the admin Dashboard's own views, not a
+ * doer's personal Checklist page). */
 checklistRouter.get("/admin/pending/:doerId", requireChecklistAdmin, async (req, res, next) => {
   try {
     const { doerId } = req.params;
@@ -466,6 +470,36 @@ checklistRouter.get("/admin/pending/:doerId", requireChecklistAdmin, async (req,
           DELAY_MS: String(delayMs(r.PLANNED) ?? ""),
         })
       );
+
+    rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
+    res.json({ tasks: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /checklist/admin/pending-all — every doer's pending task instances at once, for
+ * AccountPendingDataList.tsx's "click the ring / non-segment area" drill-down from the
+ * Dashboard. Deliberately its OWN route rather than reusing GET /tasks/mine's admin-sees-
+ * everyone branch: this page's "pending" must stay red-only (delayMs > 0) even after
+ * GET /tasks/mine went back to isDueNow() for a doer's own personal Checklist page — sharing
+ * one endpoint would have coupled those two independently-scoped Pending definitions again. */
+checklistRouter.get("/admin/pending-all", requireChecklistAdmin, async (_req, res, next) => {
+  try {
+    const [rawRows, nameLookup] = await Promise.all([
+      readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB),
+      buildDoerNameLookup(),
+    ]);
+
+    const rows: SheetRow[] = rawRows
+      .map(masterAccountsFromSheet)
+      .filter((r) => !r.STATUS?.trim() && (delayMs(r.PLANNED) ?? 0) > 0)
+      .map((r): SheetRow => ({
+        ...r,
+        FULL_NAME: nameLookup.get(r.EMAIL?.trim() ?? "") ?? r.EMAIL ?? "",
+        DELAY_DURATION: delayDuration(r.PLANNED),
+        DELAY_MS: String(delayMs(r.PLANNED) ?? ""),
+      }));
 
     rows.sort((a, b) => (a.PLANNED ?? "").localeCompare(b.PLANNED ?? ""));
     res.json({ tasks: rows });

@@ -71,9 +71,7 @@ export function MyTasksList() {
     queryFn: checkIsChecklistAdmin,
   });
   // Hides stray blank rows (empty Task/no data at all) — Sheets sometimes has trailing
-  // blank rows or rows left over from bulk edits that shouldn't render as real tasks. Pending
-  // is already narrowed server-side (GET /checklist/tasks/mine) to only RED/genuinely-overdue
-  // tasks — same condition getDelayColor() below colors a row by — per explicit user request.
+  // blank rows or rows left over from bulk edits that shouldn't render as real tasks.
   const tasks = rawTasks.filter((t) => t.TASK?.trim());
   const selectedTasks = tasks.filter((t) => selectedIds.has(t.TASK_ID));
 

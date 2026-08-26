@@ -119,6 +119,14 @@ export async function listPendingForDoer(doerId: string) {
   return res.data.tasks;
 }
 
+/** Every doer's pending tasks at once, red-only (delayMs > 0) — the Dashboard's own "click
+ * the ring" drill-down (AccountPendingDataList.tsx). Deliberately separate from
+ * listMyTasks(), which stays on isDueNow() for a doer's own personal Checklist page. */
+export async function listAllPendingAdmin() {
+  const res = await api.get<{ tasks: ChecklistTaskRecord[] }>("/checklist/admin/pending-all");
+  return res.data.tasks;
+}
+
 export interface FollowUpPayload {
   remarks: string;
   imageFileId?: string;
