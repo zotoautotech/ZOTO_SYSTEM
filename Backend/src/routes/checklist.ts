@@ -559,13 +559,16 @@ checklistRouter.post("/tasks/:taskId/followup", requireChecklistAdmin, async (re
  * Pending sections. Shared by both routes below so the GET preview and the POST save always
  * see identical wording.
  *
- * Written to read like an actual WhatsApp message a doer sends their boss, not an internal
- * numbered "Completed (9)/Pending (10)" audit list — the first version of this did exactly
- * that and the user pushed back on it directly. Each completed task shows its own Remark's
- * text (what the doer actually typed on TaskCompleteForm when marking it done) instead of a
- * bare "(Done)" tag — that remark is the substance of what got done, a bare status word
- * isn't. A completed task with no remark just shows a checkmark and the task name; a task
- * still pending shows plain, no decoration (nothing to report on it yet). */
+ * Written to read like an actual WhatsApp message a doer sends their boss — plain,
+ * professional wording, no emoji (tried once, the user asked for it removed) and no internal
+ * numbered "Completed (9)/Pending (10)" audit-list framing (an even earlier version, also
+ * rejected). Only the wrapper text (section labels, punctuation) is fixed English — every
+ * Task/Remark's value passes through completely unedited, so it reads correctly whether a
+ * doer typed it in English, Hinglish, or a mix of both, exactly as they wrote it. Each
+ * completed task shows its own Remark's text (what the doer actually typed on
+ * TaskCompleteForm when marking it done) instead of a bare "(Done)" tag — that remark is the
+ * substance of what got done, a bare status word isn't. A completed task with no remark just
+ * shows the task name; a task still pending shows plain, no decoration. */
 async function buildTodayReportText(employeeId: string): Promise<string> {
   const rows = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
     .map(masterAccountsFromSheet)
@@ -579,7 +582,7 @@ async function buildTodayReportText(employeeId: string): Promise<string> {
 
   const lines: string[] = [`Today's Update – ${dateLabel}`, ""];
   if (completed.length > 0) {
-    lines.push("✅ Completed:");
+    lines.push("Completed:");
     completed.forEach((r) => {
       const remark = r.REMARKS?.trim();
       lines.push(remark ? `- ${r.TASK || "—"} — ${remark}` : `- ${r.TASK || "—"}`);
@@ -587,7 +590,7 @@ async function buildTodayReportText(employeeId: string): Promise<string> {
     lines.push("");
   }
   if (pending.length > 0) {
-    lines.push("🕓 Pending:");
+    lines.push("Pending:");
     pending.forEach((r) => lines.push(`- ${r.TASK || "—"}`));
     lines.push("");
   }
