@@ -284,12 +284,16 @@ function delayDuration(planned: string): string {
  * board, not a personal inbox: the old Show_If only gated whether the *menu item* appeared
  * (department match or an admin-email allowlist), never which *rows* a viewer could see.
  * Endpoint path kept as "mine" to avoid a wider rename; the name no longer reflects a
- * per-user filter. Pending = Status blank + due now (Planned <= today, see isDueNow — the
- * recurrence engine bulk-generates weeks/months of future rows up front, so "pending" can't
- * just mean "no status yet"); Completed = Status set (Done/Rejected/leave types), no date
- * filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're virtual/formula
- * columns in the old schema (Full Name = lookup from Doer List by Email, Delay Duration =
- * NOW()-Planned) — looked up per row now since rows span every doer, not the caller alone.
+ * per-user filter. Pending = Status blank + genuinely overdue (delayMs(r.PLANNED) > 0 — the
+ * same "red" condition the frontend's own getDelayColor() colors a row by, per explicit user
+ * request that Pending only ever show what's actually red, not merely due-today-or-earlier
+ * the way isDueNow() alone would include; isDueNow() is still used elsewhere, e.g. the
+ * dashboard "how many tasks exist for today" bulk-generation gate, just not as this
+ * endpoint's own Pending filter anymore); Completed = Status set (Done/Rejected/leave
+ * types), no date filter. FULL_NAME and DELAY_DURATION are synthesized per row — they're
+ * virtual/formula columns in the old schema (Full Name = lookup from Doer List by Email,
+ * Delay Duration = NOW()-Planned) — looked up per row now since rows span every doer, not
+ * the caller alone.
  *
  * SUPERSEDES the department-wide-shared-queue behavior this endpoint used to have: a
  * non-admin doer now only sees their OWN rows (`EMAIL === req.user.employeeId`), Admin
@@ -304,7 +308,7 @@ checklistRouter.get("/tasks/mine", async (req, res, next) => {
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && isDueNow(r.PLANNED)))
+      .filter((r) => (wantCompleted ? !!r.STATUS?.trim() : !r.STATUS?.trim() && (delayMs(r.PLANNED) ?? 0) > 0))
       .filter((r) => admin || r.EMAIL?.trim() === employeeId)
       .map((r): SheetRow => ({
         ...r,
@@ -420,11 +424,14 @@ checklistRouter.get("/admin/dashboard", requireChecklistAdmin, async (_req, res,
 
     const counts = new Map<string, number>();
     for (const r of rows) {
-      // Same "pending" definition as GET /tasks/mine: Status blank AND due now (Planned <=
-      // today) — a bare blank-Status check (the old behavior here) counted every future-
-      // dated instance the recurrence engine has already bulk-generated too, inflating the
-      // dashboard number far past what's actually due.
-      if (r.STATUS?.trim() || !isDueNow(r.PLANNED)) continue;
+      // Same "pending" definition as GET /tasks/mine: Status blank AND genuinely overdue
+      // (delayMs > 0, the same "red" condition getDelayColor() colors a row by) — a bare
+      // blank-Status check (the old behavior here) counted every future-dated instance the
+      // recurrence engine has already bulk-generated too, inflating the dashboard number far
+      // past what's actually due; isDueNow() alone (an even earlier version of this fix)
+      // still counted merely-due-today-but-not-yet-late tasks, which the user asked to
+      // exclude too — the dashboard number should equal what's actually red.
+      if (r.STATUS?.trim() || (delayMs(r.PLANNED) ?? 0) <= 0) continue;
       const key = r.EMAIL?.trim();
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -450,7 +457,7 @@ checklistRouter.get("/admin/pending/:doerId", requireChecklistAdmin, async (req,
 
     const rows: SheetRow[] = (await readTable(env.sheets.checklistAccounts, MASTER_ACCOUNTS_TAB))
       .map(masterAccountsFromSheet)
-      .filter((r) => r.EMAIL?.trim() === doerId && !r.STATUS?.trim() && isDueNow(r.PLANNED))
+      .filter((r) => r.EMAIL?.trim() === doerId && !r.STATUS?.trim() && (delayMs(r.PLANNED) ?? 0) > 0)
       .map(
         (r): SheetRow => ({
           ...r,
