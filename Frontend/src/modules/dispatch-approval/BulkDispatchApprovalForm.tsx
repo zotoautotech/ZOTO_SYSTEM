@@ -89,7 +89,9 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
   function boxQtyErrorFor(item: DispatchApprovalItemRow) {
     const value = boxQtyByItem[itemKey(item)] ?? "";
     const n = Number(value);
-    if (!value || Number.isNaN(n) || n <= 0) return "Required.";
+    // 0 is a legitimate Box Quantity (e.g. loose items shipped unboxed) — only blank/negative/
+    // non-numeric is actually invalid.
+    if (!value || Number.isNaN(n) || n < 0) return "Required.";
     return "";
   }
 
@@ -115,7 +117,9 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
         await submitDispatchApproval(item.ORDER_ID, item.ITEM_ID, {
           outcome: outcome as Exclude<Outcome, "">,
           approvedQty: outcome === "Dispatch Today" ? qty : undefined,
-          boxQuantity: outcome === "Dispatch Today" && boxQty > 0 ? boxQty : undefined,
+          // 0 is a legitimate value (canSave() already required the field be filled and
+          // non-negative) — only omit it entirely for a non-"Dispatch Today" outcome.
+          boxQuantity: outcome === "Dispatch Today" ? boxQty : undefined,
           shortQty: outcome === "Short Quantity" ? qty : undefined,
           excessQty: outcome === "Excess Quantity" ? qty : undefined,
           nextExtendedDate: outcome === "Dispatch Extended" ? nextExtendedDate : undefined,

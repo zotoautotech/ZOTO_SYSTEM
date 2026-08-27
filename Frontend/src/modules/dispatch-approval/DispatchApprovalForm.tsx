@@ -97,7 +97,9 @@ export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLa
 
   function canSave() {
     if (!outcome || !remarks.trim()) return false;
-    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch", true) && !!boxQuantity && Number(boxQuantity) > 0;
+    // 0 is a legitimate Box Quantity (e.g. loose items shipped unboxed) — only blank/
+    // negative/non-numeric is actually invalid.
+    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch", true) && boxQuantity !== "" && Number(boxQuantity) >= 0;
     if (outcome === "Dispatch Extended") return !!nextExtendedDate;
     if (outcome === "Short Quantity") return !qtyError(shortQty, "Short", true);
     if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess", false);
