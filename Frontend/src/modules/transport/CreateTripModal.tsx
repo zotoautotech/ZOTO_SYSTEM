@@ -8,7 +8,7 @@ import { FormModal } from "../../components/form/FormModal";
 import { createTrip, attachOrders } from "../../lib/tripsApi";
 import { listTransporters, transportersToOptions, listZotoVehicles, zotoVehiclesToOptions } from "../../lib/mastersApi";
 import { listEligibleOrders, listEligibleItems } from "../../lib/tripsApi";
-import { listPdiItems, type OrderRecord } from "../../lib/ordersApi";
+import type { OrderRecord } from "../../lib/ordersApi";
 import { TransportItemPicker, type PickedItem } from "./TransportItemPicker";
 
 interface QueuedSaleOrder {
@@ -86,19 +86,11 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
   const zotoVehicleOptions = zotoVehiclesToOptions(zotoVehicles);
   const { data: eligibleOrders = [] } = useQuery({ queryKey: ["transport-eligible-orders"], queryFn: listEligibleOrders });
   const unqueuedEligibleOrders = eligibleOrders.filter((o) => !queuedOrders.some((q) => q.orderId === o.ORDER_ID));
-  // PDI already recorded a Box Quantity per item, so auto-selecting an order can carry Load
-  // Boxes over the same way the manual Load Limit Details form does.
-  const { data: rawCompletedPdiItems = [] } = useQuery({ queryKey: ["pdiItems", "COMPLETED"], queryFn: () => listPdiItems("COMPLETED") });
-  // listPdiItems("COMPLETED") returns every PDI-completed round ever, including ones already
-  // shipped on an earlier trip — GET /transport-trips/eligible-items is the one place that
-  // actually reconciles shipped quantity against approved rounds (unattachedPdiRounds() on
-  // the backend), so cross-reference against its own round ids rather than re-deriving that
-  // logic here. Without this, a doer could re-select and double-ship an item whose round had
-  // already gone out — exactly the bug a doer reported live: the Select Items picker showed
-  // 3 rounds for one customer when only 1 was genuinely still pending.
+  // PDI is on hold — GET /transport-trips/eligible-items now sources straight off Dispatch
+  // Items Approval (unattachedDispatchApprovedRounds() on the backend), already reconciled
+  // against what's already shipped, Box Quantity included. No separate PDI query/cross-
+  // reference needed anymore — this is the one and only item source for the picker below.
   const { data: eligibleItems = [] } = useQuery({ queryKey: ["transport-eligible-items"], queryFn: () => listEligibleItems() });
-  const unattachedRoundIds = new Set(eligibleItems.map((i) => i.DISP_CONF_ITEM_ID).filter(Boolean));
-  const completedPdiItems = rawCompletedPdiItems.filter((r) => unattachedRoundIds.has(r.DISP_CONF_ITEM_ID));
 
   // The vehicle master loads after first render, so the VEH-001 default can't fill its own
   // Vehicle type/No./Size/Driver fields synchronously — do it once the master arrives, and
@@ -135,21 +127,22 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
           orderId: order.ORDER_ID,
           customerName: order.CUSTOMER_NAME || "",
           timestamp: new Date().toISOString(),
-          // Sourced from this order's COMPLETED PDI rows, not ORDER_ITEMS. Dispatch Approval
-          // can approve part of an item's order quantity across several rounds (10 of 12),
-          // and each approved round has its own PDI row carrying just that quantity — so PDI
-          // is the only source that knows what's actually cleared to travel. Reading
-          // ORDER_ITEMS instead queued every item at its full order quantity, including
-          // items that were never approved at all (the "2 (22 qty)" for what should be one
-          // item at 10). Zero/blank-quantity rows are dropped rather than sent: attachOrders'
-          // schema requires a positive qty, so one bad item would 400 the whole trip.
-          items: completedPdiItems
+          // Sourced from this order's own eligible (Dispatch-Approved, unshipped) rounds, not
+          // ORDER_ITEMS. Dispatch Approval can approve part of an item's order quantity across
+          // several rounds (10 of 12), each its own round with its own approved quantity — so
+          // eligibleItems is the only source that knows what's actually cleared to travel and
+          // not already on an earlier trip. Reading ORDER_ITEMS instead queued every item at
+          // its full order quantity, including items that were never approved at all (the
+          // "2 (22 qty)" for what should be one item at 10). Zero/blank-quantity rows are
+          // dropped rather than sent: attachOrders' schema requires a positive qty, so one bad
+          // item would 400 the whole trip.
+          items: eligibleItems
             .filter((r) => r.ORDER_ID === order.ORDER_ID && Number(r.QTY || 0) > 0)
             .map((r) => {
               const boxQty = Number(r.BOX_QUANTITY || 0);
               return {
                 itemId: r.ITEM_ID,
-                dispConfItemId: r.DISP_CONF_ITEM_ID,
+                dispConfItemId: r.DISP_CONF_ITEM_ID ?? "",
                 partName: r.PART_NAME,
                 qty: Number(r.QTY),
                 unit: r.UOM || "NOS",
@@ -426,7 +419,7 @@ export function CreateTripModal({ onClose, onCreated }: Props) {
     {pickerOrder && (
       <TransportItemPicker
         customerName={pickerOrder.CUSTOMER_NAME || pickerOrder.ORDER_ID}
-        pdiItems={completedPdiItems.filter((r) => r.ORDER_ID === pickerOrder.ORDER_ID && Number(r.QTY || 0) > 0)}
+        items={eligibleItems.filter((r) => r.ORDER_ID === pickerOrder.ORDER_ID && Number(r.QTY || 0) > 0)}
         initialItems={queuedOrders.find((q) => q.orderId === pickerOrder.ORDER_ID)?.items ?? []}
         onClose={() => setPickerOrder(null)}
         onSave={(items) =>

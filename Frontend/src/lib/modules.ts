@@ -13,7 +13,12 @@ export const MODULES: ModuleDef[] = [
   { key: "sale-order", label: "Sale Order", icon: "📄" },
   { key: "so-confirmation", label: "SO Confirmation", icon: "✅" },
   { key: "dispatch-approval", label: "Dispatch Approval", icon: "📦" },
-  { key: "pdi", label: "PDI", icon: "📋" },
+  // PDI is on hold for now (explicit user decision) — Box Quantity moved to the Dispatch
+  // Approval form instead, and Transport eligibility no longer waits on this stage at all
+  // (see Backend/src/routes/tripRoutes.ts's unattachedDispatchApprovedRounds). Tile hidden
+  // from the module grid rather than deleted — the route/PdiList.tsx/stageRoutes.ts are all
+  // still there in case this needs to come back.
+  // { key: "pdi", label: "PDI", icon: "📋" },
   { key: "transport", label: "Transport", icon: "🚚" },
   { key: "transport-reached", label: "Transport Reached", icon: "🕒" },
   { key: "stock-release", label: "Stock Release", icon: "🗄️" },

@@ -114,6 +114,9 @@ export interface EligibleItemRow {
   PART_NAME: string;
   QTY: string;
   UOM: string;
+  /** Collected on the Dispatch Approval form now that PDI is on hold — blank on the
+   * Completed branch. */
+  BOX_QUANTITY?: string;
   STATUS_LABEL: string;
 }
 

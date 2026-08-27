@@ -174,6 +174,10 @@ export const DISPATCH_APPROVAL_MAP: Record<string, string> = {
   UOM: "Unit",
   DISPATCH_APPROVAL: "Dispatch Approval",
   APPROVED_QTY: "Approved Quantity",
+  // PDI is on hold for now (see tripRoutes.ts's unattachedDispatchApprovedRounds) — Box
+  // Quantity moved up to this form instead of being collected on the (now-skipped) PDI form,
+  // since Transport eligibility reads it straight off this tab now.
+  BOX_QUANTITY: "Box Quantity",
   SHORT_QTY: "Short Quantity",
   EXCESS_QTY: "Excess Quantity",
   BALANCE_DISPATCH_QTY: "Balance Dispatch Approval Qty",

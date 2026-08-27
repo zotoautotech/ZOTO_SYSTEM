@@ -45,6 +45,7 @@ const DISPATCH_APPROVAL_OPTIONS = [
 export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLabel, onClose, onSaved }: Props) {
   const [outcome, setOutcome] = useState<Outcome>("");
   const [approvedQty, setApprovedQty] = useState("");
+  const [boxQuantity, setBoxQuantity] = useState("");
   const [shortQty, setShortQty] = useState("");
   const [excessQty, setExcessQty] = useState("");
   const [nextExtendedDate, setNextExtendedDate] = useState("");
@@ -85,7 +86,7 @@ export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLa
 
   function canSave() {
     if (!outcome || !remarks.trim()) return false;
-    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch", true);
+    if (outcome === "Dispatch Today") return !qtyError(approvedQty, "Dispatch", true) && !!boxQuantity && Number(boxQuantity) > 0;
     if (outcome === "Dispatch Extended") return !!nextExtendedDate;
     if (outcome === "Short Quantity") return !qtyError(shortQty, "Short", true);
     if (outcome === "Excess Quantity") return !qtyError(excessQty, "Excess", false);
@@ -100,6 +101,7 @@ export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLa
       await submitDispatchApproval(orderId, itemId, {
         outcome: outcome as Exclude<Outcome, "">,
         approvedQty: outcome === "Dispatch Today" ? Number(approvedQty) : undefined,
+        boxQuantity: outcome === "Dispatch Today" && boxQuantity ? Number(boxQuantity) : undefined,
         shortQty: outcome === "Short Quantity" ? Number(shortQty) : undefined,
         excessQty: outcome === "Excess Quantity" ? Number(excessQty) : undefined,
         nextExtendedDate: outcome === "Dispatch Extended" ? nextExtendedDate : undefined,
@@ -153,14 +155,26 @@ export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLa
           )}
 
           {outcome === "Dispatch Today" && (
-            <TextField
-              label="Approved Quantity"
-              required
-              type="number"
-              value={approvedQty}
-              onChange={(e) => setApprovedQty(e.target.value)}
-              error={approvedQty ? qtyError(approvedQty, "Dispatch", true) : undefined}
-            />
+            <>
+              <TextField
+                label="Approved Quantity"
+                required
+                type="number"
+                value={approvedQty}
+                onChange={(e) => setApprovedQty(e.target.value)}
+                error={approvedQty ? qtyError(approvedQty, "Dispatch", true) : undefined}
+              />
+              {/* PDI is on hold for now — Box Quantity is collected right here instead, since
+                  Transport eligibility reads it straight off this Dispatch Approval row. */}
+              <TextField
+                label="Box Quantity"
+                required
+                type="number"
+                min={0}
+                value={boxQuantity}
+                onChange={(e) => setBoxQuantity(e.target.value)}
+              />
+            </>
           )}
           {outcome === "Short Quantity" && (
             <TextField

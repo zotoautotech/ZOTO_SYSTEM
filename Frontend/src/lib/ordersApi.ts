@@ -297,6 +297,9 @@ export async function listDispatchApprovalItems() {
 export interface DispatchApprovalPayload {
   outcome: "Dispatch Today" | "Dispatch Extended" | "Short Quantity" | "Excess Quantity";
   approvedQty?: number;
+  // PDI is on hold for now — this form collects Box Quantity directly instead of the (now
+  // unused) PDI form. Only meaningful for "Dispatch Today".
+  boxQuantity?: number;
   shortQty?: number;
   excessQty?: number;
   nextExtendedDate?: string;

@@ -161,65 +161,44 @@ async function getTransportRow(transportId: string) {
 }
 
 /**
- * Every approved+PDI'd ROUND that hasn't been put on a trip yet.
+ * Shared quantity-reconciliation core, used by both `unattachedPdiRounds()` (dormant — see
+ * below) and `unattachedDispatchApprovedRounds()` (the live path now that PDI is on hold).
  *
- * This is the unit Transport actually works with. Dispatch Approval can decide an item's
- * order quantity across several rounds (30 ordered, 20 approved today, 10 still open), and
- * each approved round gets its own PDI row keyed by its "Disp Conf Item ID". A round that
- * has cleared PDI is ready to travel **on its own** — it must not wait for its siblings, or
- * for the rest of its own item's quantity, to be decided. Gating on the order-level
- * ORDER_PUNCH.STATUS ("PRE TRANSPORT COMPLETED", only set once EVERY item is fully decided
- * and PDI'd) is what used to hold a finished 20 SET hostage to an undecided 10.
+ * `candidateRounds` is whatever "cleared to travel" rows exist for a given source (PDI-
+ * completed rows, or Dispatch-Approved rows); `qtyField` is that source's own quantity
+ * column name. For each item, sum every Transport_Products row's Quantity already shipped,
+ * then walk the item's own candidate rounds oldest-first, treating each as "shipped" only
+ * while there's still enough summed quantity left to cover it — the first round that can't
+ * be covered, and every round after it, are genuinely unattached/eligible. A blank-round-id
+ * Transport_Products row (the AttachOrdersModal.tsx "attach whole order" flow still doesn't
+ * write one) can't be matched to one specific round by id, only by ORDER_ID+ITEM_ID — pure
+ * quantity reconciliation is what disambiguates "one round already fully shipped via a
+ * blank-round-id legacy attach" from "an earlier round shipped, but a later, separate round
+ * is genuinely new" (two real bugs hit trying either a pure round-id check or a pure
+ * item-key check on its own).
  */
-async function unattachedPdiRounds(): Promise<SheetRow[]> {
-  const [pdiRows, productRows] = await Promise.all([
-    readTable(env.sheets.transactions, "PDI"),
-    readTable(env.sheets.transactions, "Transport_Products"),
-  ]);
+function unattachedRounds(candidateRounds: SheetRow[], productRows: SheetRow[], qtyField: string): SheetRow[] {
   const attachedRoundIds = new Set(productRows.map((r) => r["Disp Conf Item ID"]).filter(Boolean));
-  // A blank-round-id Transport_Products row (the AttachOrdersModal.tsx "attach whole order"
-  // flow doesn't write a round id even today, not just historically — "legacy" isn't purely
-  // a past-tense thing) can't be matched to one specific round by id, only by ORDER_ID+
-  // ITEM_ID. Two live bugs were found trying to resolve that ambiguity with a single boolean
-  // "is this item's key present" check, in opposite directions:
-  //  - Blocking every future round of an item once ANY blank-round-id row existed for it —
-  //    wrongly held back a genuinely new, later-approved round (e.g. 15 SET approved after
-  //    an earlier 5 SET had already shipped blank-round-id).
-  //  - Only checking a round against the legacy key when the round ITSELF had no round id —
-  //    wrongly resurrected an item whose single, only round had already fully shipped via a
-  //    blank-round-id attach (the round id existing on the PDI row doesn't mean the shipment
-  //    that already happened recorded it).
-  // Neither a pure round-id check nor a pure item-key check is enough on its own — only
-  // actual QUANTITY reconciliation tells the two cases apart. For each item, sum every
-  // Transport_Products row's Quantity (round-tracked or not — a round-tracked row's own
-  // qty is also correct to count via attachedRoundIds, but summing here is simpler and
-  // equivalent), then walk that item's own PDI-completed rounds oldest-first, treating each
-  // round as "shipped" only while there's still enough summed quantity left to cover it —
-  // the first round quantity can't fully cover, and every round after it, count as
-  // genuinely unattached.
   const attachedQtyByItem = new Map<string, number>();
   for (const r of productRows) {
     const key = `${r.ORDER_ID}::${r.ITEM_ID}`;
     attachedQtyByItem.set(key, (attachedQtyByItem.get(key) ?? 0) + (Number(r.Quantity) || 0));
   }
-
-  const completedByItem = new Map<string, SheetRow[]>();
-  for (const r of pdiRows) {
-    if (r.Status !== "PDI Completed") continue;
+  const candidatesByItem = new Map<string, SheetRow[]>();
+  for (const r of candidateRounds) {
     const key = `${r.ORDER_ID}::${r.ITEM_ID}`;
-    if (!completedByItem.has(key)) completedByItem.set(key, []);
-    completedByItem.get(key)!.push(r);
+    if (!candidatesByItem.has(key)) candidatesByItem.set(key, []);
+    candidatesByItem.get(key)!.push(r);
   }
-
   const unattached: SheetRow[] = [];
-  for (const [key, rounds] of completedByItem) {
+  for (const [key, rounds] of candidatesByItem) {
     rounds.sort((a, b) => (a.Timestamp || "").localeCompare(b.Timestamp || ""));
     let remainingShippedQty = attachedQtyByItem.get(key) ?? 0;
     let stillCovered = true;
     for (const round of rounds) {
       const roundId = round["Disp Conf Item ID"];
       if (roundId && attachedRoundIds.has(roundId)) continue; // explicitly attached — never eligible
-      const roundQty = Number(round.Quantity) || 0;
+      const roundQty = Number(round[qtyField]) || 0;
       if (stillCovered && remainingShippedQty >= roundQty) {
         remainingShippedQty -= roundQty;
         continue;
@@ -231,12 +210,39 @@ async function unattachedPdiRounds(): Promise<SheetRow[]> {
   return unattached;
 }
 
+/** Every approved+PDI'd ROUND that hasn't been put on a trip yet — kept in place but not
+ * currently called from anywhere (PDI is on hold, see unattachedDispatchApprovedRounds
+ * below); left dormant rather than deleted in case PDI needs to come back. */
+async function unattachedPdiRounds(): Promise<SheetRow[]> {
+  const [pdiRows, productRows] = await Promise.all([
+    readTable(env.sheets.transactions, "PDI"),
+    readTable(env.sheets.transactions, "Transport_Products"),
+  ]);
+  return unattachedRounds(pdiRows.filter((r) => r.Status === "PDI Completed"), productRows, "Quantity");
+}
+
+/**
+ * Every Dispatch-Approved ROUND that hasn't been put on a trip yet — the live path now that
+ * PDI is on hold (explicit user decision). Reads straight off "Dispatch Items Approval" —
+ * that tab already carries its own "Disp Conf Item ID" and (now) "Box Quantity", so no
+ * cross-tab PDI join is needed at all. A round that's Dispatch Approved is ready to travel
+ * **on its own** — same "don't wait for siblings" reasoning unattachedPdiRounds() used to
+ * apply via PDI, just one stage earlier now.
+ */
+async function unattachedDispatchApprovedRounds(): Promise<SheetRow[]> {
+  const [dispatchRows, productRows] = await Promise.all([
+    readTable(env.sheets.transactions, "Dispatch Items Approval"),
+    readTable(env.sheets.transactions, "Transport_Products"),
+  ]);
+  return unattachedRounds(dispatchRows.filter((r) => r.Status === "Dispatch Approved"), productRows, "Approved Quantity");
+}
+
 /** Orders with at least one approved+PDI'd round still waiting for a vehicle. */
 tripsRouter.get("/eligible-orders", anyOrderModule, async (_req, res, next) => {
   try {
     const [punchRowsRaw, rounds] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.map(punchFromSheet)),
-      unattachedPdiRounds(),
+      unattachedDispatchApprovedRounds(),
     ]);
     const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw);
     const orderIdsWithRounds = new Set(rounds.map((r) => r.ORDER_ID));
@@ -280,16 +286,16 @@ tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
       return;
     }
 
-    // Reads the PDI tab's own COMPLETED rows rather than ORDER_ITEMS. Dispatch Approval can
-    // approve part of an item's order quantity (10 of 12) across several rounds, and each
-    // approved round gets its own PDI row carrying only that round's quantity — so PDI is
-    // the only source that knows what's actually cleared to travel. Going via ORDER_ITEMS
+    // Reads "Dispatch Items Approval"'s own Dispatch-Approved rows rather than PDI or
+    // ORDER_ITEMS — PDI is on hold, and Dispatch Approval can approve part of an item's order
+    // quantity (10 of 12) across several rounds, each with its own Approved Quantity, so this
+    // is the only source that knows what's actually cleared to travel. Going via ORDER_ITEMS
     // instead showed the item's FULL order quantity (12, not the approved 10) and, worse,
-    // listed items that were never approved or PDI'd at all just because a sibling item
-    // pushed the order's STATUS forward.
+    // listed items that were never approved at all just because a sibling item pushed the
+    // order's STATUS forward.
     const [punchRowsRaw, rounds] = await Promise.all([
       readTable(env.sheets.transactions, ORDER_TAB).then((rows) => rows.map(punchFromSheet)),
-      unattachedPdiRounds(),
+      unattachedDispatchApprovedRounds(),
     ]);
     const punchRows = await revertOrphanedTransportAssigned(punchRowsRaw);
     const orderById = new Map(punchRows.map((o) => [o.ORDER_ID, o]));
@@ -308,8 +314,12 @@ tripsRouter.get("/eligible-items", anyOrderModule, async (req, res, next) => {
           CUSTOMER_NAME: order.CUSTOMER_NAME || "",
           PART_NO: r["Part No."] || "",
           PART_NAME: r["Part Name"] || "",
-          QTY: r.Quantity || "",
+          QTY: r["Approved Quantity"] || "",
           UOM: r.Unit || "",
+          // Collected directly on the Dispatch Approval form now (PDI's own Box Quantity
+          // field is on hold along with the rest of that stage) — carried through so
+          // CreateTripModal.tsx can still populate Transport_Products' Load Boxes on attach.
+          BOX_QUANTITY: r["Box Quantity"] || "",
           STATUS_LABEL: "Transport Pending",
         };
       });

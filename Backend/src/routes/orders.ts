@@ -8,7 +8,7 @@ import { getPermissions } from "../services/permissions.js";
 import { summarizeDispatchDecisions, dispatchBalance } from "./dispatchBalance.js";
 import { punchFromSheet, punchToSheet, saleOrderFromSheet, saleOrderToSheet } from "./orderPunchMap.js";
 import { DISPATCH_APPROVAL_MAP, dispatchApprovalFromSheet, dispatchApprovalToSheet, soConfirmationItemToSheet, soConfirmationToSheet } from "./soConfirmationMap.js";
-import { createPlaceholderPdi, registerStageRoutes } from "./stageRoutes.js";
+import { registerStageRoutes } from "./stageRoutes.js";
 import { itemFromSheet, itemToSheet } from "./itemMap.js";
 import { generateSaleOrderPdf, blankIfNA } from "../services/saleOrderDoc.js";
 import { amountInWords } from "../services/amountWords.js";
@@ -1954,6 +1954,9 @@ ordersRouter.post("/:id/so-confirmation", requireModule("so-confirmation"), asyn
 const dispatchApprovalSchema = z.object({
   outcome: z.enum(["Dispatch Today", "Dispatch Extended", "Short Quantity", "Excess Quantity"]),
   approvedQty: z.number().optional(),
+  // PDI is on hold for now — this form collects Box Quantity directly instead of the (now
+  // unused) PDI form. Only meaningful for "Dispatch Today".
+  boxQuantity: z.number().optional(),
   shortQty: z.number().optional(),
   excessQty: z.number().optional(),
   nextExtendedDate: z.string().optional(),
@@ -2062,6 +2065,7 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", requireModule("di
           .map(([k, v]) => [k, money(v as number)])
       ) as SheetRow),
       BALANCE_DISPATCH_QTY: body.balanceDispatchQty !== undefined ? money(body.balanceDispatchQty) : "",
+      BOX_QUANTITY: body.boxQuantity !== undefined ? money(body.boxQuantity) : "",
       NEXT_EXTENDED_DATE: body.nextExtendedDate ?? "",
       DISPATCH_REMARKS: body.remarks,
       // This "Status" column is this tab's own display label, separate from
@@ -2092,16 +2096,11 @@ ordersRouter.post("/:orderId/items/:itemId/dispatch-approval", requireModule("di
       await appendRow(env.sheets.transactions, "Dispatch Items Approval", { ...fields, [DISPATCH_APPROVAL_MAP.DISPATCH_ID]: dispatchId });
     }
 
-    // As soon as this round is actually approved (not Extended/Short/Excess — those are holds
-    // or exceptions, not a go-ahead), create ITS OWN PDI placeholder immediately — same "one
-    // stage earlier" convention as the Dispatch Items Approval placeholder itself, so this
-    // round shows up in the PDI queue right away instead of only once every sibling item (or
-    // every other round of this same item) is also decided. Carries this round's own Disp
-    // Conf Item ID, matching the live PDI tab's own linking column, and only this round's own
-    // approved quantity — not the item's full order quantity, and not any other round's.
-    if (body.outcome === "Dispatch Today") {
-      await createPlaceholderPdi(order, item, req.user!.employeeId, dispConfItemId, body.approvedQty);
-    }
+    // PDI is on hold for now (explicit user decision) — a round that clears Dispatch Approval
+    // no longer creates a PDI placeholder or waits on that stage at all. Transport eligibility
+    // (tripRoutes.ts's unattachedDispatchApprovedRounds) now reads straight off THIS row's own
+    // Status/Box Quantity instead. createPlaceholderPdi/the PDI tab/PdiList.tsx are all left
+    // in place, not deleted, in case PDI needs to come back — just nothing calls this anymore.
 
     // Recompute every item's balance on the order with this round folded in (fields is
     // already shaped as a raw sheet row, safe to feed straight into the same summarizer).
