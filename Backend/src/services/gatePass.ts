@@ -5,17 +5,20 @@ import { uploadBufferToDrive } from "./drive.js";
 import { readTable, updateRow } from "./sheets.js";
 import { punchFromSheet } from "../routes/orderPunchMap.js";
 
-// The "Sales-CRR Gate Pass Template" Google Doc's item table actually has 8 underlying
-// cells per data row, not the 6 visible header labels (SR. NO. / PART NO. / PART NAME /
-// QUANTITY / UNIT / NO. OF BOX) — cells 3 and 4 are blank spacer columns between PART NAME
-// and QUANTITY that don't show a distinct header (the header row merges/hides them),
-// confirmed by dumping the template's real cell structure directly rather than assuming a
-// 1:1 header-to-cell mapping, same discipline this project always uses for live data. The
-// header row (row 0) is used as a stable anchor to re-locate this exact table on every
-// fresh read (see locateItemTable) — far more robust than tracking raw character indices
-// across edits, which shift after every insertText/insertTableRow.
+// The "Sales-CRR Gate Pass Template" Google Doc's item table has 9 underlying cells per data
+// row, not the 7 visible header labels (SR. NO. / PART NO. / PART NAME / QUANTITY / UNIT /
+// NO. OF BOX / REMARKS) — cells 3 and 4 are blank spacer columns between PART NAME and
+// QUANTITY that don't show a distinct header (the header row merges/hides them), confirmed
+// by dumping the template's real cell structure directly rather than assuming a 1:1
+// header-to-cell mapping, same discipline this project always uses for live data. REMARKS
+// was added as a 9th column (index 8) at the right edge on 2026-08-27, carrying the item's
+// own Dispatch Remarks — added identically to both systems' master templates, with a backup
+// copy of each pre-edit template preserved in Drive first. The header row (row 0) is used as
+// a stable anchor to re-locate this exact table on every fresh read (see locateItemTable) —
+// far more robust than tracking raw character indices across edits, which shift after every
+// insertText/insertTableRow.
 const ITEM_TABLE_HEADER_ANCHOR = "SR. NO.";
-const ITEM_ROW_COLUMN_COUNT = 8;
+const ITEM_ROW_COLUMN_COUNT = 9;
 const FIRST_ITEM_ROW_INDEX = 1; // row 0 is the header row
 
 function sleep(ms: number): Promise<void> {
@@ -70,6 +73,10 @@ interface GatePassItem {
   loadQty: string;
   unit: string;
   loadBoxes: string;
+  // Sourced from this round's own "Dispatch Items Approval" row (matched by Disp Conf Item
+  // ID, same round-tracking column Transport_Products carries) — blank for legacy rows
+  // attached before round-tracking existed, or if the item's own remarks were left empty.
+  dispatchRemarks: string;
 }
 
 function cellText(cell: docs_v1.Schema$TableCell): string {
@@ -109,6 +116,7 @@ function valueForCell(item: GatePassItem, srNo: number, cellIndex: number): stri
     case 5: return item.loadQty;
     case 6: return item.unit;
     case 7: return item.loadBoxes;
+    case 8: return item.dispatchRemarks;
     default: return "";
   }
 }
@@ -191,11 +199,12 @@ function sumNumeric(items: GatePassItem[], field: "loadQty" | "loadBoxes"): stri
  */
 export async function ensureDispatchGatePass(transportId: string, opts: { force?: boolean } = {}): Promise<string | null> {
   try {
-    const [transportRows, soRows, productRows, punchRows] = await Promise.all([
+    const [transportRows, soRows, productRows, punchRows, dispatchApprovalRows] = await Promise.all([
       readTable(env.sheets.transactions, "TRANSPORT"),
       readTable(env.sheets.transactions, "Transport_SO"),
       readTable(env.sheets.transactions, "Transport_Products"),
       readTable(env.sheets.transactions, "ORDER_PUNCH"),
+      readTable(env.sheets.transactions, "Dispatch Items Approval"),
     ]);
     const transport = transportRows.find((r) => r.Transport_ID === transportId);
     const attachedSoRows = soRows.filter((r) => r.Transport_ID === transportId);
@@ -214,6 +223,12 @@ export async function ensureDispatchGatePass(transportId: string, opts: { force?
     if (!firstPunch) return null;
     const order = punchFromSheet(firstPunch);
 
+    // Keyed by "Disp Conf Item ID" — the same round-tracking column Transport_Products rows
+    // carry (see tripRoutes.ts's per-round attach) — so each shipped round's own Dispatch
+    // Remarks lands on its own gate pass line. Blank for a Transport_Products row with no
+    // round id (legacy rows attached before round-tracking existed).
+    const remarksByRoundId = new Map(dispatchApprovalRows.map((r) => [r["Disp Conf Item ID"], r["Dispatch Remarks"] || ""]));
+
     const items: GatePassItem[] = productRows
       .filter((r) => r.Transport_ID === transportId)
       .map((r) => ({
@@ -222,13 +237,13 @@ export async function ensureDispatchGatePass(transportId: string, opts: { force?
         loadQty: r["Load Qty"] || "",
         unit: r["Unit"] || "",
         loadBoxes: r["Load Boxes"] || "",
+        dispatchRemarks: remarksByRoundId.get(r["Disp Conf Item ID"]) || "",
       }));
     if (items.length === 0) return null;
 
-    // Both clients impersonate the same Workspace user but via the documents-scoped JWT
-    // client (see getDriveClientForDocs()'s own comment in googleAuth.ts) — kept separate
-    // from the plain getDriveClient() used by the attachment-upload feature so this new,
-    // not-yet-domain-wide-delegation-authorized scope can't break that existing feature.
+    // Plain, unimpersonated service-account clients (see googleAuth.ts) — kept as its own
+    // documents-scoped client rather than the plain getDriveClient() purely to mirror the
+    // existing call shape, not for any impersonation-coupling reason anymore.
     const drive = await getDriveClientForDocs();
     const docs = await getDocsClient();
 

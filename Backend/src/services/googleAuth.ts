@@ -4,12 +4,6 @@ import { env } from "../config/env.js";
 
 const SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"];
-// Deliberately a SEPARATE JWT client/scope set from DRIVE_SCOPES above, not just DRIVE_SCOPES
-// with "documents" appended — domain-wide delegation authorizes a Client ID for one exact
-// scope set at a time, so adding a scope to the already-working Drive client would require
-// every existing Drive caller (e.g. the attachment upload feature) to wait on a Workspace
-// admin re-authorizing the combined set too. Keeping Docs on its own client means only the
-// gate pass feature is blocked until DOCS_SCOPES is authorized — uploads keep working today.
 const DOCS_SCOPES = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/documents"];
 
 function loadCredentials(): { client_email: string; private_key: string } {
@@ -31,26 +25,35 @@ export function getGoogleAuth() {
   return sheetsAuth;
 }
 
-let driveAuth: InstanceType<typeof google.auth.JWT> | null = null;
+let driveAuth: InstanceType<typeof google.auth.GoogleAuth> | null = null;
 
 /**
- * Drive access impersonates DRIVE_IMPERSONATE_USER via domain-wide delegation (Workspace
- * Admin Console > Security > API Controls > Domain-wide Delegation, authorized for this
- * service account's Client ID + the drive scope). Without impersonation, files the service
- * account creates in someone else's Drive folder are owned by the service account itself,
- * which has zero storage quota — impersonation makes the Workspace user the owner instead,
- * using their quota. Falls back to unimpersonated if not configured (uploads will fail
- * with the quota error until domain-wide delegation is set up).
+ * Drive access, PLAIN service account — no domain-wide delegation/impersonation, by
+ * deliberate design (2026-08-27 incident: a script running under impersonated, full-domain
+ * "act as any user" Drive access permanently deleted real production files including both
+ * systems' transactions spreadsheets — see docs.google.com history / CLAUDE.md for the full
+ * account. Domain-wide delegation for this service account's Client ID was fully revoked in
+ * Workspace Admin Console afterward and must not be re-added).
+ *
+ * A plain (unimpersonated) service account has ZERO Drive storage quota of its own, so it
+ * can't own files it creates in a regular "My Drive" folder even one it has Editor access to
+ * — this used to be exactly why impersonation existed. The fix instead: every folder this
+ * service account writes into (DRIVE_FOLDER_ID on both systems, holding uploaded
+ * attachments/generated PDFs) now lives inside a genuine Google Shared Drive (Team Drive),
+ * which owns its own files' storage regardless of who creates them — a plain member with
+ * Content Manager access can create/edit/delete files there with no quota problem and no
+ * impersonation. The service account is a direct member of that Shared Drive (and directly
+ * shared, as Editor, on the two Doc templates below) — nothing here can act as any other
+ * Workspace user or reach anything outside what it's been explicitly given access to.
+ *
+ * Every Drive API call against these clients MUST pass `supportsAllDrives: true` (and
+ * `includeItemsFromAllDrives: true` for any list/search call) — without it, Shared Drive
+ * items are invisible to these endpoints even with otherwise-correct permissions.
  */
 function getDriveAuth() {
   if (driveAuth) return driveAuth;
   const credentials = loadCredentials();
-  driveAuth = new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: DRIVE_SCOPES,
-    subject: env.driveImpersonateUser || undefined,
-  });
+  driveAuth = new google.auth.GoogleAuth({ credentials, scopes: DRIVE_SCOPES });
   return driveAuth;
 }
 
@@ -70,26 +73,20 @@ export async function getDriveClient() {
   return google.drive({ version: "v3", auth: auth as any });
 }
 
-let docsAuth: InstanceType<typeof google.auth.JWT> | null = null;
+let docsAuth: InstanceType<typeof google.auth.GoogleAuth> | null = null;
 
 /**
- * Docs API access, for filling in the Dispatch Gate Pass template — impersonates the same
- * Workspace user as Drive (so generated Docs use their quota), but via its OWN JWT client
- * with DOCS_SCOPES (drive + documents), see that constant's comment above for why this is
- * kept separate from getDriveAuth() rather than just adding "documents" to DRIVE_SCOPES.
- * Requires a Workspace admin to additionally authorize this Client ID for DOCS_SCOPES in
- * Admin Console > Security > API Controls > Domain-wide Delegation — a NEW authorization
- * entry (or an edit to add the documents scope), separate from the existing Drive-only one.
+ * Docs API access, for filling in the Dispatch Gate Pass / Sale Order templates — plain
+ * service account, same "no impersonation, ever" reasoning as getDriveAuth() above. Kept as
+ * its own client/scope set (drive + documents) purely to mirror the existing call sites
+ * (gatePass.ts, saleOrderDoc.ts) that already ask for this specific combination — there's no
+ * domain-wide-delegation coupling concern left to design around now that neither client
+ * impersonates anyone.
  */
 function getDocsAuth() {
   if (docsAuth) return docsAuth;
   const credentials = loadCredentials();
-  docsAuth = new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: DOCS_SCOPES,
-    subject: env.driveImpersonateUser || undefined,
-  });
+  docsAuth = new google.auth.GoogleAuth({ credentials, scopes: DOCS_SCOPES });
   return docsAuth;
 }
 
@@ -98,9 +95,9 @@ export async function getDocsClient() {
   return google.docs({ version: "v1", auth: auth as any });
 }
 
-/** The gate pass pipeline also needs Drive calls (copy the template, export to PDF, delete
- * the intermediate Doc) alongside Docs calls — uses the SAME (documents-scoped) client as
- * getDocsClient() rather than the plain getDriveClient(), so every call in that one pipeline
+/** The gate pass / sale order pipelines also need Drive calls (copy the template, export to
+ * PDF, delete the intermediate Doc) alongside Docs calls — uses the SAME client as
+ * getDocsClient() rather than the plain getDriveClient(), so every call in one pipeline
  * shares a single token/scope set instead of juggling two clients for one feature. */
 export async function getDriveClientForDocs() {
   const auth = getDocsAuth();
