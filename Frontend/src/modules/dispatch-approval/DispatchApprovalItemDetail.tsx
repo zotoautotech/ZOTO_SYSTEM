@@ -134,14 +134,22 @@ export function DispatchApprovalItemDetail() {
             {formatTimestamp(order.APPROVAL_TIME || order.CREATED_AT)}
           </span>
 
-          {/* Dispatch Approval is per-item now — the order can still say "DISPATCH APPROVAL"
-              while this specific item already has its own decision (other items on the same
-              order just haven't been decided yet), so also check this item's own remaining
-              balance. An item's order quantity can be decided across multiple rounds (12
-              ordered, 10 approved today, 2 later) — the form stays actionable as long as any
-              balance remains, not just while the log is empty or the latest round was a
-              "Dispatch Extended" hold. */}
-          {order.STATUS === "DISPATCH APPROVAL" && remainingBalance > 0 && (
+          {/* Dispatch Approval is per-item now — a round that clears on ONE item cascades
+              ORDER_PUNCH.STATUS forward for the WHOLE order (a cleared round travels on its
+              own without waiting on its siblings, see tripRoutes.ts), which can push STATUS
+              straight past "DISPATCH APPROVAL COMPLETED" into PDI/Transport/... even while a
+              DIFFERENT item on the same order — or this item's own remaining balance — was
+              never decided at all. A strict `order.STATUS === "DISPATCH APPROVAL"` check hid
+              the action for exactly that item once its order had moved on, even though the
+              item genuinely still needed a decision and orders.ts's own dispatch-approvals/
+              items list (the backend source for the pending queue this page is reached from)
+              already uses this same broadened check to keep such an item showing as pending —
+              this quick action's gate was the one place left still using the old strict check.
+              An item's order quantity can be decided across multiple rounds (12 ordered, 10
+              approved today, 2 later) — the form stays actionable as long as any balance
+              remains, not just while the log is empty or the latest round was a "Dispatch
+              Extended" hold. */}
+          {!["", "PENDING", "PENDING SALE ORDER", "SALE ORDER", "CANCELLED"].includes(order.STATUS || "") && remainingBalance > 0 && (
             <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
               <QuickAction label="Give Dispatch Approval Form" onClick={() => setShowForm(true)}>
                 <path d="M9 11l3 3L22 4" />
