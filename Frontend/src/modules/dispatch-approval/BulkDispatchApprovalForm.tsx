@@ -66,6 +66,10 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
   const [qtyByItem, setQtyByItem] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((item) => [itemKey(item), String(Number(item.BALANCE_QTY) || 0)]))
   );
+  // PDI is on hold — Box Quantity is collected right here per item, same as the single-item
+  // DispatchApprovalForm, since Transport eligibility reads it straight off this row now.
+  // Only meaningful (and required) for "Dispatch Today".
+  const [boxQtyByItem, setBoxQtyByItem] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ItemResult[] | null>(null);
 
@@ -82,10 +86,19 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
     return "";
   }
 
+  function boxQtyErrorFor(item: DispatchApprovalItemRow) {
+    const value = boxQtyByItem[itemKey(item)] ?? "";
+    const n = Number(value);
+    if (!value || Number.isNaN(n) || n <= 0) return "Required.";
+    return "";
+  }
+
   function canSave() {
     if (!outcome || !remarks.trim()) return false;
     if (outcome === "Dispatch Extended") return !!nextExtendedDate;
-    return items.every((item) => !qtyErrorFor(item));
+    if (!items.every((item) => !qtyErrorFor(item))) return false;
+    if (outcome === "Dispatch Today") return items.every((item) => !boxQtyErrorFor(item));
+    return true;
   }
 
   async function handleSave() {
@@ -97,10 +110,12 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const qty = Number(qtyByItem[itemKey(item)]) || 0;
+      const boxQty = Number(boxQtyByItem[itemKey(item)]) || 0;
       try {
         await submitDispatchApproval(item.ORDER_ID, item.ITEM_ID, {
           outcome: outcome as Exclude<Outcome, "">,
           approvedQty: outcome === "Dispatch Today" ? qty : undefined,
+          boxQuantity: outcome === "Dispatch Today" && boxQty > 0 ? boxQty : undefined,
           shortQty: outcome === "Short Quantity" ? qty : undefined,
           excessQty: outcome === "Excess Quantity" ? qty : undefined,
           nextExtendedDate: outcome === "Dispatch Extended" ? nextExtendedDate : undefined,
@@ -147,10 +162,15 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
         {outcome && (
           <>
             {showQtyColumn && (
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 4 }}>
                 <span className="text-muted" style={{ fontSize: 12, width: 130, textAlign: "left" }}>
                   {QTY_LABEL[outcome as Exclude<Outcome, "" | "Dispatch Extended">]} *
                 </span>
+                {outcome === "Dispatch Today" && (
+                  <span className="text-muted" style={{ fontSize: 12, width: 100, textAlign: "left" }}>
+                    Box Qty *
+                  </span>
+                )}
               </div>
             )}
             <div
@@ -203,6 +223,25 @@ export function BulkDispatchApprovalForm({ items: itemsProp, onClose, onSaved }:
                           }}
                         />
                         {error && <div style={{ color: "#d32f2f", fontSize: 11, marginTop: 2 }}>{error}</div>}
+                      </div>
+                    )}
+                    {outcome === "Dispatch Today" && (
+                      <div style={{ flexShrink: 0, width: 100 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          value={boxQtyByItem[key] ?? ""}
+                          onChange={(e) => setBoxQtyByItem((prev) => ({ ...prev, [key]: e.target.value }))}
+                          disabled={submitting || done}
+                          style={{
+                            width: "100%",
+                            padding: "6px 8px",
+                            border: `1px solid ${boxQtyErrorFor(item) ? "#d32f2f" : "var(--color-border)"}`,
+                            borderRadius: 6,
+                            fontSize: 13,
+                          }}
+                        />
+                        {boxQtyErrorFor(item) && <div style={{ color: "#d32f2f", fontSize: 11, marginTop: 2 }}>{boxQtyErrorFor(item)}</div>}
                       </div>
                     )}
                     {result && (

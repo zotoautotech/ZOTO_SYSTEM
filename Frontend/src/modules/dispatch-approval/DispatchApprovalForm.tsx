@@ -68,6 +68,17 @@ export function DispatchApprovalForm({ orderId, itemId, remainingBalance, unitLa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uomList.join("|")]);
 
+  // Pre-fill Approved/Short Quantity with the item's full outstanding balance the moment an
+  // outcome that needs it is picked — the overwhelmingly common case is dispatching the whole
+  // remaining balance in one go, so defaulting to it (still fully editable, e.g. for a
+  // genuine partial round) saves the doer from retyping a number the app already knows.
+  useEffect(() => {
+    if (remainingBalance <= 0) return;
+    if (outcome === "Dispatch Today") setApprovedQty((prev) => prev || String(remainingBalance));
+    else if (outcome === "Short Quantity") setShortQty((prev) => prev || String(remainingBalance));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outcome]);
+
   const balanceQtyNum = Number(balanceDispatchQty) || 0;
   // Two different "balance" concepts, deliberately kept separate: balanceQtyNum is a
   // manually-typed stock/inventory figure (no IMS connected yet, same as Available Stock
