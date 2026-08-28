@@ -44,6 +44,7 @@ function scaledItemFields(item: SheetRow, loadQty: number): SheetRow {
     const n = Number(v);
     return v !== undefined && v !== "" && !Number.isNaN(n) ? (n * ratio).toFixed(2) : (v ?? "");
   };
+  const scaledTotal = scale(item.TOTAL_AMOUNT);
   return {
     ...itemToSheet(item),
     "Discount (Rs)": scale(item.DISCOUNT_RS),
@@ -52,7 +53,14 @@ function scaledItemFields(item: SheetRow, loadQty: number): SheetRow {
     SGST: scale(item.SGST),
     IGST: scale(item.IGST),
     "Tax Amount": scale(item.TAX_AMOUNT),
-    "Total Amount": scale(item.TOTAL_AMOUNT),
+    // Scaling a whole-rupee order total down to a partial shipment's own ratio almost always
+    // leaves a stray paisa or two (e.g. 3/8 of a clean ₹40,000 order line is ₹16,349.99, not
+    // ₹16,350.00) — matching the same round-off Tally itself applies (an explicit "Round Off"
+    // line to land on a whole rupee), and the same "only the Total ever rounds, never the
+    // components underneath it" convention orders.ts's own roundOff() already uses for
+    // order-level totals: everything else on this row (Basic/CGST/SGST/IGST/Tax Amount) stays
+    // at exact paisa precision, only Total Amount rounds to the nearest whole rupee.
+    "Total Amount": scaledTotal ? String(Math.round(Number(scaledTotal))) : scaledTotal,
   };
 }
 
