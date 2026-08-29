@@ -6,8 +6,9 @@ import { useSearch } from "../lib/search";
 /** ZOTO's app-launcher HOME screen (old AppSheet had one central HOME app that fanned out
  * to every business process as its own sub-app — After Sales, Checklist, IMS, etc.). Tiles
  * are sourced from the "ZOTO HOME" sheet (Name/View/Image/Filter columns), not hardcoded, so
- * a new row there shows up here without a deploy. "SALES CRR" is the only tile with a real
- * app behind it so far; every other tile routes to a generic "coming soon" placeholder. */
+ * a new row there shows up here without a deploy. "SALES CRR", "CHECKLIST", and "NPD" are the
+ * only tiles with a real app behind them so far; every other tile routes to a generic
+ * "coming soon" placeholder. */
 export function Home() {
   const { query } = useSearch();
   const { data: tiles = [], isLoading } = useQuery({
@@ -21,6 +22,7 @@ export function Home() {
     const name = tile.name.toUpperCase();
     if (name.startsWith("SALES CRR")) return "/modules";
     if (name.startsWith("CHECKLIST")) return "/checklist";
+    if (name.startsWith("NPD")) return "/npd";
     return `/home/${encodeURIComponent(tile.view)}`;
   }
 

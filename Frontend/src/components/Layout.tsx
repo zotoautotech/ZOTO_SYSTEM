@@ -140,6 +140,7 @@ const HOME_NAV_ITEM = { to: "/", icon: HomeIcon, label: "Home", end: true };
 const APP_SECTIONS: Record<string, { to: string; label: string }> = {
   modules: { to: "/modules", label: "Sales CRR" },
   checklist: { to: "/checklist", label: "Checklist" },
+  npd: { to: "/npd", label: "NPD" },
 };
 
 const UTILITY_ITEMS = [
@@ -266,9 +267,11 @@ export function Layout() {
         ? [{ label: "HOME", to: "/" }]
         : pathSegments[0] === "checklist"
           ? [{ label: "CHECKLIST", to: "/checklist" }]
-          : pathSegments[0] === "settings"
-            ? [{ label: "HOME", to: "/" }]
-            : [{ label: "SALES CRR", to: "/modules" }];
+          : pathSegments[0] === "npd"
+            ? [{ label: "NPD", to: "/npd" }]
+            : pathSegments[0] === "settings"
+              ? [{ label: "HOME", to: "/" }]
+              : [{ label: "SALES CRR", to: "/modules" }];
   // Dispatch Approval doers shouldn't be able to click through to the full order (see
   // plans/pure-puzzling-gray.md) — the order-financials view is hidden there now, but the
   // intermediate "ORD-xxxx" / "Order Punch Items View" crumbs on this module's own per-item
@@ -286,10 +289,21 @@ export function Layout() {
     data: "Pending Orders Dash",
   };
   pathSegments.forEach((seg, i) => {
-    if (seg === "modules" || seg === "home" || seg === "checklist") return;
+    if (seg === "modules" || seg === "home" || seg === "checklist" || seg === "npd") return;
     if (isItemLevelModulePage && (i === 2 || i === 3)) return;
+    // CHECKLIST_SEGMENT_LABELS is Checklist-specific ("dashboard" -> "Dashboard - Pending
+    // Checklist") but used to apply to ANY app's path segments — NPD's own /npd/dashboard
+    // route collided with it and showed the Checklist label on a completely unrelated page
+    // (caught during Sprint 6 browser verification). Only apply it while actually inside
+    // Checklist; every other app's segments fall through to the generic seg.replace() label.
+    const segmentLabel =
+      seg === "items"
+        ? "Order Punch Items View"
+        : pathSegments[0] === "checklist"
+          ? (CHECKLIST_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " "))
+          : seg.replace(/-/g, " ");
     crumbs.push({
-      label: seg === "items" ? "Order Punch Items View" : CHECKLIST_SEGMENT_LABELS[seg] ?? seg.replace(/-/g, " "),
+      label: segmentLabel,
       to: "/" + pathSegments.slice(0, i + 1).join("/"),
     });
   });

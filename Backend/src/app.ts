@@ -11,6 +11,7 @@ import { ordersRouter } from "./routes/orders.js";
 import { tripsRouter } from "./routes/tripRoutes.js";
 import { uploadsRouter } from "./routes/uploads.js";
 import { checklistRouter } from "./routes/checklist.js";
+import { npdRouter } from "./routes/npd/index.js";
 import { permissionAuditRouter } from "./routes/permissionAudit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -67,6 +68,7 @@ app.use("/api/v1/orders", ordersRouter);
 app.use("/api/v1/transport-trips", tripsRouter);
 app.use("/api/v1/uploads", uploadsRouter);
 app.use("/api/v1/checklist", checklistRouter);
+app.use("/api/v1/npd", npdRouter);
 app.use("/api/v1/admin", permissionAuditRouter);
 
 app.use(notFoundHandler);

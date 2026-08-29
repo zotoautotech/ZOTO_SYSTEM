@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { google } from "googleapis";
 import { env } from "../config/env.js";
 
@@ -6,9 +8,22 @@ const SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"];
 const DOCS_SCOPES = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/documents"];
 
+// Backend/ itself — same base directory env.ts resolves .env against, for the same reason:
+// GOOGLE_APPLICATION_CREDENTIALS in .env is a relative path ("./secrets/service-account-key.json"),
+// and a bare readFileSync(relativePath) resolves against process.cwd(), not against where the
+// .env file lives. That's fine when someone runs `cd Backend && npm run dev`, but not under
+// .claude/launch.json's preview_start config (cwd = repo root) — surfaced as a real ENOENT
+// there. Resolve relative credential paths against this file's own directory's parent instead.
+const BACKEND_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 function loadCredentials(): { client_email: string; private_key: string } {
   if (env.googleServiceAccountKeyJson) return JSON.parse(env.googleServiceAccountKeyJson);
-  if (env.googleApplicationCredentials) return JSON.parse(readFileSync(env.googleApplicationCredentials, "utf8"));
+  if (env.googleApplicationCredentials) {
+    const credPath = path.isAbsolute(env.googleApplicationCredentials)
+      ? env.googleApplicationCredentials
+      : path.resolve(BACKEND_ROOT, env.googleApplicationCredentials);
+    return JSON.parse(readFileSync(credPath, "utf8"));
+  }
   throw new Error(
     "No Google credentials configured. Set GOOGLE_SERVICE_ACCOUNT_KEY_JSON or GOOGLE_APPLICATION_CREDENTIALS in .env"
   );

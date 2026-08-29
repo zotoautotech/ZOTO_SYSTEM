@@ -1,4 +1,16 @@
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+// Plain `import "dotenv/config"` resolves .env relative to process.cwd() — fine when the
+// process is started with `cd Backend && npm run dev`, but NOT when started some other way
+// with a different working directory (e.g. .claude/launch.json's preview_start config runs
+// `node Backend/node_modules/tsx/dist/cli.mjs watch Backend/src/index.ts` from the repo
+// root, whose cwd is the repo root, not Backend/ — Backend/.env then silently never loads
+// and every env var falls back to its default/empty string, which surfaced as a 500 on
+// literally every Sheets-backed route with no obvious cause). Resolve .env relative to this
+// file's own location instead, so it loads correctly regardless of the process's cwd.
+loadDotenv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env") });
 
 function required(name: string): string {
   const value = process.env[name];
@@ -28,6 +40,15 @@ export const env = {
     home: process.env.ZOTO_HOME_SHEET_ID ?? "",
     checklistMaster: process.env.CHECKLIST_MASTER_SHEET_ID ?? "",
     checklistAccounts: process.env.CHECKLIST_ACCOUNTS_SHEET_ID ?? "",
+    // NPD module — see NPD/CONTEXT.md for the full two-spreadsheet split. FG taxonomy/SKU data
+    // lives on the existing `fg` sheet above (shared with Sales CRR's masters.ts, additive
+    // writes only). Everything else NPD-specific — Raw Material SKU, RM taxonomy, Vendor Master,
+    // Vehicle Compatibility, NPD USERS permissions, and (as later sprints add them) Projects/
+    // BOM/Part Code Request/pricing-audit/Customer Master V2/Purchase/WIP/item-spec tabs — lives
+    // on the live "ZOTO/PRODUCT MASTER-RM" spreadsheet (the user's own Drive, shared Editor with
+    // this service account; no separate spreadsheet was created since the service account has no
+    // Drive quota of its own to create one in — see NPD/CONTEXT.md).
+    npd: process.env.NPD_SHEET_ID ?? "",
   },
 
   driveFolderId: process.env.DRIVE_FOLDER_ID ?? "",
