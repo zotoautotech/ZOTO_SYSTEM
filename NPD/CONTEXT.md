@@ -678,11 +678,135 @@ check still correctly 409s even with `CODE` no longer required. Repeated live th
 `Terminal Block` with `CODE` left blank, and the real live sheet shows it landed as `AD`,
 continuing the exact same sequence.
 
-**Scope note**: this correction covers `RM ref Category.CODE` only, per what the user asked for
-this round. `RM ref Category DD.CODE` (the Sub-Category code) almost certainly has an equivalent
-App Formula on the live sheet — not yet pulled or verified, still hand-typed by the Design user
-in NPD today. Ask before assuming the same pattern applies there; get the real formula first,
-the same way this one was obtained, rather than guessing it's identical.
+**Scope note (superseded — see the two sections below)**: this correction originally covered
+only `RM ref Category.CODE`. `RM ref Category DD.CODE`/`AGAINST ID`/`Category` and
+`RM ref Paint.Code` have since been pulled and implemented too — see "RM ref Category DD's real
+App Formulas" and the paragraph after it, below.
+
+## RM ref Category DD's real App Formulas (2026-08-29, same day, continued)
+
+The user pulled 3 more real App Formulas directly from the live AppSheet editor for
+`RM ref Category DD` — `CODE`, `AGAINST ID`, and `Category` — and asked for all 3 to be applied
+verbatim. Only `CODE` is real, useful logic; the other 2 are the same dead-cruft pattern already
+documented above, confirmed a second time on a different table:
+
+- **`CODE`**: `LOOKUP(LOOKUP(MAXROW("RM ref Category DD","TIMESTAMP",ISNOTBLANK([Unique ID])),
+  "RM ref Category DD","Unique ID","CODE"),"Alphabet","Letter","Letter Increment")` — same
+  "next letter after whichever row was most recently created" shape as `RM ref Category.CODE`,
+  just matching `MAXROW`'s result against `Unique ID` (this table's real key) instead of
+  `CATEGORY` (that table's key is its own label field — confirmed these really are two
+  different configured keys, not a typo). Implemented via a shared `nextCode(tab, codeField)`
+  helper in `npdPartCode.ts` (generalized once `RM ref Paint` needed a 3rd caller with yet
+  another field name — see below).
+- **`AGAINST ID`**: `any(SELECT(Raw Material SKU[ID'S], [ID'S]=MAXROW("Raw Material
+  SKU","TIMESTAMP",[ID'S]<>"")))` — the identical "most recently created SKU app-wide, live and
+  constantly shifting" dead-pointer pattern as `RM ref Category`'s own `Against id`.
+- **`Category`**: `LOOKUP([_THISROW].[AGAINST ID],"Raw Material SKU","ID'S","Category")` — reads
+  through that same dead `AGAINST ID` pointer, so it returns "the Category of whatever the
+  newest SKU happens to be," not the real Category this Sub-Category belongs to.
+
+**I flagged this clearly before implementing** — NPD's own `Category` field on this tab was a
+real, doer-picked value, and copying the legacy formula makes it *strictly worse*, not more
+correct; it would silently discard whatever Category the doer actually selected. **The user's
+explicit response, after seeing that explanation, was to implement all 3 verbatim anyway** ("All
+3, exactly as shown" — see the AskUserQuestion result in this session). Implemented exactly as
+instructed:
+
+- `Backend/src/services/npdPartCode.ts` — `nextAgainstId()` and `categoryFromAgainstId()`,
+  matching the two formulas above literally.
+- `Backend/src/routes/npd/taxonomy.ts`'s POST handler for `rm-category-dd`: unconditionally
+  overwrites `body["AGAINST ID"]`/`body.Category` with the computed values, **after** the
+  duplicate-check runs (moved the whole dup-check block earlier in the handler specifically for
+  this — otherwise the check would compare the post-override garbage `Category` instead of what
+  the doer actually submitted, making it meaningless. This reordering benefits every table, not
+  just this one, and is a general correctness fix, not a special case).
+- Frontend: new `computedFields` metadata on `TaxonomyTableMeta` (`GET /npd/taxonomy`'s response)
+  — `TaxonomyRowForm.tsx` hides any field listed there from the CREATE form only (still shown/
+  editable on EDIT, since the PUT path never auto-computes anything). `rm-category`:
+  `["CODE"]`. `rm-category-dd`: `["CODE","AGAINST ID"]` — deliberately NOT `Category`, since
+  `Category` is still a real required input the dup-check needs, even though the legacy formula
+  then discards it; hiding it entirely would remove the only place a doer expresses intent.
+
+**Verified end-to-end live** (curl AND the actual browser create form): submitted
+`Category: "Wiring Harness"` on a new Sub-Category — the saved row came back with
+`Category: "LED Driver"` (whatever the most-recently-created `Raw Material SKU` row's Category
+was at that moment), `AGAINST ID: "RM0007"` (that same SKU's own ID), and `CODE: "AB"`
+(sequential after the existing `AA` row) — confirming the override reproduces the real formula's
+behavior exactly, including its known dysfunction. The create form correctly hides `CODE`/
+`AGAINST ID` with a "generated automatically once saved" note, while still showing `Category` as
+a required input.
+
+## RM ref Paint's real App Formula (2026-08-29, same day, continued again)
+
+Same day, third table: the user pulled `RM ref Paint.Code`'s real App Formula too —
+`LOOKUP(LOOKUP(maxrow("RM ref Paint","TIMESTAMP",ISNOTBLANK([Unique ID])),"RM ref
+Paint","Paint Description","Code"),"Alphabet","Letter","Letter Increment")` — identical shape
+again, matching against `Paint Description` (this table's own label/key field). No dead-pointer
+complication this time — `RM ref Paint` has no `AGAINST ID`/`Category`-style fields, `Code` is
+the only computed column. Implemented via the same shared `nextCode()` helper (generalized to
+take the code field name as a parameter, since this tab's own column is titled `Code`, not
+`CODE` like the other two) — `nextPaintCode()` in `npdPartCode.ts`, wired into `taxonomy.ts`'s
+`rm-paint` POST handling and `computedFields: ["Code"]`.
+
+**Verified live via curl**: existing `Black Powder Coating` row already had `Code: A`; created
+`Matte Grey Finish` and `Gloss White` without specifying `Code` at all — got `B` then `C`,
+exactly sequential.
+
+**Running tally of RM ref Category-family tables now on the real formulas**: `RM ref Category`
+(CODE), `RM ref Category DD` (CODE, AGAINST ID, Category), `RM ref Paint` (Code). Not yet pulled
+or implemented: `PART DESGIN BY.CODE` and anything on the FG side — ask before assuming the same
+pattern applies there; get the real formula first, the same way each of these was obtained,
+rather than guessing it's identical.
+
+## Frontend rebuilt to match the real legacy reference screens (2026-08-29, same day, continued)
+
+The user gave direct access to the running legacy AppSheet app itself (`NPD DESIGNS-ADC-V2`,
+`platform.appsheet.com`) — full screenshots of its Home → Product Master hub, RM SKU list/
+detail/form, FG SKU list/detail/form, and the BOM/Assemble Data sub-list — and asked for the
+generic Taxonomy-admin-driven RM/FG SKU browsing to be replaced with dedicated screens matching
+these exactly, reusing this codebase's own Sales CRR UI components ("CRR UI context") rather
+than inventing new ones.
+
+**New `Product Master` hub** (`Frontend/src/npd/ProductMasterHome.tsx`, `/npd/product-master`)
+— 5 tiles (Raw Material SKU / Final Good SKU / RM Search / FG Search / Assemble Data), using
+the **real icon images**, not emoji — pulled directly from the live `NPD USER` tab on
+`ZOTO/PRODUCT MASTER FG` (Name/Image/View/Permissions columns), the exact same pattern the
+top-level ZOTO HOME launcher already uses (`Backend/src/routes/home.ts`). RM/FG Search tiles
+currently just link to the same catalog pages (no separate global-search UI built yet — the
+catalog's own header search box already searches across all fields, so a dedicated search
+screen wasn't obviously distinct enough to justify building separately without being asked).
+
+**New RM/FG SKU catalog + detail pages**, replacing the generic Taxonomy-table view for these
+two tables specifically (`rm-sku`/`fg-sku` now excluded from `TaxonomyAdmin.tsx`'s picker —
+still generic-CRUD on the backend, just no longer browsable there in the frontend, so there's
+one place to look for each):
+
+- `RmSkuCatalog.tsx` (`/npd/rm-sku`) / `FgSkuCatalog.tsx` (`/npd/fg-sku`) — left sidebar =
+  Category names + live counts, main area = cards grouped by Sub Category header. Reuses
+  **`CustomerFilterPanel`** (Sales CRR's own list-screen sidebar component, e.g. `OrderPunchList`)
+  even though it's filtering Categories here, not customers — already generic
+  (`{name,count}[]`), no new sidebar component needed.
+- `RmSkuDetail.tsx` (`/npd/rm-sku/:id`) / `FgSkuDetail.tsx` (`/npd/fg-sku/:id`) — plain field
+  list matching the reference's core fields.
+
+**Deliberately NOT built, flagged clearly rather than silently approximated**: the reference's
+right-side category-specific dimension panel (e.g. "Bearing Dimensions" — would need ~26
+category-specific RM dimension tables, a much larger version of the 6 FG-side item-spec tables
+already built in Sprint 6), the left icon actions (Upload Images & Drawings / UPDATE IQC PDF /
+Verified RM item / Update All Vendor PDFs / MACHINING & OTHER CHARGES / Verify BOM Item — all
+need file-upload and verification workflows this app doesn't have), and the "Drawing Videos"/
+"Fitment Details" panels on FG SKU detail (need a `Customer Wise Fitment` table + file upload).
+Each of these is a real, separate build — ask before starting any of them rather than assuming
+scope.
+
+**Verified live in the actual browser**, not just typechecked: navigated the real Product
+Master hub (icons rendering correctly from the live Freepik CDN URLs), into RM SKU Catalog
+(sidebar showing real `LED Driver` category with its real count, cards grouped by
+`3W Constant Current Driver` showing the actual live `AAAA000A0`...`AAAA006A0` SKUs from
+earlier verification work), into a real detail page, and into FG SKU Catalog (all 78 real
+production rows, correctly split into `Ambient Light` (1) and `Uncategorized` (77) — matching
+the live sheet's real, mostly-blank `CATEGORY` column exactly as documented in this file's
+"Live header snapshots" section).
 
 ## Known gotchas (add to as they're found)
 

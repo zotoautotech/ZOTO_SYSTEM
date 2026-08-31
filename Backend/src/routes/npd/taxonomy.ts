@@ -4,7 +4,13 @@ import { env } from "../../config/env.js";
 import { appendRow, deleteRows, readTable, updateRow } from "../../services/sheets.js";
 import { nextSequentialId } from "../../services/ids.js";
 import { logChange } from "../../services/npdChangelog.js";
-import { nextCategoryCode, nextSubCategoryCode, nextAgainstId, categoryFromAgainstId } from "../../services/npdPartCode.js";
+import {
+  nextCategoryCode,
+  nextSubCategoryCode,
+  nextAgainstId,
+  categoryFromAgainstId,
+  nextPaintCode,
+} from "../../services/npdPartCode.js";
 
 /**
  * Sprint 1 taxonomy admin — generic CRUD over the five NPD reference tabs. Unlike Sales CRR's
@@ -119,8 +125,11 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "RM ref Paint",
     idColumn: "Unique ID",
     idPrefix: "RMPAINT",
-    requiredFields: ["Code", "Paint Description"],
+    // `Code` is auto-generated the same way as RM ref Category/Category DD's own CODE
+    // columns — see nextPaintCode()'s doc comment for the real App Formula this replicates.
+    requiredFields: ["Paint Description"],
     fields: ["Code", "Paint Description"],
+    computedFields: ["Code"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -512,6 +521,9 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     }
     if (table.key === "rm-category-dd" && !body.CODE) {
       body.CODE = await nextSubCategoryCode();
+    }
+    if (table.key === "rm-paint" && !body.Code) {
+      body.Code = await nextPaintCode();
     }
     // `AGAINST ID`/`Category` on rm-category-dd are real AppSheet App Formula columns in the
     // legacy sheet, meaning they were never client-editable there either — always computed,

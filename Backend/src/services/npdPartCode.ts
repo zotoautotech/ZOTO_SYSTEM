@@ -54,15 +54,18 @@ export async function generatePartCode(baseCode: string, employeeId: string): Pr
  */
 const RM_CATEGORY_TAB = "RM ref Category";
 const RM_CATEGORY_DD_TAB = "RM ref Category DD";
+const RM_PAINT_TAB = "RM ref Paint";
 const RM_ALPHABET_TAB = "Alphabet";
 
-/** Shared by nextCategoryCode() and nextSubCategoryCode() — both real App Formulas follow the
- * identical shape (find the most-recently-created row in the SAME tab, read its CODE, look up
- * the next Letter Increment in the shared RM Alphabet tab), just scoped to a different tab.
- * Bootstraps to the Alphabet's own first letter ("A") when the tab has no rows yet — the real
- * formula's MAXROW would find nothing in that case, matching how the very first live row in
- * either tab had to have been seeded by hand before any formula could take over. */
-async function nextCode(tab: string): Promise<string> {
+/** Shared by nextCategoryCode()/nextSubCategoryCode()/nextPaintCode() — all three real App
+ * Formulas follow the identical shape (find the most-recently-created row in the SAME tab,
+ * read its own code field, look up the next Letter Increment in the shared RM Alphabet tab),
+ * just scoped to a different tab and, since `RM ref Paint`'s code column is titled `Code` not
+ * `CODE`, a different exact field name per tab. Bootstraps to the Alphabet's own first letter
+ * ("A") when the tab has no rows yet — the real formula's MAXROW would find nothing in that
+ * case, matching how the very first live row in any of these tabs had to have been seeded by
+ * hand before any formula could take over. */
+async function nextCode(tab: string, codeField: string): Promise<string> {
   const rows = await readTable(env.sheets.npd, tab, { refresh: true });
   const withRows = rows.filter((r) => (r["Unique ID"] ?? "").trim());
 
@@ -74,7 +77,7 @@ async function nextCode(tab: string): Promise<string> {
   }
 
   const alphabet = await readTable(env.sheets.npd, RM_ALPHABET_TAB);
-  const prevCode = (latest?.CODE ?? "").trim();
+  const prevCode = (latest?.[codeField] ?? "").trim();
 
   if (!prevCode) {
     const first = alphabet.find((r) => (r.Letter ?? "").trim());
@@ -91,7 +94,7 @@ async function nextCode(tab: string): Promise<string> {
 
 /** `RM ref Category.CODE` — see this file's module-level doc comment for the decoded formula. */
 export async function nextCategoryCode(): Promise<string> {
-  return nextCode(RM_CATEGORY_TAB);
+  return nextCode(RM_CATEGORY_TAB, "CODE");
 }
 
 /**
@@ -117,7 +120,25 @@ export async function nextCategoryCode(): Promise<string> {
  * copying the legacy formula would make it *worse*, not more correct.
  */
 export async function nextSubCategoryCode(): Promise<string> {
-  return nextCode(RM_CATEGORY_DD_TAB);
+  return nextCode(RM_CATEGORY_DD_TAB, "CODE");
+}
+
+/**
+ * `RM ref Paint.Code` — same real App Formula shape again, pulled directly off the live
+ * column:
+ *
+ *   LOOKUP(LOOKUP(maxrow("RM ref Paint","TIMESTAMP",ISNOTBLANK([Unique ID])),
+ *          "RM ref Paint","Paint Description","Code"),
+ *          "Alphabet","Letter","Letter Increment")
+ *
+ * Matches MAXROW's result against `Paint Description` (this table's own label/key field, same
+ * as `RM ref Category` matching against `CATEGORY`) rather than `Unique ID` (as `RM ref
+ * Category DD` does) — confirms different tables really do have different configured keys in
+ * the source app, not a typo. No dead-pointer complication here, unlike `RM ref Category DD`'s
+ * `AGAINST ID`/`Category` — this tab has no such fields, `Code` is the only computed column.
+ */
+export async function nextPaintCode(): Promise<string> {
+  return nextCode(RM_PAINT_TAB, "Code");
 }
 
 /**

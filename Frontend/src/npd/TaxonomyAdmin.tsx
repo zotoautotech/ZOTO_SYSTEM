@@ -33,10 +33,14 @@ export function TaxonomyAdmin() {
   const [creating, setCreating] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
-  const { data: tables = [] } = useQuery({
+  const { data: allTables = [] } = useQuery({
     queryKey: ["npd", "taxonomy", "tables"],
     queryFn: listTaxonomyTables,
   });
+  // `rm-sku`/`fg-sku` now have their own dedicated catalog views (RmSkuCatalog/RmSkuDetail,
+  // FgSkuCatalog/FgSkuDetail — matching the real legacy reference screens, reachable from the
+  // Product Master hub) — excluded here so there's only one place to browse each.
+  const tables = allTables.filter((t) => t.key !== "rm-sku" && t.key !== "fg-sku");
 
   const active: TaxonomyTableMeta | undefined =
     tables.find((t) => t.key === activeKey) ?? tables[0];

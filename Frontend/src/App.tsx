@@ -49,6 +49,11 @@ import { Purchase } from "./npd/Purchase";
 import { StockWipDashboard } from "./npd/StockWipDashboard";
 import { Notifications } from "./npd/Notifications";
 import { RmPartCodeGenerator } from "./npd/RmPartCodeGenerator";
+import { RmSkuCatalog } from "./npd/RmSkuCatalog";
+import { RmSkuDetail } from "./npd/RmSkuDetail";
+import { FgSkuCatalog } from "./npd/FgSkuCatalog";
+import { FgSkuDetail } from "./npd/FgSkuDetail";
+import { ProductMasterHome } from "./npd/ProductMasterHome";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -93,6 +98,11 @@ export default function App() {
         <Route path="npd/dashboard" element={<StockWipDashboard />} />
         <Route path="npd/notifications" element={<Notifications />} />
         <Route path="npd/rm-part-code" element={<RmPartCodeGenerator />} />
+        <Route path="npd/product-master" element={<ProductMasterHome />} />
+        <Route path="npd/rm-sku" element={<RmSkuCatalog />} />
+        <Route path="npd/rm-sku/:id" element={<RmSkuDetail />} />
+        <Route path="npd/fg-sku" element={<FgSkuCatalog />} />
+        <Route path="npd/fg-sku/:id" element={<FgSkuDetail />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/dashboard" element={<Dashboard />} />

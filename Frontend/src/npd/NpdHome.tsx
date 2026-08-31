@@ -8,7 +8,8 @@ interface CardDef {
 
 const CARDS: CardDef[] = [
   { to: "/npd/projects", icon: "📋", label: "Projects Board" },
-  { to: "/npd/taxonomy", icon: "🗂️", label: "Categories, Taxonomy & SKU Catalogs" },
+  { to: "/npd/product-master", icon: "🏭", label: "Product Master" },
+  { to: "/npd/taxonomy", icon: "🗂️", label: "Categories & Taxonomy" },
   { to: "/npd/rm-part-code", icon: "🏷️", label: "RM Part Code Generator" },
   { to: "/npd/part-code-requests", icon: "🔖", label: "New Part Code Request" },
   { to: "/npd/bom", icon: "🧩", label: "BOM Builder" },

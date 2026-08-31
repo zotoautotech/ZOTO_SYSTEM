@@ -1,0 +1,85 @@
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
+import { useIsMobile } from "../lib/responsive";
+import { useSearch } from "../lib/search";
+import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+
+/** FG SKU Catalog — same rebuild as RmSkuCatalog.tsx, matching the real legacy reference
+ * screen (left Category filter with counts, main area = cards grouped by Sub Category header,
+ * each card showing Name / Segment / PART NO.). Reuses the identical `CustomerFilterPanel`
+ * sidebar pattern. */
+export function FgSkuCatalog() {
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const { query } = useSearch();
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "fg-sku"],
+    queryFn: () => listTaxonomyRows("fg-sku"),
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const activeCategory = params.get("category");
+
+  const categoryCounts = new Map<string, number>();
+  rows.forEach((r) => {
+    const cat = r.CATEGORY || "Uncategorized";
+    categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+  });
+  const categories = [...categoryCounts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, count]) => ({ name, count }));
+
+  const filtered = rows.filter((r) => {
+    if (activeCategory && (r.CATEGORY || "Uncategorized") !== activeCategory) return false;
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    return Object.values(r).some((v) => v.toLowerCase().includes(q));
+  });
+
+  const groups = new Map<string, TaxonomyRow[]>();
+  filtered.forEach((r) => {
+    const sub = r["SUB CATEGORY"] || "—";
+    (groups.get(sub) ?? groups.set(sub, []).get(sub)!).push(r);
+  });
+
+  function selectCategory(name: string | null) {
+    const p = new URLSearchParams(window.location.search);
+    if (name) p.set("category", name);
+    else p.delete("category");
+    navigate({ search: p.toString() }, { replace: true });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", marginTop: 16, minHeight: "calc(100vh - 128px)" }}>
+      <CustomerFilterPanel customers={categories} active={activeCategory} onSelect={selectCategory} />
+      <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "0 4px" : "0 0 0 4px" }}>
+        {isLoading && <p className="text-muted">Loading…</p>}
+        {!isLoading && filtered.length === 0 && <p className="text-muted">No FG SKUs found.</p>}
+        {[...groups.entries()].map(([sub, items]) => (
+          <div key={sub} style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, margin: "16px 0 8px" }}>
+              {sub} <span className="text-muted" style={{ fontWeight: 400, fontSize: 12 }}>{items.length}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+              {items.map((r) => (
+                <div
+                  key={r["FG ID"]}
+                  className="card"
+                  style={{ padding: 14, cursor: "pointer" }}
+                  onClick={() => navigate(`/npd/fg-sku/${encodeURIComponent(r["FG ID"])}`)}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{r.Name || "—"}</div>
+                  <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>{r.SEGMENT || "—"}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{r["PART NO."] || "—"}</div>
+                  <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{r["SUB CATEGORY"]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
