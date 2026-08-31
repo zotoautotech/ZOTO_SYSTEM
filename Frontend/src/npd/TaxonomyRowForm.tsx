@@ -15,10 +15,17 @@ interface Props {
 
 /** Generic create/edit form for any NPD taxonomy table — fields are entirely driven by the
  * table's own metadata (see TaxonomyAdmin.tsx), matching this project's existing field-list-
- * driven form pattern (StageForm.tsx) rather than one hand-coded form per table. */
+ * driven form pattern (StageForm.tsx) rather than one hand-coded form per table.
+ *
+ * `table.computedFields` are hidden on CREATE — the backend always computes them itself (see
+ * Backend/src/routes/npd/taxonomy.ts's POST handler and npdPartCode.ts), so there's nothing
+ * meaningful for a doer to type; showing an input that gets silently overwritten would be
+ * actively misleading. They're still shown on EDIT, for a manual correction afterward — the
+ * PUT path doesn't auto-compute anything, it only writes what's submitted. */
 export function TaxonomyRowForm({ table, row, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const isEdit = !!row;
+  const visibleFields = table.fields.filter((f) => isEdit || !table.computedFields.includes(f));
   const [values, setValues] = useState<TaxonomyRow>(() => {
     const initial: TaxonomyRow = {};
     for (const f of table.fields) initial[f] = row?.[f] ?? "";
@@ -57,7 +64,13 @@ export function TaxonomyRowForm({ table, row, onClose, onSaved }: Props) {
       sectionLabel={table.label}
     >
       <div style={{ padding: "28px var(--space)", overflowY: "auto", flex: 1 }}>
-        {table.fields.map((f) => (
+        {!isEdit && table.computedFields.length > 0 && (
+          <p className="text-muted" style={{ fontSize: 12, marginTop: -12, marginBottom: 16 }}>
+            {table.computedFields.join(", ")} {table.computedFields.length === 1 ? "is" : "are"} generated
+            automatically once saved.
+          </p>
+        )}
+        {visibleFields.map((f) => (
           <TextField
             key={f}
             label={f}

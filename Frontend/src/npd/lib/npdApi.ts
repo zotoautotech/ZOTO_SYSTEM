@@ -14,6 +14,12 @@ export interface TaxonomyTableMeta {
   /** false for FG/RM SKU catalogs — new rows there come only from an approved Part Code
    * Request, not this generic form. Editing an existing row is still allowed either way. */
   allowCreate: boolean;
+  /** Field names (subset of `fields`) the backend always computes itself on create — e.g.
+   * rm-category/rm-category-dd's CODE/AGAINST ID, real AppSheet App Formula columns (see
+   * Backend/src/services/npdPartCode.ts). Hidden from the create form (nothing for a doer to
+   * fill in — the value is decided server-side), but still shown/editable when editing an
+   * existing row, for a manual correction. */
+  computedFields: string[];
 }
 
 export type TaxonomyRow = Record<string, string>;

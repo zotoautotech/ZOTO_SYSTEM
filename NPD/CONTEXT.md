@@ -634,6 +634,56 @@ continuing the count) and confirmed the new row appears in the RM SKU Catalog.
   `Parts Allocation`-style many-to-many SKU↔Customer table design decision the user hasn't made
   yet. Ask before building it.
 
+## `RM ref Category.CODE` auto-generation (2026-08-29, post-Sprint-6 continued)
+
+The user found and shared the **actual live AppSheet App Formula** for `RM ref Category.CODE` by
+opening the column's own settings in the AppSheet editor — not inferred from data this time, the
+literal formula:
+
+```
+LOOKUP(LOOKUP(maxrow("RM ref Category","TIMESTAMP",ISNOTBLANK([Unique ID])),
+       "RM ref Category","CATEGORY","CODE"),
+       "Alphabet","Letter","Letter Increment")
+```
+
+Decoded: find the most-recently-created `RM ref Category` row (`MAXROW` by `TIMESTAMP`), read
+**its** `CODE`, look that letter up in an `Alphabet` tab's `Letter` column, return the matching
+`Letter Increment` — i.e. **new CODE = the letter right after whichever Category was added last**.
+The user also pulled the real `Alphabet` tab's full content directly from the live
+`ZOTO/PRODUCT MASTER FG` sheet (a 702-row `SR NO./Letter/Letter Increment/MAKED BY/MAKED CODE`
+table, A→Z→AA→AB→…→ZZ, with only the first 2 rows' `MAKED BY`/`MAKED CODE` populated —
+`CASTED`/`ZOTO`/`0` and `MACHINED`/`SUPPLIER`/`1`).
+
+**Implemented to match exactly, not just documented:**
+- New `Alphabet` tab created on `env.sheets.npd` (the RM spreadsheet) — same shape, same 702
+  rows, generated programmatically (a `colName()` bijective base-26 function), not hand-pasted.
+  **This is a separate tab from `env.sheets.fg`'s own `Alphabet`** (used by the FG Part Code's
+  unverified Alphabet-suffix scheme, see the section above) — two different spreadsheets, two
+  independent Alphabet tabs, same layout only.
+- `Backend/src/services/npdPartCode.ts` — new `nextCategoryCode()`, implementing the formula
+  exactly: finds the most-recent `RM ref Category` row by `TIMESTAMP`, reads its `CODE`, looks up
+  the next `Letter Increment` in the new RM `Alphabet` tab. Bootstraps to the Alphabet's first
+  letter (`"A"`) when no Category rows exist yet — the real formula's `MAXROW` would find nothing
+  in that case, matching how the very first live Category had to be seeded by hand originally.
+- `taxonomy.ts`'s `rm-category` entry: `CODE` dropped from `requiredFields` (still in `fields`,
+  so it's visible and editable for a manual correction, just never required from the client) —
+  the `POST /npd/taxonomy/rm-category` handler now auto-fills `body.CODE` via `nextCategoryCode()`
+  whenever the caller didn't already supply one, before the duplicate check and insert.
+
+**Verified end-to-end live** (curl AND actual browser): existing `LED Driver` row already had
+`CODE: AA` (seeded earlier); created `Wiring Harness` and `Connector Housing` via curl without
+specifying `CODE` at all — got `AB` then `AC`, exactly sequential; duplicate-`CATEGORY`-name
+check still correctly 409s even with `CODE` no longer required. Repeated live through the actual
+`TaxonomyAdmin` UI — the form's `CODE` field correctly shows no required-asterisk now, created
+`Terminal Block` with `CODE` left blank, and the real live sheet shows it landed as `AD`,
+continuing the exact same sequence.
+
+**Scope note**: this correction covers `RM ref Category.CODE` only, per what the user asked for
+this round. `RM ref Category DD.CODE` (the Sub-Category code) almost certainly has an equivalent
+App Formula on the live sheet — not yet pulled or verified, still hand-typed by the Design user
+in NPD today. Ask before assuming the same pattern applies there; get the real formula first,
+the same way this one was obtained, rather than guessing it's identical.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

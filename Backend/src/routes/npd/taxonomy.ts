@@ -4,6 +4,7 @@ import { env } from "../../config/env.js";
 import { appendRow, deleteRows, readTable, updateRow } from "../../services/sheets.js";
 import { nextSequentialId } from "../../services/ids.js";
 import { logChange } from "../../services/npdChangelog.js";
+import { nextCategoryCode, nextSubCategoryCode, nextAgainstId, categoryFromAgainstId } from "../../services/npdPartCode.js";
 
 /**
  * Sprint 1 taxonomy admin — generic CRUD over the five NPD reference tabs. Unlike Sales CRR's
@@ -54,6 +55,14 @@ interface TaxonomyTableDef {
    * SKU catalog's price-ish fields use this; every other table's edits go through un-logged,
    * matching the build prompt's own scoping ("every price/BOM edit" — not every edit). */
   auditFields?: string[];
+  /** Field names (subset of `fields`) that the POST handler always computes itself and never
+   * takes from the client — `rm-category`/`rm-category-dd`'s CODE/AGAINST ID/Category, matching
+   * real AppSheet App Formula columns (see npdPartCode.ts's own doc comments). The frontend
+   * hides these from the CREATE form entirely (there's nothing for a doer to fill in — the
+   * value is decided server-side, and for rm-category-dd's Category, showing an editable input
+   * that gets silently discarded would be actively misleading). Still listed in `fields` and
+   * still editable via the PUT/edit path, for a manual correction afterward. */
+  computedFields?: string[];
 }
 
 const TABLES: TaxonomyTableDef[] = [
@@ -67,9 +76,14 @@ const TABLES: TaxonomyTableDef[] = [
     // `CODE` (the 2-letter Category code the real RM Part Code is built from — see
     // services/npdPartCode.ts) and `Against id` were added to the live sheet to match the
     // verified legacy ADC schema (confirmed against 714 real Raw Material SKU rows). `CODE`
-    // is required so every Category has one before it can be used to generate a part code.
-    requiredFields: ["CATEGORY", "CODE"],
+    // is NOT client-supplied — the real system's own AppSheet formula (pulled directly off
+    // the live column, see nextCategoryCode()'s doc comment) auto-generates it as "the next
+    // letter after whichever Category was most recently created," and the POST handler below
+    // does the same. Still listed in `fields` (so it displays/is editable afterward if a
+    // correction is ever needed) but deliberately absent from `requiredFields`.
+    requiredFields: ["CATEGORY"],
     fields: ["CATEGORY", "CODE", "Against id"],
+    computedFields: ["CODE"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -82,9 +96,19 @@ const TABLES: TaxonomyTableDef[] = [
     idPrefix: "RMSUB",
     // Live header has `Category ID`, not `KEY` (confirmed directly, headers had drifted since
     // Sprint 1's original seed — same "dump live headers before trusting an assumption"
-    // discipline as everywhere else in this codebase).
-    requiredFields: ["Category", "SUB CATEGORY", "CODE"],
+    // discipline as everywhere else in this codebase). `CODE` is auto-generated the same way
+    // as `RM ref Category.CODE` — see nextSubCategoryCode()'s own doc comment for the real
+    // App Formula this replicates — so it's deliberately absent from requiredFields.
+    // `Category` stays required + shown on the create form even though the POST handler
+    // silently overwrites it after the duplicate check runs (see taxonomy.ts's POST handler
+    // and categoryFromAgainstId()'s own doc comment) — the submitted value still matters for
+    // that dup check, and hiding the field entirely would remove the only place a doer
+    // expresses which Category this Sub-Category is meant to belong to, even though the real
+    // legacy formula then ignores it. `CODE`/`AGAINST ID` have no such dual role — pure
+    // backend-computed, nothing meaningful for a doer to type — so only those two are hidden.
+    requiredFields: ["Category", "SUB CATEGORY"],
     fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID"],
+    computedFields: ["CODE", "AGAINST ID"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -417,6 +441,7 @@ taxonomyRouter.get("/", async (_req, res) => {
       fields: t.fields,
       requiredFields: t.requiredFields,
       allowCreate: t.allowCreate ?? true,
+      computedFields: t.computedFields ?? [],
     })),
   });
 });
@@ -457,6 +482,12 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // ICs" was rejected as a duplicate of the *category* "LED Modules & Drivers" / "COB LED
     // Chips" row, even though the actual Category+Sub Category combination was unique). Skipped
     // entirely for tables that legitimately allow repeated names (skipDuplicateCheck).
+    //
+    // Deliberately runs BEFORE the CODE/AGAINST ID/Category auto-generation below — those
+    // overwrite `body.Category` with a computed (and, for rm-category-dd, functionally
+    // meaningless — see categoryFromAgainstId()'s own doc comment) value, so checking against
+    // the CLIENT'S submitted Category here, before it gets clobbered, is what makes this dup
+    // check mean anything at all for this table.
     if (!table.skipDuplicateCheck && table.requiredFields.length > 0) {
       const existing = await readTable(table.spreadsheetId, table.tab, { refresh: true });
       const dup = existing.some((r) =>
@@ -469,6 +500,30 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
           error: { code: "DUPLICATE", message: `${table.requiredFields.join(" + ")} combination already exists` },
         });
       }
+    }
+
+    // `RM ref Category.CODE` / `RM ref Category DD.CODE` are both auto-generated, matching the
+    // real AppSheet App Formulas pulled directly off the live columns — see nextCategoryCode()/
+    // nextSubCategoryCode()'s own doc comments for the decoded formulas. Only auto-fills when
+    // the caller didn't already supply one (e.g. a manual correction via edit), so this never
+    // silently overwrites an intentional override.
+    if (table.key === "rm-category" && !body.CODE) {
+      body.CODE = await nextCategoryCode();
+    }
+    if (table.key === "rm-category-dd" && !body.CODE) {
+      body.CODE = await nextSubCategoryCode();
+    }
+    // `AGAINST ID`/`Category` on rm-category-dd are real AppSheet App Formula columns in the
+    // legacy sheet, meaning they were never client-editable there either — always computed,
+    // unconditionally overriding anything the client sent, matching that. See
+    // nextAgainstId()/categoryFromAgainstId()'s own doc comments for why these are known to be
+    // functionally meaningless (implemented on the user's explicit, informed instruction to
+    // match the legacy formulas verbatim, not because they're believed to be useful). Runs
+    // AFTER the duplicate check above, not before — see that check's own comment for why.
+    if (table.key === "rm-category-dd") {
+      const againstId = await nextAgainstId();
+      body["AGAINST ID"] = againstId;
+      body.Category = await categoryFromAgainstId(againstId);
     }
 
     const id = await nextSequentialId(table.spreadsheetId, table.tab, table.idColumn, table.idPrefix);
