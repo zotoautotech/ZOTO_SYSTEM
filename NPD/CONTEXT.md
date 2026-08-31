@@ -832,6 +832,23 @@ these sections come back, the backend endpoints are still there to build a UI ag
 write the pages fresh rather than trying to resurrect deleted files from git history blindly
 (check the API shape still matches first).
 
+## RM/FG SKU Catalog page chrome rebuilt to match Sales CRR's own list screens (31 Aug 2026)
+
+`RmSkuCatalog.tsx`/`FgSkuCatalog.tsx` looked visually inconsistent with the rest of this app —
+the card content already matched the real legacy reference, but the page chrome around it
+(a plain "+Add" button floating above the grid, a fixed-width non-resizable sidebar, no
+header-row actions) didn't match how every other list screen in this codebase looks
+(`OrderPunchList.tsx` and friends: draggable-width `CustomerFilterPanel`, a filter icon in
+the header-actions row via `useSetHeaderActions`, not inline page content). Both catalogs
+were rebuilt to that exact chrome — draggable divider (`onDividerMouseDown`/`Move`/`Up`,
+160–480px clamp, double-click resets to 260px, same as `OrderPunchList.tsx`) + a header-row
+filter icon button (not yet wired to anything, matching the same inert placeholder every
+other list screen's filter icon currently is). **`RmSkuCatalog`'s old "+Add" button (which
+pointed at `/npd/rm-part-code`) was dropped, not moved** — that route/page was deleted in the
+same session's earlier frontend cleanup (see "NPD landing page collapsed..." above) and no
+replacement RM SKU create flow exists yet; add a header "+" button back once one is built,
+following the same `useSetHeaderActions` pattern already in place.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
