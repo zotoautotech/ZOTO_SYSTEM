@@ -10,6 +10,7 @@ import { npdAttachmentRouter } from "./npdAttachment.js";
 import { customerRouter } from "./customer.js";
 import { purchaseRouter } from "./purchase.js";
 import { dashboardRouter } from "./dashboard.js";
+import { rmPartCodeRouter } from "./rmPartCode.js";
 
 /**
  * NPD module root router, mounted at /api/v1/npd in app.ts. Every sub-router (taxonomy today;
@@ -43,3 +44,4 @@ npdRouter.use("/npd-attachments", npdAttachmentRouter);
 npdRouter.use("/customer", customerRouter);
 npdRouter.use("/purchase", purchaseRouter);
 npdRouter.use("/dashboard", dashboardRouter);
+npdRouter.use("/rm-part-code", rmPartCodeRouter);

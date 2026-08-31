@@ -48,6 +48,7 @@ import { CustomerOnboarding } from "./npd/CustomerOnboarding";
 import { Purchase } from "./npd/Purchase";
 import { StockWipDashboard } from "./npd/StockWipDashboard";
 import { Notifications } from "./npd/Notifications";
+import { RmPartCodeGenerator } from "./npd/RmPartCodeGenerator";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="npd/purchase" element={<Purchase />} />
         <Route path="npd/dashboard" element={<StockWipDashboard />} />
         <Route path="npd/notifications" element={<Notifications />} />
+        <Route path="npd/rm-part-code" element={<RmPartCodeGenerator />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/dashboard" element={<Dashboard />} />

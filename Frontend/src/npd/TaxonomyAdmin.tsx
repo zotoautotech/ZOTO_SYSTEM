@@ -139,9 +139,9 @@ export function TaxonomyAdmin() {
             </div>
             {!active.allowCreate && (
               <p className="text-muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 12 }}>
-                New rows here are published through their own approval workflow elsewhere in
-                NPD (New Part Code Request for the SKU catalogs, Customer KYC for the Customer
-                Master) — you can still edit existing rows.
+                New rows here come from their own dedicated flow elsewhere in NPD — RM Part
+                Code Generator for RM SKUs, New Part Code Request for FG SKUs, Customer KYC for
+                the Customer Master — you can still edit existing rows.
               </p>
             )}
             {deleteError && <p style={{ color: "var(--color-error)", fontSize: 13, marginBottom: 8 }}>{deleteError}</p>}

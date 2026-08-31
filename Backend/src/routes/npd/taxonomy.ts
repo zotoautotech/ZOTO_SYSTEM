@@ -64,8 +64,12 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "RM ref Category",
     idColumn: "Unique ID",
     idPrefix: "RMCAT",
-    requiredFields: ["CATEGORY"],
-    fields: ["CATEGORY"],
+    // `CODE` (the 2-letter Category code the real RM Part Code is built from — see
+    // services/npdPartCode.ts) and `Against id` were added to the live sheet to match the
+    // verified legacy ADC schema (confirmed against 714 real Raw Material SKU rows). `CODE`
+    // is required so every Category has one before it can be used to generate a part code.
+    requiredFields: ["CATEGORY", "CODE"],
+    fields: ["CATEGORY", "CODE", "Against id"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -76,8 +80,11 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "RM ref Category DD",
     idColumn: "Unique ID",
     idPrefix: "RMSUB",
-    requiredFields: ["Category", "SUB CATEGORY"],
-    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "KEY"],
+    // Live header has `Category ID`, not `KEY` (confirmed directly, headers had drifted since
+    // Sprint 1's original seed — same "dump live headers before trusting an assumption"
+    // discipline as everywhere else in this codebase).
+    requiredFields: ["Category", "SUB CATEGORY", "CODE"],
+    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -90,6 +97,21 @@ const TABLES: TaxonomyTableDef[] = [
     idPrefix: "RMPAINT",
     requiredFields: ["Code", "Paint Description"],
     fields: ["Code", "Paint Description"],
+    timestampField: "TIMESTAMP",
+    useremailField: "USEREMAIL",
+  },
+  // The 4th and final lookup table the real RM Part Code formula draws from (see
+  // services/npdPartCode.ts) — CODE is a single digit (0/1), PART DESIGN BY names who
+  // designed the part. Live sheet seeded with 0="ZOTO DESIGN PART", 1="SUPPLIER DESIGN PART".
+  {
+    key: "part-design-by",
+    label: "Part Design By",
+    spreadsheetId: env.sheets.npd,
+    tab: "PART DESGIN BY",
+    idColumn: "UNIQUE ID",
+    idPrefix: "PDB",
+    requiredFields: ["CODE", "PART DESIGN BY"],
+    fields: ["CODE", "PART DESIGN BY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },

@@ -482,3 +482,29 @@ export async function getNotifications() {
   const res = await api.get<NotificationsSummary>("/npd/dashboard/notifications");
   return res.data;
 }
+
+// --- RM Part Code Generator (verified against 714 real legacy rows — see
+// Backend/src/services/npdPartCode.ts's own doc comment for the full derivation) ---
+
+export interface GenerateRmPartCodePayload {
+  category: string;
+  subCategory: string;
+  paintDescription: string;
+  designByLabel: string;
+  vendorName?: string;
+}
+
+export interface RmPartCodeResult {
+  id: string;
+  partCode: string;
+  categoryCode: string;
+  subCategoryCode: string;
+  count: string;
+  paintCode: string;
+  designByDigit: string;
+}
+
+export async function generateRmPartCode(payload: GenerateRmPartCodePayload) {
+  const res = await api.post<RmPartCodeResult>("/npd/rm-part-code/generate", payload);
+  return res.data;
+}
