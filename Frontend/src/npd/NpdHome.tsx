@@ -6,19 +6,14 @@ interface CardDef {
   label: string;
 }
 
-const CARDS: CardDef[] = [
-  { to: "/npd/projects", icon: "📋", label: "Projects Board" },
-  { to: "/npd/product-master", icon: "🏭", label: "Product Master" },
-  { to: "/npd/taxonomy", icon: "🗂️", label: "Categories & Taxonomy" },
-  { to: "/npd/rm-part-code", icon: "🏷️", label: "RM Part Code Generator" },
-  { to: "/npd/part-code-requests", icon: "🔖", label: "New Part Code Request" },
-  { to: "/npd/bom", icon: "🧩", label: "BOM Builder" },
-  { to: "/npd/price-changes", icon: "📈", label: "Price & BOM Change Log" },
-  { to: "/npd/customer-onboarding", icon: "🧾", label: "Customer Onboarding & KYC" },
-  { to: "/npd/purchase", icon: "🚚", label: "Purchase" },
-  { to: "/npd/dashboard", icon: "📦", label: "Stock & WIP Dashboard" },
-  { to: "/npd/notifications", icon: "🔔", label: "Notifications" },
-];
+// All 11 cards removed on explicit user instruction (31 Aug 2026) — every route below still
+// exists and works (Projects Board /npd/projects, Product Master /npd/product-master,
+// Categories & Taxonomy /npd/taxonomy, RM Part Code Generator /npd/rm-part-code, New Part Code
+// Request /npd/part-code-requests, BOM Builder /npd/bom, Price & BOM Change Log
+// /npd/price-changes, Customer Onboarding & KYC /npd/customer-onboarding, Purchase
+// /npd/purchase, Stock & WIP Dashboard /npd/dashboard, Notifications /npd/notifications) —
+// only this landing-page grid was asked to go. Don't re-add entries here without being asked.
+const CARDS: CardDef[] = [];
 
 /** NPD app landing page — one card per shipped section, matching HOME's own tile-grid pattern
  * one level down. Add a new CARDS entry (not a copy-pasted <Link> block) as future sprints
