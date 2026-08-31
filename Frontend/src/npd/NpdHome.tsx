@@ -1,23 +1,49 @@
 import { Link } from "react-router-dom";
 
-interface CardDef {
+interface TileDef {
   to: string;
-  icon: string;
-  label: string;
+  name: string;
+  image: string;
 }
 
-// All 11 cards removed on explicit user instruction (31 Aug 2026) — every route below still
-// exists and works (Projects Board /npd/projects, Product Master /npd/product-master,
-// Categories & Taxonomy /npd/taxonomy, RM Part Code Generator /npd/rm-part-code, New Part Code
-// Request /npd/part-code-requests, BOM Builder /npd/bom, Price & BOM Change Log
-// /npd/price-changes, Customer Onboarding & KYC /npd/customer-onboarding, Purchase
-// /npd/purchase, Stock & WIP Dashboard /npd/dashboard, Notifications /npd/notifications) —
-// only this landing-page grid was asked to go. Don't re-add entries here without being asked.
-const CARDS: CardDef[] = [];
+/** NPD landing page — matches the real legacy AppSheet reference screen exactly (NPD DESIGN
+ * home, 5 tiles: RAW MATERIAL SKU / FINAL GOOD SKU / RM SEARCH / FG SEARCH / ASSEMBLE DATA),
+ * including its real icon images — pulled directly from the live `NPD USER` tab
+ * (`ZOTO/PRODUCT MASTER FG` sheet), the same Name/Image/View/Permissions pattern the top-level
+ * ZOTO HOME launcher already uses (`Backend/src/routes/home.ts`). Not emoji placeholders — the
+ * actual icons the reference app uses. Every other section that used to be on this page
+ * (Projects Board, Categories & Taxonomy, RM Part Code Generator, New Part Code Request, BOM
+ * Builder card, Price & BOM Change Log, Customer Onboarding & KYC, Purchase, Stock & WIP
+ * Dashboard, Notifications) was removed on explicit user instruction (31 Aug 2026) along with
+ * its dedicated page component — don't re-add a card/route here without being asked. */
+const TILES: TileDef[] = [
+  {
+    to: "/npd/rm-sku",
+    name: "RAW MATERIAL SKU",
+    image: "https://cdn-icons-png.freepik.com/256/14248/14248314.png?ga=GA1.1.715346516.1729860160",
+  },
+  {
+    to: "/npd/fg-sku",
+    name: "FINAL GOOD SKU",
+    image: "https://cdn-icons-png.freepik.com/256/9471/9471735.png?ga=GA1.1.715346516.1729860160",
+  },
+  {
+    to: "/npd/rm-sku",
+    name: "RM SEARCH",
+    image: "https://cdn-icons-png.freepik.com/256/18389/18389987.png?ga=GA1.1.715346516.1729860160",
+  },
+  {
+    to: "/npd/fg-sku",
+    name: "FG SEARCH",
+    image: "https://cdn-icons-png.freepik.com/256/17764/17764891.png?ga=GA1.1.715346516.1729860160",
+  },
+  {
+    to: "/npd/bom",
+    name: "ASSEMBLE DATA",
+    image: "https://cdn-icons-png.freepik.com/256/10839/10839319.png?ga=GA1.1.2018887696.1729159453",
+  },
+];
 
-/** NPD app landing page — one card per shipped section, matching HOME's own tile-grid pattern
- * one level down. Add a new CARDS entry (not a copy-pasted <Link> block) as future sprints
- * ship more sections. */
 export function NpdHome() {
   return (
     <div style={{ marginTop: 16 }}>
@@ -28,22 +54,22 @@ export function NpdHome() {
           gap: 16,
         }}
       >
-        {CARDS.map((card) => (
+        {TILES.map((tile) => (
           <Link
-            key={card.to}
-            to={card.to}
+            key={tile.name}
+            to={tile.to}
             className="card"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: 14,
               padding: 16,
               textDecoration: "none",
               color: "var(--color-text)",
             }}
           >
-            <span style={{ fontSize: 24 }}>{card.icon}</span>
-            <span style={{ fontWeight: 500 }}>{card.label}</span>
+            <img src={tile.image} alt="" style={{ width: 40, height: 40, objectFit: "contain", flexShrink: 0 }} />
+            <span style={{ fontWeight: 600 }}>{tile.name}</span>
           </Link>
         ))}
       </div>

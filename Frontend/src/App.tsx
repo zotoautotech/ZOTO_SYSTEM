@@ -38,22 +38,11 @@ import { DoerPendingList } from "./checklist/DoerPendingList";
 import { AccountDashboardExpand } from "./checklist/AccountDashboardExpand";
 import { AccountPendingDataList } from "./checklist/AccountPendingDataList";
 import { NpdHome } from "./npd/NpdHome";
-import { TaxonomyAdmin } from "./npd/TaxonomyAdmin";
-import { PartCodeRequestList } from "./npd/PartCodeRequestList";
 import { BomBuilder } from "./npd/BomBuilder";
-import { PriceChangeQueue } from "./npd/PriceChangeQueue";
-import { ProjectsBoard } from "./npd/ProjectsBoard";
-import { ProjectDetail } from "./npd/ProjectDetail";
-import { CustomerOnboarding } from "./npd/CustomerOnboarding";
-import { Purchase } from "./npd/Purchase";
-import { StockWipDashboard } from "./npd/StockWipDashboard";
-import { Notifications } from "./npd/Notifications";
-import { RmPartCodeGenerator } from "./npd/RmPartCodeGenerator";
 import { RmSkuCatalog } from "./npd/RmSkuCatalog";
 import { RmSkuDetail } from "./npd/RmSkuDetail";
 import { FgSkuCatalog } from "./npd/FgSkuCatalog";
 import { FgSkuDetail } from "./npd/FgSkuDetail";
-import { ProductMasterHome } from "./npd/ProductMasterHome";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -85,20 +74,8 @@ export default function App() {
         <Route path="checklist/dashboard/account" element={<AccountDashboardExpand />} />
         <Route path="checklist/dashboard/account/data" element={<AccountPendingDataList />} />
         <Route path="npd" element={<NpdHome />} />
-        <Route path="npd/taxonomy" element={<TaxonomyAdmin />} />
-        <Route path="npd/taxonomy/:key" element={<TaxonomyAdmin />} />
-        <Route path="npd/part-code-requests" element={<PartCodeRequestList />} />
         <Route path="npd/bom" element={<BomBuilder />} />
         <Route path="npd/bom/:fgId" element={<BomBuilder />} />
-        <Route path="npd/price-changes" element={<PriceChangeQueue />} />
-        <Route path="npd/projects" element={<ProjectsBoard />} />
-        <Route path="npd/projects/:id" element={<ProjectDetail />} />
-        <Route path="npd/customer-onboarding" element={<CustomerOnboarding />} />
-        <Route path="npd/purchase" element={<Purchase />} />
-        <Route path="npd/dashboard" element={<StockWipDashboard />} />
-        <Route path="npd/notifications" element={<Notifications />} />
-        <Route path="npd/rm-part-code" element={<RmPartCodeGenerator />} />
-        <Route path="npd/product-master" element={<ProductMasterHome />} />
         <Route path="npd/rm-sku" element={<RmSkuCatalog />} />
         <Route path="npd/rm-sku/:id" element={<RmSkuDetail />} />
         <Route path="npd/fg-sku" element={<FgSkuCatalog />} />

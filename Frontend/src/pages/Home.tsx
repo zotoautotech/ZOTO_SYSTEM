@@ -22,7 +22,7 @@ export function Home() {
     const name = tile.name.toUpperCase();
     if (name.startsWith("SALES CRR")) return "/modules";
     if (name.startsWith("CHECKLIST")) return "/checklist";
-    if (name.startsWith("NPD")) return "/npd/product-master";
+    if (name.startsWith("NPD")) return "/npd";
     return `/home/${encodeURIComponent(tile.view)}`;
   }
 

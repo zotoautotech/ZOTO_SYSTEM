@@ -808,6 +808,30 @@ production rows, correctly split into `Ambient Light` (1) and `Uncategorized` (7
 the live sheet's real, mostly-blank `CATEGORY` column exactly as documented in this file's
 "Live header snapshots" section).
 
+## NPD landing page collapsed into the Product Master hub (31 Aug 2026)
+
+`Frontend/src/npd/NpdHome.tsx` (route `/npd`) now renders the exact same 5-tile grid that used
+to live only at `/npd/product-master` (RAW MATERIAL SKU / FINAL GOOD SKU / RM SEARCH /
+FG SEARCH / ASSEMBLE DATA, real Freepik icon images) — matching the real legacy app, whose
+HOME tile opens straight into this screen with no intermediate menu. `ProductMasterHome.tsx`
+was deleted (its content is now `NpdHome.tsx` verbatim) and the `/npd/product-master` route
+was removed from `App.tsx`; `Home.tsx`'s `hrefFor()` points `NPD*` tiles back at plain `/npd`.
+
+**Every other section that used to be on the old 11-card NPD landing page was deleted from the
+frontend entirely on explicit user instruction** — not just unlinked, the page components and
+their routes are gone: `TaxonomyAdmin.tsx`/`TaxonomyRowForm.tsx` (`/npd/taxonomy`),
+`PartCodeRequestList.tsx`/`PartCodeRequestForm.tsx` (`/npd/part-code-requests`),
+`RmPartCodeGenerator.tsx` (`/npd/rm-part-code`), `PriceChangeQueue.tsx`
+(`/npd/price-changes`), `ProjectsBoard.tsx`/`ProjectDetail.tsx`/`ProjectForm.tsx`
+(`/npd/projects`), `CustomerOnboarding.tsx`/`KycForm.tsx`/`RaiseRequestForm.tsx`
+(`/npd/customer-onboarding`), `Purchase.tsx`/`TaxInvoiceForm.tsx`/`StoreInForm.tsx`
+(`/npd/purchase`), `StockWipDashboard.tsx` (`/npd/dashboard`), `Notifications.tsx`
+(`/npd/notifications`). The corresponding backend routes/services (`Backend/src/routes/npd/`,
+`npdPartCode.ts`, etc.) were **not** touched — this was a frontend-only removal; if any of
+these sections come back, the backend endpoints are still there to build a UI against, just
+write the pages fresh rather than trying to resurrect deleted files from git history blindly
+(check the API shape still matches first).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
