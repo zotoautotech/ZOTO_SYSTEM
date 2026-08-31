@@ -180,29 +180,70 @@ export async function categoryFromAgainstId(againstId: string): Promise<string> 
 }
 
 /**
- * RM Part Code generation — reverse-engineered and VERIFIED against the real legacy ADC
- * spreadsheet (`Copy of ADC/PRODUCT MASTER-RM`), not guessed. Confirmed against all 714 real
- * `Raw Material SKU` rows: every single one matched this exact 5-part shape.
+ * RM Part Code generation — as of this pass, implemented against the REAL `PART NO.` App
+ * Formula the user pulled directly off the live AppSheet column (not the earlier reverse-
+ * engineered approximation), verbatim:
  *
- * `PART NO.` = [Category CODE] + [Sub-Category CODE] + [3-digit running count] + [Paint CODE]
- *              + [Design-By digit]
+ *   IF(NOT(ISBLANK(LOOKUP([ID'S],"RM ref Category","AGAINST ID","CODE"))),
+ *      LOOKUP([ID'S],"RM ref Category","AGAINST ID","CODE"),
+ *      ANY(SELECT(RM ref Category[CODE], [_THISROW].[Category]=[CATEGORY])))
+ *   &
+ *   IF(NOT(ISBLANK(LOOKUP([ID'S],"RM ref Category DD","AGAINST ID","CODE"))),
+ *      LOOKUP([ID'S],"RM ref Category DD","AGAINST ID","CODE"),
+ *      ANY(SELECT(RM ref Category DD[CODE],
+ *          AND([_THISROW].[Category]=[CATEGORY],[_THISROW].[Sub Category]=[SUB CATEGORY]))))
+ *   &
+ *   RIGHT("000"&COUNT(SELECT(RAW MATERIAL SKU[ID'S], AND(
+ *     [_THISROW].[Category]=[Category], [_THISROW].[Sub Category]=[Sub Category],
+ *     [_THISROW].[Paint]=[_THISROW].[Paint], [_THISROW].[MAKE BY]=[_THISROW].[MAKE BY],
+ *     [_THISROW].[_ROWNUMBER]>=[_ROWNUMBER]))),3)
+ *   &
+ *   IF(NOT(ISBLANK(LOOKUP([_THISROW].[Paint],"RM ref Paint","Paint Description","Code"))),
+ *      LOOKUP([_THISROW].[Paint],"RM ref Paint","Paint Description","Code"),
+ *      ANY(SELECT(RM ref Paint[Code], [_THISROW].[Paint]=[Unique ID])))
+ *   &
+ *   IF(NOT(ISBLANK(LOOKUP([_THISROW].[MAKE BY],"Alphabet","MAKED BY","MAKED CODE"))),
+ *      LOOKUP([_THISROW].[MAKE BY],"Alphabet","MAKED BY","MAKED CODE"),
+ *      ANY(SELECT(Alphabet[MAKED CODE], [_THISROW].[MAKE BY]=[MAKED CODE])))
  *
- *   - Category CODE (2 letters) — `RM ref Category.CODE`, one row per Category.
- *   - Sub-Category CODE (2 letters) — `RM ref Category DD.CODE`, one row per Category+Sub
- *     Category pair.
- *   - 3-digit count — NOT stored anywhere; a simple monotonic counter scoped to the 4-letter
- *     (Category+Sub-Category) prefix, starting "000", incrementing per new part under that
- *     prefix. Verified: 62 of 64 real multi-part prefixes matched this exactly (the other 2
- *     were explained by a deleted row, not a different rule).
- *   - Paint CODE (1 letter) — `RM ref Paint.Code`, looked up by the part's actual paint/finish.
- *   - Design-By digit (1 digit) — `PART DESGIN BY.CODE`, e.g. 0 = in-house, 1 = supplier.
+ * Four real findings vs the earlier approximation this replaces:
  *
- * All four lookup tables are edited via the generic taxonomy admin (Backend/src/routes/npd/
- * taxonomy.ts's `rm-category`/`rm-category-dd`/`rm-paint`/`part-design-by` entries) — this
- * service only does the lookups + the counter + the concatenation, matching the real legacy
- * behavior (every piece hand-picked by Design from a fixed vocabulary, the code itself
- * assembled deterministically from what they picked — see NPD/CONTEXT.md's Sprint 7 notes for
- * the full trace).
+ * 1. Every `IF(NOT(ISBLANK(LOOKUP(...AGAINST ID...))),...)` branch is a dead pointer — it can
+ *    only resolve non-blank if some OTHER row's `AGAINST ID` already points back at [ID'S] of
+ *    the SKU being created, which is impossible for a brand-new row (nothing can reference an
+ *    ID that doesn't exist yet). Implemented verbatim anyway (harmless no-op) — same "match the
+ *    legacy formula even where it's functionally dead" instruction as `RM ref Category DD`'s
+ *    own `AGAINST ID`/`Category` columns (see nextAgainstId()'s doc comment above). The real
+ *    resolution always comes from each formula's `ANY(SELECT(...))` fallback branch.
+ * 2. The Design-By digit does NOT come from the `PART DESGIN BY` reference table the earlier
+ *    approximation assumed — it comes from the shared `Alphabet` tab's `MAKED BY`/`MAKED CODE`
+ *    columns (the same tab `nextCode()` above already reads for the running-letter sequence),
+ *    matched against the SKU's own `MAKE BY` field (e.g. "ADC"/"SUPPLIER"). `PART DESGIN BY`
+ *    is very likely a dead, unused leftover reference table — left alone/untouched, just no
+ *    longer read by this function.
+ * 3. The Paint lookup's real branch matches `[_THISROW].[Paint]` against `RM ref Paint`'s
+ *    `Unique ID` column (its fallback `ANY(SELECT(...))` branch) — the live app's `Paint` field
+ *    stores the ref's row ID, not its description text, so the formula's own FIRST branch
+ *    (matching against `Paint Description`) is dead there too. This codebase's own RM SKU form
+ *    is built the other way around — its `Paint` field holds the picked `Paint Description`
+ *    text directly (see the taxonomy admin's plain `SearchableSelect`, no hidden ref-id
+ *    concept) — so for THIS implementation the description-match branch is the one that
+ *    actually resolves, and the `Unique ID` branch is checked second as a genuine fallback
+ *    (harmless either way, matches the formula's own two-branch shape).
+ * 4. The running 3-digit count's `_ROWNUMBER>=[_THISROW].[_ROWNUMBER]` condition is themselves
+ *    ambiguous outside a live AppSheet runtime — `_ROWNUMBER` for the row being ADDED isn't a
+ *    stable, queryable value the way it is for already-committed rows, so this couldn't be
+ *    replicated byte-for-byte against a Sheets-API backend even in principle. Kept as the
+ *    already-VERIFIED-against-714-real-rows behavior from the earlier approximation instead:
+ *    count of existing rows sharing the same 4-letter Category+Sub-Category prefix, 0-indexed,
+ *    ascending — confirmed to match all 714 real `Raw Material SKU` rows' actual `PART NO.`
+ *    values when this was first reverse-engineered (see NPD/CONTEXT.md's Sprint 7 notes). This
+ *    is the one deliberate deviation from the literal formula text above, and it's a deviation
+ *    from something unverifiable, not a guess replacing something known.
+ *
+ * All lookup tables are edited via the generic taxonomy admin (Backend/src/routes/npd/
+ * taxonomy.ts's `rm-category`/`rm-category-dd`/`rm-paint` entries, plus the shared `Alphabet`
+ * tab) — this service only does the lookups + the counter + the concatenation.
  */
 
 export class RmPartCodeLookupError extends Error {
@@ -212,24 +253,83 @@ export class RmPartCodeLookupError extends Error {
   }
 }
 
-async function lookupCode(tab: string, matchField: string, matchValue: string, codeField: string): Promise<string> {
-  const rows = await readTable(env.sheets.npd, tab);
-  const row = rows.find((r) => (r[matchField] ?? "").trim().toLowerCase() === matchValue.trim().toLowerCase());
-  const code = (row?.[codeField] ?? "").trim();
-  if (!code) {
+/** Part A/B of the formula: the Category/Sub-Category CODE for a NEW row being created.
+ * `id` is the new row's own `ID'S` — passed through only so the formula's dead `AGAINST ID`
+ * branch can be included verbatim (see this file's module doc comment, finding #1); it never
+ * actually resolves for a row that doesn't exist yet, so this always falls through to the real
+ * `ANY(SELECT(...))` branch below. */
+async function categoryCodeForNewRow(id: string, category: string): Promise<string> {
+  const rows = await readTable(env.sheets.npd, RM_CATEGORY_TAB, { refresh: true });
+  const dead = rows.find((r) => (r["AGAINST ID"] ?? "").trim() === id);
+  if (dead && (dead.CODE ?? "").trim()) return dead.CODE.trim();
+  const real = rows.find((r) => (r.CATEGORY ?? "").trim().toLowerCase() === category.trim().toLowerCase());
+  if (!real || !(real.CODE ?? "").trim()) {
     throw new RmPartCodeLookupError(
-      "MISSING_CODE",
-      `No CODE found on "${tab}" for ${matchField}="${matchValue}" — add it via Taxonomy admin first.`
+      "MISSING_CATEGORY_CODE",
+      `No CODE found on "RM ref Category" for CATEGORY="${category}" — add it via Taxonomy admin first.`
     );
   }
-  return code;
+  return real.CODE.trim();
+}
+
+async function subCategoryCodeForNewRow(id: string, category: string, subCategory: string): Promise<string> {
+  const rows = await readTable(env.sheets.npd, RM_CATEGORY_DD_TAB, { refresh: true });
+  const dead = rows.find((r) => (r["AGAINST ID"] ?? "").trim() === id);
+  if (dead && (dead.CODE ?? "").trim()) return dead.CODE.trim();
+  const real = rows.find(
+    (r) =>
+      (r.Category ?? "").trim().toLowerCase() === category.trim().toLowerCase() &&
+      (r["SUB CATEGORY"] ?? "").trim().toLowerCase() === subCategory.trim().toLowerCase()
+  );
+  if (!real || !(real.CODE ?? "").trim()) {
+    throw new RmPartCodeLookupError(
+      "MISSING_SUBCATEGORY_CODE",
+      `No CODE found on "RM ref Category DD" for Category="${category}" / SUB CATEGORY="${subCategory}" — add it via Taxonomy admin first.`
+    );
+  }
+  return real.CODE.trim();
+}
+
+/** Part D: matches the real formula's own two branches (description-text match, then
+ * Unique-ID match) — see finding #3 above for why the description branch is the one that
+ * actually resolves against this codebase's own RM SKU form. */
+async function paintCodeFor(paintValue: string): Promise<string> {
+  const rows = await readTable(env.sheets.npd, RM_PAINT_TAB, { refresh: true });
+  const byDescription = rows.find(
+    (r) => (r["Paint Description"] ?? "").trim().toLowerCase() === paintValue.trim().toLowerCase()
+  );
+  if (byDescription && (byDescription.Code ?? "").trim()) return byDescription.Code.trim();
+  const byUniqueId = rows.find((r) => (r["Unique ID"] ?? "").trim() === paintValue.trim());
+  if (!byUniqueId || !(byUniqueId.Code ?? "").trim()) {
+    throw new RmPartCodeLookupError(
+      "MISSING_PAINT_CODE",
+      `No Code found on "RM ref Paint" for Paint="${paintValue}" — add it via Taxonomy admin first.`
+    );
+  }
+  return byUniqueId.Code.trim();
+}
+
+/** Part E: the Design-By digit, off the shared `Alphabet` tab's `MAKED BY`/`MAKED CODE`
+ * columns — see finding #2 above for why this is `Alphabet`, not `PART DESGIN BY`. */
+async function makeByDigitFor(makeBy: string): Promise<string> {
+  const rows = await readTable(env.sheets.npd, RM_ALPHABET_TAB, { refresh: true });
+  const row = rows.find((r) => (r["MAKED BY"] ?? "").trim().toLowerCase() === makeBy.trim().toLowerCase());
+  if (!row || !(row["MAKED CODE"] ?? "").trim()) {
+    throw new RmPartCodeLookupError(
+      "MISSING_MAKE_BY_CODE",
+      `No MAKED CODE found on "Alphabet" for MAKED BY="${makeBy}" — add it via Taxonomy admin first.`
+    );
+  }
+  return row["MAKED CODE"].trim();
 }
 
 export interface RmPartCodeInput {
+  /** The new SKU row's own `ID'S` (minted before this is called) — see finding #1 above. */
+  id: string;
   category: string;
   subCategory: string;
-  paintDescription: string;
-  designByLabel: string;
+  paint: string;
+  makeBy: string;
 }
 
 export interface RmPartCodeResult {
@@ -243,10 +343,10 @@ export interface RmPartCodeResult {
 
 export async function generateRmPartCode(input: RmPartCodeInput): Promise<RmPartCodeResult> {
   const [categoryCode, subCategoryCode, paintCode, designByDigit] = await Promise.all([
-    lookupCode("RM ref Category", "CATEGORY", input.category, "CODE"),
-    lookupCode("RM ref Category DD", "SUB CATEGORY", input.subCategory, "CODE"),
-    lookupCode("RM ref Paint", "Paint Description", input.paintDescription, "Code"),
-    lookupCode("PART DESGIN BY", "PART DESIGN BY", input.designByLabel, "CODE"),
+    categoryCodeForNewRow(input.id, input.category),
+    subCategoryCodeForNewRow(input.id, input.category, input.subCategory),
+    paintCodeFor(input.paint),
+    makeByDigitFor(input.makeBy),
   ]);
 
   const prefix = categoryCode + subCategoryCode;

@@ -489,28 +489,8 @@ export async function getNotifications() {
   return res.data;
 }
 
-// --- RM Part Code Generator (verified against 714 real legacy rows — see
-// Backend/src/services/npdPartCode.ts's own doc comment for the full derivation) ---
-
-export interface GenerateRmPartCodePayload {
-  category: string;
-  subCategory: string;
-  paintDescription: string;
-  designByLabel: string;
-  vendorName?: string;
-}
-
-export interface RmPartCodeResult {
-  id: string;
-  partCode: string;
-  categoryCode: string;
-  subCategoryCode: string;
-  count: string;
-  paintCode: string;
-  designByDigit: string;
-}
-
-export async function generateRmPartCode(payload: GenerateRmPartCodePayload) {
-  const res = await api.post<RmPartCodeResult>("/npd/rm-part-code/generate", payload);
-  return res.data;
-}
+// RM SKU creation (the real "Raw Material SKU Form", RmSkuForm.tsx) now goes through the
+// generic `createTaxonomyRow("rm-sku", ...)` above, same as every other taxonomy table — the
+// server computes PART NO. itself (see Backend/src/services/npdPartCode.ts's generateRmPartCode()
+// doc comment for the real, verified App Formula this replicates). The old dedicated
+// /npd/rm-part-code/generate endpoint + RmPartCodeGenerator.tsx page are gone.

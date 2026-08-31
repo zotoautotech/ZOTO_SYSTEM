@@ -1,28 +1,30 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
 import { useIsMobile } from "../lib/responsive";
 import { useSearch } from "../lib/search";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+import { RmSkuForm } from "./RmSkuForm";
 
 /** RM SKU Catalog — same list-screen chrome as every Sales CRR queue (`OrderPunchList.tsx`
  * etc.): a draggable-width `CustomerFilterPanel` sidebar (here filtering Category, not
- * customer — the component is already generic `{name,count}[]`) + a filter icon in the
- * header-actions row, not a button floating above the grid. The card grid itself still
+ * customer — the component is already generic `{name,count}[]`) + a "+ New" / filter icon in
+ * the header-actions row, not a button floating above the grid. The card grid itself still
  * matches the real legacy AppSheet reference (cards grouped by Sub Category, each card
  * showing Category / created date / PART NO. / Sub Category / Vendor Name) — only the page
- * chrome around it was out of step with the rest of this app. There's no "+Add" here: the
- * old RM Part Code Generator flow that used to create these rows was removed from the
- * frontend on request, and no other create form exists yet — add a header "+" button back
- * once a real RM SKU create flow is built. */
+ * chrome around it was out of step with the rest of this app. "+ New" opens the real
+ * "Raw Material SKU Form" (RmSkuForm.tsx), which now actually creates a row (rm-sku's
+ * PART NO. is server-computed — see the taxonomy table's own doc comment). */
 export function RmSkuCatalog() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { query } = useSearch();
+  const queryClient = useQueryClient();
   const [filterWidth, setFilterWidth] = useState(260);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "rm-sku"],
@@ -85,23 +87,46 @@ export function RmSkuCatalog() {
   );
 
   useSetHeaderActions(
-    <button
-      aria-label="Filter"
-      style={{
-        width: 38,
-        height: 38,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: "1px solid var(--color-border)",
-        borderRadius: 8,
-        background: "var(--color-bg)",
-      }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4 5h16M7 12h10M10 19h4" />
-      </svg>
-    </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {!isMobile && (
+        <button
+          aria-label="New"
+          onClick={() => setCreating(true)}
+          style={{
+            width: 38,
+            height: 38,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid var(--color-border)",
+            borderRadius: 8,
+            background: "var(--color-bg)",
+            color: "var(--color-primary)",
+            fontSize: 18,
+            fontWeight: 600,
+          }}
+        >
+          +
+        </button>
+      )}
+      <button
+        aria-label="Filter"
+        style={{
+          width: 38,
+          height: 38,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg)",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 5h16M7 12h10M10 19h4" />
+        </svg>
+      </button>
+    </div>
   );
 
   return (
@@ -148,6 +173,41 @@ export function RmSkuCatalog() {
           ))}
         </div>
       </div>
+
+      {isMobile && (
+        <button
+          aria-label="New"
+          onClick={() => setCreating(true)}
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            border: "none",
+            background: "var(--color-primary)",
+            color: "#fff",
+            fontSize: 26,
+            fontWeight: 600,
+            boxShadow: "var(--shadow-lg)",
+            zIndex: 5,
+          }}
+        >
+          +
+        </button>
+      )}
+
+      {creating && (
+        <RmSkuForm
+          onClose={() => setCreating(false)}
+          onSaved={(id) => {
+            setCreating(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-sku"] });
+            navigate(`/npd/rm-sku/${encodeURIComponent(id)}`);
+          }}
+        />
+      )}
     </div>
   );
 }

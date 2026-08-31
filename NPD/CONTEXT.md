@@ -849,6 +849,70 @@ same session's earlier frontend cleanup (see "NPD landing page collapsed..." abo
 replacement RM SKU create flow exists yet; add a header "+" button back once one is built,
 following the same `useSetHeaderActions` pattern already in place.
 
+## RM Part Code — corrected to the REAL App Formula, and a real "Raw Material SKU Form" built (31 Aug 2026)
+
+The user supplied the actual live `PART NO.` App Formula off the `Raw Material SKU` column
+(not a reconstruction) — `Backend/src/services/npdPartCode.ts`'s `generateRmPartCode()` was
+rewritten to match it verbatim, replacing the earlier Sprint 7 approximation. Four real
+findings from the literal formula text (full derivation + the formula itself is in that
+file's own module doc comment, don't duplicate it here):
+
+1. Every `AGAINST ID` branch on Category/Sub-Category is a dead pointer for a brand-new row
+   (nothing can reference an ID that doesn't exist yet) — implemented anyway for fidelity,
+   always no-ops, same "match the legacy formula even where it's dead" convention as
+   `RM ref Category DD`'s own `AGAINST ID`/`Category` columns above.
+2. **The Design-By digit comes from the shared `Alphabet` tab's `MAKED BY`/`MAKED CODE`
+   columns, NOT the `PART DESGIN BY` reference table** the earlier approximation assumed.
+   Confirmed by reading the live `Alphabet` tab directly: only 2 of its 702 rows have a
+   non-blank `MAKED BY` — `MAKED BY: "ZOTO", MAKED CODE: "0"` and `MAKED BY: "SUPPLIER",
+   MAKED CODE: "1"`. **The value is `"ZOTO"`, not `"ADC"`** — the old reference screenshot's
+   button labelled "ADC" is from the legacy "Copy of ADC" spreadsheet (ADC = this business's
+   old company name before its ZOTO rebrand); the live production `Alphabet` tab has already
+   been updated to `"ZOTO"`. `RmSkuForm.tsx`'s Make By toggle is `"ZOTO"`/`"SUPPLIER"` — sending
+   `"ADC"` 422s (neither of the formula's two lookup branches can resolve it).
+3. The Paint lookup's real branch (per the live app) matches against `RM ref Paint`'s `Unique
+   ID` column, not `Paint Description` — but this codebase's own RM SKU form stores the picked
+   `Paint Description` text directly (no hidden ref-id concept), so for THIS implementation the
+   description-match branch is the one that actually resolves; the `Unique ID` branch is kept
+   as a genuine second fallback, matching the formula's own two-branch shape either way.
+4. The running 3-digit count's `_ROWNUMBER>=[_THISROW].[_ROWNUMBER]` condition isn't a stable,
+   queryable value outside a live AppSheet runtime for a row that doesn't exist yet — kept as
+   the already-VERIFIED-against-714-real-rows behavior from the Sprint 7 approximation instead
+   (count of existing rows sharing the 4-letter prefix, 0-indexed ascending). The one
+   deliberate deviation from the literal formula text, and a deviation from something
+   unverifiable, not a guess replacing something known.
+
+**A real "Raw Material SKU Form" now exists** (`Frontend/src/npd/RmSkuForm.tsx`, opened via a
+header "+ New" button on `RmSkuCatalog.tsx`, matching the reference screen) — Category → Sub
+Category (dependent dropdown, scoped to the picked Category) → Vendor Name (free text, not a
+`vendor-master` SearchableSelect — that table has zero rows in production and the real RM SKU
+rows' own `VENDOR NAME` values are plain text on the row itself, not a Vendor Master ref) →
+Paint → Make By. `PART NO.` is never a form input — `rm-sku`'s taxonomy table entry
+(`Backend/src/routes/npd/taxonomy.ts`) now has `allowCreate: true`, `requiredFields:
+["Category","Sub Category","VENDOR NAME","Paint","MAKE BY"]`, and `computedFields: ["PART
+NO."]`; its `POST` handler mints the row's `ID'S` up front (moved earlier in the handler,
+since `generateRmPartCode()` needs it for the dead `AGAINST ID` branches) then calls
+`generateRmPartCode()` before writing. **This replaced the old dedicated `/npd/rm-part-code/
+generate` endpoint + `RmPartCodeGenerator.tsx` page** (`Backend/src/routes/npd/rmPartCode.ts`
+deleted, unmounted from `Backend/src/routes/npd/index.ts`) — that route's frontend was
+already deleted earlier this same session as part of the NPD landing-page cleanup, and its own
+create logic didn't even set `MAKE BY`, so there was nothing worth keeping from it.
+`RmPartCodeLookupError` (a missing-CODE lookup failure — e.g. a Category with no `CODE` yet)
+now gets its own `422` in `taxonomy.ts`'s POST handler instead of falling through to the
+generic error handler's masked "Something went wrong" — this project's `errorHandler.ts`
+deliberately hides raw exception messages (see CLAUDE.md), so a genuinely actionable 422 needs
+its own explicit catch to not get swallowed the same way; caught this exact case live during
+verification before the fix (Make By: "ADC" 500'd with no useful message until this was added).
+
+**Verified live against the real production `env.sheets.npd` RM sheet** (not a scratch/test
+sheet — the local dev backend points at the same live spreadsheet the deployed app uses):
+created a real row through the new form (Category "LED Driver" / Sub Category "3W Constant
+Current Driver", same prefix as the 7 existing seed rows) and got `PART NO.: AAAA007A0` —
+correctly continuing the existing 000–006 sequence at 007, with the right Paint code and "0"
+Design-By digit for ZOTO. The test row (`RM0008`) was deleted immediately after via the
+taxonomy DELETE endpoint to leave production clean — don't leave verification rows behind in
+a live sheet; delete them the same way once confirmed.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

@@ -10,7 +10,6 @@ import { npdAttachmentRouter } from "./npdAttachment.js";
 import { customerRouter } from "./customer.js";
 import { purchaseRouter } from "./purchase.js";
 import { dashboardRouter } from "./dashboard.js";
-import { rmPartCodeRouter } from "./rmPartCode.js";
 
 /**
  * NPD module root router, mounted at /api/v1/npd in app.ts. Every sub-router (taxonomy today;
@@ -44,4 +43,6 @@ npdRouter.use("/npd-attachments", npdAttachmentRouter);
 npdRouter.use("/customer", customerRouter);
 npdRouter.use("/purchase", purchaseRouter);
 npdRouter.use("/dashboard", dashboardRouter);
-npdRouter.use("/rm-part-code", rmPartCodeRouter);
+// RM SKU creation (the real "Raw Material SKU Form") now goes through the generic taxonomy
+// router's POST /taxonomy/rm-sku instead of a dedicated /rm-part-code route — see
+// taxonomy.ts's rm-sku table entry and its POST handler's PART NO. computation.

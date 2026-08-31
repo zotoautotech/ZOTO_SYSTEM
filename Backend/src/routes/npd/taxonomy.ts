@@ -10,6 +10,8 @@ import {
   nextAgainstId,
   categoryFromAgainstId,
   nextPaintCode,
+  generateRmPartCode,
+  RmPartCodeLookupError,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -276,6 +278,13 @@ const TABLES: TaxonomyTableDef[] = [
     skipDuplicateCheck: true,
     auditFields: ["Discount", "price", "Final Price"],
   },
+  // Create is now enabled — the real "Raw Material SKU Form" (Frontend/src/npd/RmSkuForm.tsx),
+  // matching the legacy reference screen field-for-field. `PART NO.` is server-computed via
+  // the real verified App Formula (services/npdPartCode.ts's generateRmPartCode()) — see the
+  // POST handler below — never client-supplied, hence `computedFields`. `skipDuplicateCheck`
+  // stays true: many legitimately different SKUs share the same Category/Sub Category/Vendor/
+  // Paint/Make By (only the generated PART NO. is meant to be unique, and that's computed, not
+  // user input, so there's nothing meaningful to dup-check here).
   {
     key: "rm-sku",
     label: "RM SKU Catalog",
@@ -283,11 +292,11 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "Raw Material SKU",
     idColumn: "ID'S",
     idPrefix: "RM",
-    requiredFields: [],
+    requiredFields: ["Category", "Sub Category", "VENDOR NAME", "Paint", "MAKE BY"],
     fields: ["PART NO.", "Category", "Sub Category", "Paint", "MAKE BY", "VENDOR NAME", "IQC PDF UPDATE LAST", "TrF tO Master Rm"],
+    computedFields: ["PART NO."],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
-    allowCreate: false,
     skipDuplicateCheck: true,
   },
   // Published customer master (Sprint 5, build-prompt §5.5) — reuses this same generic infra
@@ -481,6 +490,12 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     for (const f of table.requiredFields) shape[f] = z.string().trim().min(1);
     const body = z.object(shape).parse(req.body);
 
+    // Minted up front (not after the CODE/PART NO. computations below, as it originally was)
+    // because rm-sku's PART NO. formula needs this row's own ID'S as an input (see
+    // generateRmPartCode()'s doc comment, finding #1) — every other table just ignores it
+    // being available a little earlier, so this is safe to hoist unconditionally.
+    const id = await nextSequentialId(table.spreadsheetId, table.tab, table.idColumn, table.idPrefix);
+
     // Duplicate detection — server-side, the real gate, matching this project's convention
     // (Sales CRR's customer-assignment gate, part-code duplicate check, etc.). Case-insensitive
     // match on ALL required fields together, not just the first one — a table like
@@ -537,8 +552,19 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
       body["AGAINST ID"] = againstId;
       body.Category = await categoryFromAgainstId(againstId);
     }
+    // `PART NO.` — the real, verified App Formula (see services/npdPartCode.ts's
+    // generateRmPartCode() doc comment). Server-computed, never client-supplied.
+    if (table.key === "rm-sku") {
+      const result = await generateRmPartCode({
+        id,
+        category: (body.Category as string) ?? "",
+        subCategory: (body["Sub Category"] as string) ?? "",
+        paint: (body.Paint as string) ?? "",
+        makeBy: (body["MAKE BY"] as string) ?? "",
+      });
+      body["PART NO."] = result.partCode;
+    }
 
-    const id = await nextSequentialId(table.spreadsheetId, table.tab, table.idColumn, table.idPrefix);
     const record: Record<string, string> = {
       [table.idColumn]: id,
       [table.timestampField]: new Date().toISOString(),
@@ -548,6 +574,13 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     await appendRow(table.spreadsheetId, table.tab, record);
     res.status(201).json({ id, ...body });
   } catch (err) {
+    // A missing-CODE lookup failure (e.g. rm-sku's Category/Sub Category/Paint/Make By don't
+    // resolve to a CODE yet — see generateRmPartCode()'s own doc comment) is a real, actionable
+    // 422, not an unexpected server error — surface its actual message instead of letting the
+    // generic error handler mask it as "Something went wrong" (see CLAUDE.md's errorHandler note).
+    if (err instanceof RmPartCodeLookupError) {
+      return res.status(422).json({ error: { code: err.code, message: err.message } });
+    }
     next(err);
   }
 });
