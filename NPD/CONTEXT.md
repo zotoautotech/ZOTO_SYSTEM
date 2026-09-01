@@ -962,6 +962,17 @@ app). The scoped rule explicitly excludes `[role="listbox"] input` — `Searchab
 open-dropdown search box has an intentional borderless/bottom-border-only look that the bold
 rule would otherwise clobber via `!important`.
 
+**Two more rounds needed to actually match** — the first pass alone still didn't look right:
+the reference form's fields have **square corners** (no `border-radius` at all — this app's
+`TextField`/`SearchableSelect` default to `var(--radius)`, rounded), and its border **doesn't
+change on focus** (no color swap to `var(--color-primary)`, just the same border whether idle
+or focused). Both fixed in the same scoped stylesheet — `border-radius: 0 !important` added
+to every rule, and the `:focus`/`:focus-visible` rule now sets the identical `1.5px solid
+var(--color-text)` border instead of swapping its color. The Make By ZOTO/SUPPLIER toggle's
+own wrapper (a plain inline style, not a shared component) got the same square-corner/bold-
+border treatment directly rather than through the stylesheet, for consistency across every
+field on the form.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

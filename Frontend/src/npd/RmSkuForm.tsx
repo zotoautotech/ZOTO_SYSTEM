@@ -99,26 +99,30 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />
       {/* Scoped to this one form, not the shared TextField/SearchableSelect components
-          themselves (those are used app-wide — bolding their default border globally would
-          be a much bigger, unrequested visual change). Gives every field box here a
-          permanent, bolder rectangle border, always-on rather than only on focus, matching
-          the reference form's own visual weight. */}
+          themselves (those are used app-wide — changing their defaults globally would be a
+          much bigger, unrequested visual change). Matches the reference form's own field
+          boxes exactly: square corners (no border-radius, not this app's usual rounded
+          fields), a bold, always-on border, and — this is the part the two earlier passes at
+          this still got wrong — the SAME border on focus as when idle, no color swap. The
+          reference form's fields simply don't have a distinct focus style at all. */}
       <style>{`
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
           border: 1.5px solid var(--color-text) !important;
+          border-radius: 0 !important;
         }
         .rm-sku-form input:focus,
         .rm-sku-form button[aria-haspopup="listbox"]:focus-visible {
           outline: none;
-          border-color: var(--color-primary) !important;
+          border: 1.5px solid var(--color-text) !important;
         }
         /* The SearchableSelect's own open dropdown panel has an unrelated search input with
-           its own borderless/bottom-border-only design — excluded from the bold-border rule
-           above, not just left to lose the specificity fight against it. */
+           its own borderless/bottom-border-only design — excluded from the rules above, not
+           just left to lose the specificity fight against them. */
         .rm-sku-form [role="listbox"] input {
           border: none !important;
           border-bottom: 1px solid var(--color-border) !important;
+          border-radius: 0 !important;
         }
       `}</style>
       <div
@@ -247,7 +251,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
               MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
-            <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+            <div style={{ display: "flex", border: "1.5px solid var(--color-text)", overflow: "hidden" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}
