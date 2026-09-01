@@ -913,6 +913,19 @@ Design-By digit for ZOTO. The test row (`RM0008`) was deleted immediately after 
 taxonomy DELETE endpoint to leave production clean — don't leave verification rows behind in
 a live sheet; delete them the same way once confirmed.
 
+## RmSkuForm.tsx is a deliberate exception to FormModal.tsx's centered-modal convention (31 Aug 2026)
+
+The "Raw Material SKU Form" now opens as a right-docked, full-height sliding panel over a
+dimmed backdrop (X + title + Cancel/Save in the header row, a "Page 1" tab-underline strip,
+scrollable body below) — matching the real legacy AppSheet reference screen's own panel exactly,
+on explicit request. This does **not** use the shared `FormModal.tsx` (CLAUDE.md's "every modal
+form uses FormModal" convention) — it's a bespoke layout built directly in `RmSkuForm.tsx`
+itself, since `FormModal` is a fixed-size *centered* modal by design and has no right-docked-
+panel mode. This is a one-off exception for this one form, not a precedent — don't copy this
+custom layout into other forms without being asked; if a right-docked-panel pattern is wanted
+more broadly later, that's a `FormModal.tsx` variant to build deliberately, not something to
+silently reproduce form-by-form.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
