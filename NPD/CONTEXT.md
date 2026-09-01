@@ -983,6 +983,10 @@ rule would otherwise clobber via `!important`.
    fields is `7px` (`.rm-sku-fields > div { margin-bottom: 7px }`, overriding `TextField`'s/
    `SearchableSelect`'s own shared `20px` default the same scoped-not-global way as
    everything else in this section), and the footer Cancel/Save bar is a fixed `54px` tall.
+5. The fixed-`630px` field column is horizontally **centered** (`margin: "0 auto"`) inside
+   the padded content area rather than flush-left — the panel itself is wider than
+   `630px + padding` at most viewport sizes (it's `min(54vw, 1040px)`), so left-aligning the
+   column left a visibly lopsided gap on the right that the reference form didn't have.
 
 ## Known gotchas (add to as they're found)
 

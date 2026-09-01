@@ -189,7 +189,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         </div>
 
         <div style={{ padding: "24px var(--space)", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 630, maxWidth: "100%" }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 630, maxWidth: "100%", margin: isMobile ? undefined : "0 auto" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
