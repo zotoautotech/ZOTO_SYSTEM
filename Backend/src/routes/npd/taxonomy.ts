@@ -501,6 +501,17 @@ taxonomyRouter.get("/rm-category-dd/preview", async (_req, res, next) => {
   }
 });
 
+// `RM ref Paint` has no `Against id`/dead-pointer column at all (confirmed live — see
+// nextPaintCode()'s own doc comment), so this preview is just the CODE half of the other two.
+taxonomyRouter.get("/rm-paint/preview", async (_req, res, next) => {
+  try {
+    const code = await nextPaintCode();
+    res.json({ code });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/:key", async (req, res, next) => {
   try {
     const table = findTable(req.params.key);

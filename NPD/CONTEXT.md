@@ -1200,6 +1200,38 @@ on both sides, and the form mounts with no console errors beyond the expected 40
 unauthenticated data queries (via the same temporary-route technique used throughout this
 file). Give this a manual pass with a real login before relying on it.
 
+## Paint gets the same "+ New" inline-create flow — and a real bug caught: Unique ID previews were fake (1 Sep 2026)
+
+Third and final of the three RM taxonomy "+ New" flows — `RmPaintForm.tsx`, opened from the
+Paint `SearchableSelect`. Simpler than its two siblings: the real "RM ref Paint Form"
+reference (confirmed off the user's own field-config screenshot) has just `TIMESTAMP`,
+`USEREMAIL`, `Unique ID`, `Code`, `Paint Description` — no `Against id`/dead-pointer column
+and no `DUPLICACY` at all, matching what was already known (`RM ref Paint` has no such
+columns — see `nextPaintCode()`'s own doc comment). New `GET /npd/taxonomy/rm-paint/preview`
+mirrors the other two preview endpoints, minus the `againstId` half.
+
+**Caught directly by the user comparing this form's Unique ID against the live sheet: they
+didn't match at all** (`a195c0f2` shown vs `RMCAT0001` actually saved). The earlier
+"can't be previewed for real" reasoning for `Unique ID` turned out to be wrong —
+`Backend/src/services/ids.ts`'s `nextSequentialId()` is a pure function (max existing numeric
+suffix + 1, zero-padded to 4) of rows already loaded for each form's own dropdown, not
+something that needed minting a real row to know. Added `previewSequentialId()` to
+`lib/npdApi.ts` — the identical regex/max/pad-4 logic, client-side — and wired it into all
+three "+ New" forms (`RmCategoryForm.tsx` off `categoryRows`/`"RMCAT"`,
+`RmSubCategoryForm.tsx` off `subCategoryRows`/`"RMSUB"`, `RmPaintForm.tsx` off a newly-added
+`paintRows` prop/`"RMPAINT"`), replacing the cosmetic random-hex placeholder everywhere it
+appeared. Now shows the REAL value that will be saved, not an approximation — the one
+remaining caveat is it can only be as accurate as the `*Rows` data actually loaded client-side
+(same as `DUPLICACY`'s own live-computation caveat elsewhere in this section), which is
+correct once a real authenticated session has the real rows loaded, same as everything else
+in these forms.
+
+**Verification note**: same constraint as the other two "+ New" flows — full authenticated
+save round-trip unverified, no login session available. What WAS verified live this time: the
+real `previewSequentialId()` output (`"RMCAT0001"`, matching the intended format exactly) in
+place of the old random-hex placeholder, confirming the fix actually works even though the
+underlying data was empty (no auth) in the test session.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

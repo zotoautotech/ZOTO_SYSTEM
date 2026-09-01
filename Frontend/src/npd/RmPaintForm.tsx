@@ -4,43 +4,26 @@ import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import { createTaxonomyRow, previewRmCategoryCode, previewSequentialId, type TaxonomyRow } from "./lib/npdApi";
+import { createTaxonomyRow, previewRmPaintCode, previewSequentialId, type TaxonomyRow } from "./lib/npdApi";
 
 interface Props {
-  categoryRows: TaxonomyRow[];
+  paintRows: TaxonomyRow[];
   onClose: () => void;
-  onSaved: (category: string) => void;
+  onSaved: (paintDescription: string) => void;
 }
 
-/** "RM ref Category Form" — the nested "+ New" form opened from RmSkuForm.tsx's Category
- * SearchableSelect (its `onAddNew`), matching the real legacy AppSheet reference field-for-
- * field. TIMESTAMP/USEREMAIL/Unique ID/Against id/CODE/DUPLICACY are all real App Formula
- * columns on the live `RM ref Category` tab, server-computed on save
- * (`Backend/src/routes/npd/taxonomy.ts`'s `rm-category` POST handler; see
- * `services/npdPartCode.ts`'s `countCategoryDuplicates()`/`nextAgainstId()`/
- * `nextCategoryCode()` doc comments) — but every one now shows a real LIVE value instead of
- * a "Generated on Save" placeholder, matching the reference's own live-updating preview:
- * - TIMESTAMP: a ticking clock (updates every second while the form is open).
- * - USEREMAIL: this app has no email field on doers (Employee Id + Password login, see
- *   CLAUDE.md's Auth section) — shows the logged-in doer's Employee Id instead, the same
- *   substitution this app already makes everywhere an "email" concept would otherwise apply.
- * - CODE / Against id: real previews from `GET /npd/taxonomy/rm-category/preview` — a
- *   read-only call to the exact same `nextCategoryCode()`/`nextAgainstId()` helpers the real
- *   POST handler uses, so what's shown here is genuinely what would be saved (barring a race
- *   with another doer creating a category in between).
- * - DUPLICACY: computed live client-side from `categoryRows` (passed down from RmSkuForm,
- *   already loaded there) — a trimmed-equality count against whatever CATEGORY is currently
- *   typed, recomputing on every keystroke, mirroring the real formula exactly.
- * - Unique ID: the REAL next value (`previewSequentialId()` in `lib/npdApi.ts`), not a
- *   cosmetic placeholder — an earlier pass here showed a random hex string instead, on the
- *   assumption `nextSequentialId()` couldn't be mirrored client-side, but it turned out to be
- *   a pure function of `categoryRows` (already loaded here) — same regex/max/pad-4 logic as
- *   the backend, so this now matches the real saved sheet value exactly. Caught live: the
- *   user compared this form's shown Unique ID against the live sheet and they didn't match. */
-export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
+/** "RM ref Paint Form" — the nested "+ New" form opened from RmSkuForm.tsx's Paint
+ * SearchableSelect, matching the real reference field-for-field, in order: TIMESTAMP,
+ * USEREMAIL, Unique ID, Code, Paint Description. Simpler than RmCategoryForm.tsx/
+ * RmSubCategoryForm.tsx — `RM ref Paint` has no `Against id`/dead-pointer column and no
+ * `DUPLICACY` at all (confirmed live — see npdPartCode.ts's nextPaintCode() doc comment), so
+ * there's nothing to preview beyond `Code` itself. Same live-value approach as its two
+ * siblings otherwise, including the REAL (not cosmetic-random) Unique ID preview — see
+ * RmCategoryForm.tsx's own doc comment for the full reasoning. */
+export function RmPaintForm({ paintRows, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [category, setCategory] = useState("");
+  const [paintDescription, setPaintDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -50,23 +33,18 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  // The REAL next Unique ID, not a cosmetic random one — nextSequentialId() on the backend
-  // turned out to be a pure function of the rows already loaded here (see
-  // previewSequentialId()'s own doc comment), so this now matches exactly what gets saved.
-  const previewUniqueId = previewSequentialId(categoryRows, "Unique ID", "RMCAT");
+  // The REAL next Unique ID — see RmCategoryForm.tsx's own doc comment for why this replaced
+  // an earlier cosmetic-random-hex placeholder.
+  const previewUniqueId = previewSequentialId(paintRows, "Unique ID", "RMPAINT");
 
   const { data: preview, isError: previewFailed } = useQuery({
-    queryKey: ["npd", "taxonomy", "rm-category", "preview"],
-    queryFn: previewRmCategoryCode,
+    queryKey: ["npd", "taxonomy", "rm-paint", "preview"],
+    queryFn: previewRmPaintCode,
     retry: 1,
   });
 
-  const duplicacy = category.trim()
-    ? categoryRows.filter((r) => (r.CATEGORY ?? "").trim() === category.trim()).length
-    : 0;
-
   function canSave() {
-    return !!category.trim() && !saving;
+    return !!paintDescription.trim() && !saving;
   }
 
   async function handleSave() {
@@ -74,8 +52,8 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await createTaxonomyRow("rm-category", { CATEGORY: category.trim() });
-      onSaved(category.trim());
+      await createTaxonomyRow("rm-paint", { "Paint Description": paintDescription.trim() });
+      onSaved(paintDescription.trim());
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ?? "Could not save — please try again.");
@@ -128,7 +106,7 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
             ✕
           </button>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
-            RM ref Category Form
+            RM ref Paint Form
           </h2>
         </div>
 
@@ -136,16 +114,14 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
           <TextField label="TIMESTAMP" value={now.toLocaleString()} disabled />
           <TextField label="USEREMAIL" value={user?.employeeId ?? ""} disabled />
           <TextField label="Unique ID" value={previewUniqueId} disabled />
-          <TextField label="Against id" value={preview?.againstId || "—"} disabled />
-          <TextField label="CODE" value={preview ? preview.code : previewFailed ? "—" : "Loading…"} disabled />
+          <TextField label="Code" value={preview ? preview.code : previewFailed ? "—" : "Loading…"} disabled />
           <TextField
-            label="CATEGORY"
+            label="Paint Description"
             required
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="Type a category name…"
+            value={paintDescription}
+            onChange={(e) => setPaintDescription(e.target.value)}
+            placeholder="Type a paint description…"
           />
-          <TextField label="DUPLICACY" value={String(duplicacy)} disabled />
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 

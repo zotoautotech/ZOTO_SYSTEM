@@ -7,6 +7,7 @@ import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
 import { RmCategoryForm } from "./RmCategoryForm";
 import { RmSubCategoryForm } from "./RmSubCategoryForm";
+import { RmPaintForm } from "./RmPaintForm";
 
 interface Props {
   onClose: () => void;
@@ -43,6 +44,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   const queryClient = useQueryClient();
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingSubCategory, setCreatingSubCategory] = useState(false);
+  const [creatingPaint, setCreatingPaint] = useState(false);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -309,7 +311,16 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               </span>
             </div>
           </div>
-          <SearchableSelect label="Paint" required value={paint} onChange={setPaint} options={paintOptions} placeholder="Select Paint…" />
+          <SearchableSelect
+            label="Paint"
+            required
+            value={paint}
+            onChange={setPaint}
+            options={paintOptions}
+            placeholder="Select Paint…"
+            addNewLabel="New"
+            onAddNew={() => setCreatingPaint(true)}
+          />
           <div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 11, color: "#1A1A1A" }}>
               MAKE BY<span style={{ color: "#DC2626" }}>*</span>
@@ -435,6 +446,17 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             setCreatingSubCategory(false);
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-category-dd"] });
             setSubCategory(newSubCategory);
+          }}
+        />
+      )}
+      {creatingPaint && (
+        <RmPaintForm
+          paintRows={paintRows}
+          onClose={() => setCreatingPaint(false)}
+          onSaved={(newPaint) => {
+            setCreatingPaint(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-paint"] });
+            setPaint(newPaint);
           }}
         />
       )}

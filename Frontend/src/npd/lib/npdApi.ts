@@ -24,6 +24,23 @@ export interface TaxonomyTableMeta {
 
 export type TaxonomyRow = Record<string, string>;
 
+/** Client-side mirror of `Backend/src/services/ids.ts`'s `nextSequentialId()` — same regex/
+ * max/pad-4 logic, given the rows already loaded for a table's own dropdown/preview instead
+ * of a fresh read. Used by the RM ref .../*Form.tsx "+ New" panels to show the REAL Unique ID
+ * that will be saved (confirmed live: a previous cosmetic-random-hex preview didn't match the
+ * real sheet value at all — `nextSequentialId` turned out to be a pure, easily-mirrored
+ * computation, not something that needed a new backend endpoint to preview accurately). */
+export function previewSequentialId(rows: TaxonomyRow[], idColumn: string, prefix: string, pad = 4): string {
+  let max = 0;
+  for (const row of rows) {
+    const raw = row[idColumn];
+    if (!raw) continue;
+    const match = raw.match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `${prefix}${String(max + 1).padStart(pad, "0")}`;
+}
+
 export async function listTaxonomyTables() {
   const res = await api.get<{ tables: TaxonomyTableMeta[] }>("/npd/taxonomy");
   return res.data.tables;
@@ -49,6 +66,13 @@ export async function previewRmCategoryCode() {
 /** Same idea, scoped to `RM ref Category DD` — see previewRmCategoryCode()'s own doc comment. */
 export async function previewRmCategoryDdCode() {
   const res = await api.get<{ code: string; againstId: string }>("/npd/taxonomy/rm-category-dd/preview");
+  return res.data;
+}
+
+/** `RM ref Paint` has no `Against id` column at all — see previewRmCategoryCode()'s sibling
+ * doc comment on the backend for why. */
+export async function previewRmPaintCode() {
+  const res = await api.get<{ code: string }>("/npd/taxonomy/rm-paint/preview");
   return res.data;
 }
 
