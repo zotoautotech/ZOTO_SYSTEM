@@ -14,11 +14,12 @@ interface Props {
 /** "Raw Material SKU Form" — matches the real legacy AppSheet reference field-for-field
  * (PART NO. auto-computed/read-only, Category, Sub Category, Vendor Name, Paint, Make By
  * toggle) AND its layout: a panel docked to the right edge of the screen, full height, over a
- * dimmed backdrop, with Cancel/Save in the header row instead of a footer bar — this is a
- * deliberate exception to `FormModal.tsx`'s usual fixed-size centered-modal convention (see
- * CLAUDE.md), built custom for this one form on explicit request to match the reference
- * screenshot's own right-docked panel exactly, not the centered-modal shape every other form
- * in this app uses. `PART NO.` is never shown here as an input — the backend computes it
+ * dimmed backdrop — X (left) + centered title in the header, no tab strip, Cancel/Save in a
+ * footer bar at the bottom instead — this is a deliberate exception to `FormModal.tsx`'s usual
+ * fixed-size centered-modal convention (see CLAUDE.md), built custom for this one form on
+ * explicit request to match the reference screenshot's own right-docked panel exactly, not the
+ * centered-modal shape every other form in this app uses. `PART NO.` is never shown here as an
+ * input — the backend computes it
  * server-side from the real, verified App Formula (services/npdPartCode.ts's
  * generateRmPartCode()) once the row is created, matching `computedFields` on the `rm-sku`
  * taxonomy table entry the same way every other computed-field table already works.
@@ -111,9 +112,9 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
       >
         <div
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
-            gap: 16,
             padding: "18px var(--space)",
             borderBottom: "1px solid var(--color-border)",
           }}
@@ -136,27 +137,19 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           >
             ✕
           </button>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, flex: 1 }}>Raw Material SKU Form</h2>
-          <button className="btn" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-        <div style={{ padding: "0 var(--space)", borderBottom: "1px solid var(--color-border)" }}>
-          <span
+          <h2
             style={{
-              display: "inline-block",
-              padding: "10px 4px",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "var(--color-primary)",
-              borderBottom: "2px solid var(--color-primary)",
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              margin: 0,
+              fontSize: 18,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
             }}
           >
-            Page 1
-          </span>
+            Raw Material SKU Form
+          </h2>
         </div>
 
         <div style={{ padding: "24px var(--space)", overflowY: "auto", flex: 1 }}>
@@ -278,6 +271,24 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               New
             </div>
           </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "14px var(--space)",
+            borderTop: "1px solid var(--color-border)",
+            background: "var(--color-bg-page)",
+          }}
+        >
+          <button className="btn" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
     </div>
