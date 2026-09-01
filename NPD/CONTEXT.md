@@ -1083,6 +1083,32 @@ the reference form's own field actually behaves too: it's editable and validated
 actually saved. Verified live: typing `"AAAA000"` (7 chars) shows the red border + error;
 completing it to `"AAAA000A0"` (9 chars) clears both.
 
+## PART NO. now shows a real live-computed preview, not a typed field (1 Sep 2026)
+
+Reverted the "editable with live validation" behavior from the previous round — the user
+shared the reference form's own field-config screenshot directly, which settles it
+definitively: PART NO.'s "Auto Compute" section literally says *"Compute the value for this
+column instead of allowing user input"* — it was never meant to be typed into at all, only to
+update live and reactively as the doer picks the other fields. `RmSkuForm.tsx` now computes
+`livePartNo` client-side as a **read-only preview**, mirroring the exact same pieces
+`services/npdPartCode.ts`'s `generateRmPartCode()` computes server-side (Category CODE + Sub
+Category CODE + running per-prefix count + Paint Code + Make By digit), from data already
+loaded for the dropdowns (`categoryRows`/`subCategoryRows`/`paintRows`) plus one extra query
+(`rm-sku` rows, for the same running-count logic `RmSkuCatalog.tsx` needs) — each piece
+resolves independently and concatenates as soon as its own inputs are picked, so the field
+fills in progressively exactly like the reference (e.g. `"AA000"` once Category+Sub Category
+are in, growing to the full 9 characters as Paint/Make By are picked too). **`livePartNo` is
+purely cosmetic — never sent in the `createTaxonomyRow` payload**; the backend's own
+`generateRmPartCode()` remains the sole source of truth for the real, saved `PART NO.`.
+
+**Caught and fixed one real bug while wiring this up**: `makeBy` used to default to `"ZOTO"`
+on mount, which meant its `"0"` digit contributed to `livePartNo` before the doer had touched
+anything — a freshly-opened form showed `"0"` with a validation error already active. Changed
+`makeBy`'s type to `"ZOTO" | "SUPPLIER" | null`, defaulting to `null` (no default selection,
+matching the reference's own required-with-no-default Make By state) — `canSave()`/
+`handleSave()` updated to require it explicitly. Verified live: the field is correctly blank
+(shows the `"000"` placeholder) on a fresh open now.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

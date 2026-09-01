@@ -38,12 +38,15 @@ interface Props {
  * neither of the real formula's two lookup branches can resolve it. */
 export function RmSkuForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
-  const [partNo, setPartNo] = useState("");
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [paint, setPaint] = useState("");
-  const [makeBy, setMakeBy] = useState<"ZOTO" | "SUPPLIER">("ZOTO");
+  // No default selection — a preselected ZOTO/SUPPLIER would have contributed its digit to
+  // `livePartNo` below before the doer touched anything, showing a premature "0" with a
+  // validation error on an otherwise-untouched form. Matches the reference's own required
+  // (no default) Make By state.
+  const [makeBy, setMakeBy] = useState<"ZOTO" | "SUPPLIER" | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -68,6 +71,12 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     queryKey: ["npd", "taxonomy", "rows", "rm-paint"],
     queryFn: () => listTaxonomyRows("rm-paint"),
   });
+  // Needed only to compute PART NO.'s live preview below (the running per-prefix count) —
+  // same table RmSkuCatalog.tsx already reads.
+  const { data: rmSkuRows = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "rm-sku"],
+    queryFn: () => listTaxonomyRows("rm-sku"),
+  });
 
   const categoryOptions: SelectOption[] = categoryRows.map((r) => ({ value: r.CATEGORY, label: r.CATEGORY }));
   // Sub Category is scoped to the picked Category, same dependent-dropdown pattern as the
@@ -77,12 +86,36 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
   const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
 
+  // PART NO. live preview — client-side mirror of the real, verified App Formula
+  // (services/npdPartCode.ts's generateRmPartCode() on the backend is the actual source of
+  // truth; this recomputes the same pieces from data already loaded for the dropdowns above,
+  // purely so the field updates live as the doer picks Category/Sub Category/Paint/Make By,
+  // matching the reference form's own "Auto Compute... instead of allowing user input"
+  // behavior — confirmed directly off the reference's own field config screenshot). Each
+  // piece resolves independently and concatenates as soon as its own inputs are picked, same
+  // progressive fill the reference shows (e.g. "AA000" once only Category/Sub Category are
+  // in, growing to the full 9 chars as Paint/Make By are picked too) — never sent to the
+  // server; the actual create payload only ever carries the picked field values themselves
+  // (see handleSave below), and the backend computes the real, final PART NO. independently.
+  const categoryCode = categoryRows.find((r) => r.CATEGORY === category)?.CODE ?? "";
+  const subCategoryCode =
+    subCategoryRows.find((r) => r.Category === category && r["SUB CATEGORY"] === subCategory)?.CODE ?? "";
+  const paintCode = paintRows.find((r) => r["Paint Description"] === paint)?.Code ?? "";
+  // Matches the live `Alphabet` tab's own MAKED BY/MAKED CODE rows (ZOTO -> "0",
+  // SUPPLIER -> "1") — see this file's module doc comment for how that was confirmed.
+  const designByDigit = makeBy === "ZOTO" ? "0" : makeBy === "SUPPLIER" ? "1" : "";
+  const prefix = categoryCode && subCategoryCode ? categoryCode + subCategoryCode : "";
+  const count = prefix
+    ? String(rmSkuRows.filter((r) => (r["PART NO."] ?? "").startsWith(prefix)).length).padStart(3, "0")
+    : "";
+  const livePartNo = categoryCode + subCategoryCode + count + paintCode + designByDigit;
+
   function canSave() {
-    return !!category && !!subCategory && !!vendorName && !!paint && !saving;
+    return !!category && !!subCategory && !!vendorName && !!paint && !!makeBy && !saving;
   }
 
   async function handleSave() {
-    if (!canSave()) return;
+    if (!canSave() || !makeBy) return;
     setSaving(true);
     setError("");
     try {
@@ -186,22 +219,18 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
 
         <div style={{ padding: isMobile ? "24px var(--space)" : "32px 40px 40px", overflowY: "auto", flex: 1 }}>
         <div className="rm-sku-fields" style={{ width: "100%" }}>
-          {/* PART NO. is a real, editable input with the reference's own live 9-digit
-              validation — matching the AppSheet form's actual transient behavior (its field
-              is technically editable too; an "Auto Compute" App Formula just overwrites
-              whatever's typed the moment the row is actually saved). This app's backend does
-              the same thing server-side (services/npdPartCode.ts's generateRmPartCode(), the
-              real verified formula) — `partNo` here is UI-only, purely for the doer to see/
-              type against and get the same instant feedback the reference gives; it is
-              deliberately NOT sent in the create payload below, since the server-computed
-              value is always the one that's actually authoritative. */}
+          {/* PART NO. is disabled/read-only, not manually typed — the reference form's own
+              field config (confirmed directly off its "Auto Compute" section) says exactly
+              this: "Compute the value for this column instead of allowing user input." It
+              updates live as `livePartNo` recomputes above, growing progressively as
+              Category/Sub Category/Paint/Make By are picked, same as the reference. */}
           <TextField
             label="PART NO."
             required
-            value={partNo}
-            onChange={(e) => setPartNo(e.target.value)}
+            value={livePartNo}
+            disabled
             placeholder="000"
-            error={partNo.length > 0 && partNo.length !== 9 ? "PART CODE LENGTH IS NOT EQUAL TO 9 DIGIT" : undefined}
+            error={livePartNo.length > 0 && livePartNo.length !== 9 ? "PART CODE LENGTH IS NOT EQUAL TO 9 DIGIT" : undefined}
           />
           <SearchableSelect
             label="Category"
