@@ -975,6 +975,14 @@ rule would otherwise clobber via `!important`.
    **Panel width was also corrected** to match a real measurement the user provided
    (~1030px of a 1912px-wide screenshot, ~54%) — now `min(54vw, 1040px)`, up from the
    original `min(46vw, 620px)` guess.
+4. **Exact field/layout dimensions matched to a second set of real measurements**: the field
+   column itself is a fixed `630px` (wrapped in a `.rm-sku-fields` div, separate from the
+   panel's own `min(54vw, 1040px)` width — the panel can be wider than the field column,
+   matching the reference's own padding around it), every input/dropdown box is `51px` tall
+   (`.rm-sku-form input, button[aria-haspopup="listbox"] { height: 51px }`), the gap between
+   fields is `7px` (`.rm-sku-fields > div { margin-bottom: 7px }`, overriding `TextField`'s/
+   `SearchableSelect`'s own shared `20px` default the same scoped-not-global way as
+   everything else in this section), and the footer Cancel/Save bar is a fixed `54px` tall.
 
 ## Known gotchas (add to as they're found)
 

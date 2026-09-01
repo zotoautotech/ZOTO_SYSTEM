@@ -108,6 +108,8 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
           border-radius: 0 !important;
+          height: 51px !important;
+          box-sizing: border-box;
         }
         .rm-sku-form input:focus,
         .rm-sku-form button[aria-haspopup="listbox"]:focus-visible {
@@ -121,6 +123,14 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           border: none !important;
           border-bottom: 1px solid var(--color-border) !important;
           border-radius: 0 !important;
+          height: auto !important;
+        }
+        /* Field gap — 7px, measured off the real running form, overriding TextField's/
+           SearchableSelect's own shared 20px default. Each field call renders one div as its
+           own root element, a direct child of .rm-sku-fields, so this catches all of them
+           uniformly without needing to touch either shared component. */
+        .rm-sku-fields > div {
+          margin-bottom: 7px !important;
         }
       `}</style>
       <div
@@ -179,6 +189,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         </div>
 
         <div style={{ padding: "24px var(--space)", overflowY: "auto", flex: 1 }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 630, maxWidth: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
@@ -298,13 +309,16 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             </div>
           </div>
         </div>
+        </div>
 
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "14px var(--space)",
+            height: 54,
+            padding: "0 var(--space)",
+            boxSizing: "border-box",
             borderTop: "1px solid var(--color-border)",
             background: "var(--color-bg-page)",
           }}
