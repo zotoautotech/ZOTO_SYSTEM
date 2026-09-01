@@ -38,6 +38,7 @@ interface Props {
  * neither of the real formula's two lookup branches can resolve it. */
 export function RmSkuForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
+  const [partNo, setPartNo] = useState("");
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -185,17 +186,22 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
 
         <div style={{ padding: isMobile ? "24px var(--space)" : "32px 40px 40px", overflowY: "auto", flex: 1 }}>
         <div className="rm-sku-fields" style={{ width: "100%" }}>
-          {/* PART NO. is required on the real live column even though this form never lets a
-              doer type it — server-computed on Save (see this file's module doc comment).
-              Light grey background signals it's read-only/system-generated, matching the
-              reference's disabled-field treatment. */}
+          {/* PART NO. is a real, editable input with the reference's own live 9-digit
+              validation — matching the AppSheet form's actual transient behavior (its field
+              is technically editable too; an "Auto Compute" App Formula just overwrites
+              whatever's typed the moment the row is actually saved). This app's backend does
+              the same thing server-side (services/npdPartCode.ts's generateRmPartCode(), the
+              real verified formula) — `partNo` here is UI-only, purely for the doer to see/
+              type against and get the same instant feedback the reference gives; it is
+              deliberately NOT sent in the create payload below, since the server-computed
+              value is always the one that's actually authoritative. */}
           <TextField
             label="PART NO."
             required
-            value=""
-            placeholder="Generated on Save"
-            disabled
-            style={{ background: "#F9FAFB", color: "#9CA3AF" }}
+            value={partNo}
+            onChange={(e) => setPartNo(e.target.value)}
+            placeholder="000"
+            error={partNo.length > 0 && partNo.length !== 9 ? "PART CODE LENGTH IS NOT EQUAL TO 9 DIGIT" : undefined}
           />
           <SearchableSelect
             label="Category"

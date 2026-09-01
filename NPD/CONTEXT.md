@@ -1064,6 +1064,25 @@ rule would otherwise clobber via `!important`.
     again, don't assume header vs footer from this history — confirm which is currently
     wanted, since this has flipped repeatedly.
 
+## PART NO. is a real editable field with live 9-digit validation again (1 Sep 2026)
+
+Reverted the "disabled, blank, `Generated on Save` placeholder" treatment — the user pointed
+out the reference form's own PART NO. field is genuinely editable with live client-side
+validation (a red-bordered "PART CODE LENGTH IS NOT EQUAL TO 9 DIGIT" message, shown/hidden
+as the doer types), and asked for the same behavior. **This is UI-only, not a new create-time
+input path**: `partNo` state exists purely so the doer gets the same instant feedback the
+reference gives, using `TextField`'s existing `error` prop (`error: partNo.length > 0 &&
+partNo.length !== 9 ? "PART CODE LENGTH..." : undefined`) rather than hand-building a
+warning-icon paragraph outside the field's own wrapper div (that would have needed a
+negative-margin hack to sit inside the `.rm-sku-fields > div` 30px-gap rule; using the built-
+in `error` prop keeps it correctly nested instead). **`partNo` is never sent in the
+`createTaxonomyRow("rm-sku", ...)` payload** — `PART NO.` stays 100% server-computed
+(`services/npdPartCode.ts`'s `generateRmPartCode()`, the real verified formula), matching how
+the reference form's own field actually behaves too: it's editable and validated live, but an
+"Auto Compute" App Formula silently overwrites whatever was typed the instant the row is
+actually saved. Verified live: typing `"AAAA000"` (7 chars) shows the red border + error;
+completing it to `"AAAA000A0"` (9 chars) clears both.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
