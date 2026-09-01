@@ -1167,6 +1167,39 @@ Unique ID generates a fresh value, and CODE's fallback-to-"—" (instead of hang
 *real* live values, and the full create-and-select round trip, are unverified against actual
 authenticated data — worth a manual pass before relying on this in production.
 
+## Sub Category gets the same "+ New" inline-create flow (1 Sep 2026)
+
+Same treatment as Category's own "+ New" flow above, this time for Sub Category —
+`RmSubCategoryForm.tsx`, opened via the Sub Category `SearchableSelect`'s `onAddNew`, matches
+the real "RM ref Category DD Form" field-for-field, confirmed off the user's own field-config
+screenshot in this exact order: `TIMESTAMP`, `AGAINST ID`, `Unique ID`, `CODE`, `USEREMAIL`,
+`SUB CATEGORY`, `DUPLICACY`. **The reference form has no `Category` input at all** —
+confirming what was already known (`categoryFromAgainstId()`'s doc comment): `Category` on
+this table is a dead App Formula column, nothing meaningful for a doer to pick, so unlike the
+generic taxonomy admin form (which still shows it, for the dup-check's sake), this dedicated
+form follows the reference and omits it entirely — the parent-picked `category` is still sent
+in the create payload (needed for the dup-check), just not rendered as a field.
+
+`RM ref Category DD.DUPLICACY` is new, mirroring `RM ref Category.DUPLICACY`'s shape (a
+trimmed-name duplicate count) but scoped to `SUB CATEGORY` — `countSubCategoryDuplicates()`
+in `services/npdPartCode.ts`. Unlike the `RM ref Category` formulas, the exact `DUPLICACY`
+formula text for this table wasn't captured directly — it's inferred by direct analogy to
+the sibling table's confirmed formula, not independently guessed; worth double-checking
+against the live field config if it's ever in doubt. Also added `GET /npd/taxonomy/
+rm-category-dd/preview` (same shape as `rm-category`'s own preview endpoint) so `CODE`/
+`AGAINST ID` show real live values here too, same "—" fallback on a failed fetch.
+
+The "+ New" row only appears once a Category is already picked (`addNewLabel`/`onAddNew`
+both `undefined` until then) — a new Sub Category needs a Category to belong under, and the
+Sub Category dropdown itself is already disabled/inert until one is picked.
+
+**Verification note**: same constraint as the Category "+ New" flow above — this form sits
+behind `requireAuth`, and no valid session was available to exercise the real save round-trip
+or the actual CODE/AGAINST ID/DUPLICACY live values. What WAS verified: `tsc --noEmit` clean
+on both sides, and the form mounts with no console errors beyond the expected 401s from the
+unauthenticated data queries (via the same temporary-route technique used throughout this
+file). Give this a manual pass with a real login before relying on it.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

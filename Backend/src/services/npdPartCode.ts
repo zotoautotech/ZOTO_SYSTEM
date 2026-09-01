@@ -199,6 +199,22 @@ export async function countCategoryDuplicates(category: string): Promise<string>
 }
 
 /**
+ * `RM ref Category DD.DUPLICACY` — same shape as `RM ref Category.DUPLICACY` above, scoped
+ * to `SUB CATEGORY` instead. Confirmed on the real reference form's own field list (which
+ * notably does NOT show a `Category` input at all — see `categoryFromAgainstId()`'s doc
+ * comment for why that's dead there — but DOES show `DUPLICACY`), though the exact formula
+ * text wasn't captured the way `RM ref Category`'s own was; inferred by direct analogy to
+ * the sibling table's confirmed formula, not guessed independently.
+ */
+export async function countSubCategoryDuplicates(subCategory: string): Promise<string> {
+  const trimmed = subCategory.trim();
+  if (!trimmed) return "0";
+  const rows = await readTable(env.sheets.npd, RM_CATEGORY_DD_TAB, { refresh: true });
+  const count = rows.filter((r) => (r["SUB CATEGORY"] ?? "").trim() === trimmed).length;
+  return String(count);
+}
+
+/**
  * RM Part Code generation — as of this pass, implemented against the REAL `PART NO.` App
  * Formula the user pulled directly off the live AppSheet column (not the earlier reverse-
  * engineered approximation), verbatim:

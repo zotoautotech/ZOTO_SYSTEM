@@ -13,6 +13,7 @@ import {
   generateRmPartCode,
   RmPartCodeLookupError,
   countCategoryDuplicates,
+  countSubCategoryDuplicates,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -120,9 +121,14 @@ const TABLES: TaxonomyTableDef[] = [
     // expresses which Category this Sub-Category is meant to belong to, even though the real
     // legacy formula then ignores it. `CODE`/`AGAINST ID` have no such dual role — pure
     // backend-computed, nothing meaningful for a doer to type — so only those two are hidden.
+    // `DUPLICACY` — confirmed on the real reference form's own field list too (it does NOT
+    // show a `Category` input at all, matching the note above that it's dead there; it DOES
+    // show `DUPLICACY`) — a live trimmed-name duplicate count, same shape as `RM ref
+    // Category.DUPLICACY` (see countCategoryDuplicates()'s doc comment) but scoped to `SUB
+    // CATEGORY` instead — see countSubCategoryDuplicates()'s own doc comment.
     requiredFields: ["Category", "SUB CATEGORY"],
-    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID"],
-    computedFields: ["CODE", "AGAINST ID"],
+    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "DUPLICACY"],
+    computedFields: ["CODE", "AGAINST ID", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -485,6 +491,16 @@ taxonomyRouter.get("/rm-category/preview", async (_req, res, next) => {
   }
 });
 
+// Same idea, scoped to `RM ref Category DD` — see the endpoint above's own comment.
+taxonomyRouter.get("/rm-category-dd/preview", async (_req, res, next) => {
+  try {
+    const [code, againstId] = await Promise.all([nextSubCategoryCode(), nextAgainstId()]);
+    res.json({ code, againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/:key", async (req, res, next) => {
   try {
     const table = findTable(req.params.key);
@@ -580,6 +596,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
       const againstId = await nextAgainstId();
       body["AGAINST ID"] = againstId;
       body.Category = await categoryFromAgainstId(againstId);
+      body.DUPLICACY = await countSubCategoryDuplicates((body["SUB CATEGORY"] as string) ?? "");
     }
     // `PART NO.` — the real, verified App Formula (see services/npdPartCode.ts's
     // generateRmPartCode() doc comment). Server-computed, never client-supplied.

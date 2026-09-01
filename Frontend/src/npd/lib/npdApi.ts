@@ -46,6 +46,12 @@ export async function previewRmCategoryCode() {
   return res.data;
 }
 
+/** Same idea, scoped to `RM ref Category DD` — see previewRmCategoryCode()'s own doc comment. */
+export async function previewRmCategoryDdCode() {
+  const res = await api.get<{ code: string; againstId: string }>("/npd/taxonomy/rm-category-dd/preview");
+  return res.data;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }

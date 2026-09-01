@@ -6,6 +6,7 @@ import { SearchableSelect, type SelectOption } from "../components/form/Searchab
 import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
 import { RmCategoryForm } from "./RmCategoryForm";
+import { RmSubCategoryForm } from "./RmSubCategoryForm";
 
 interface Props {
   onClose: () => void;
@@ -41,6 +42,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [creatingSubCategory, setCreatingSubCategory] = useState(false);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -259,6 +261,10 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               onChange={setSubCategory}
               options={subCategoryOptions}
               placeholder={category ? "Select Sub Category…" : "Pick a Category first"}
+              // Only offered once a Category is picked — a new Sub Category needs one to
+              // belong under (see RmSubCategoryForm.tsx's own `category` prop doc comment).
+              addNewLabel={category ? "New" : undefined}
+              onAddNew={category ? () => setCreatingSubCategory(true) : undefined}
             />
           </div>
           {/* Free text, not a SearchableSelect off the `vendor-master` taxonomy table — that
@@ -417,6 +423,18 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-category"] });
             setCategory(newCategory);
             setSubCategory("");
+          }}
+        />
+      )}
+      {creatingSubCategory && (
+        <RmSubCategoryForm
+          category={category}
+          subCategoryRows={subCategoryRows}
+          onClose={() => setCreatingSubCategory(false)}
+          onSaved={(newSubCategory) => {
+            setCreatingSubCategory(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-category-dd"] });
+            setSubCategory(newSubCategory);
           }}
         />
       )}
