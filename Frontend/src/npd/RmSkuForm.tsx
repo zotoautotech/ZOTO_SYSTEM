@@ -13,15 +13,24 @@ interface Props {
 
 /** "Raw Material SKU Form" — matches the real legacy AppSheet reference field-for-field
  * (PART NO. auto-computed/read-only, Category, Sub Category, Vendor Name, Paint, Make By
- * toggle) AND its exact measured layout: a panel docked to the right edge of the screen,
- * `min(1063px, 96vw)` wide, X + left-aligned title in a 72px header, fields in a fixed 542px
- * column with 120px left padding from the drawer edge (NOT centered), 53px field height,
- * ~28px gap between fields, Cancel/Save in a footer bar — a deliberate exception to
- * `FormModal.tsx`'s usual fixed-size centered-modal convention (see CLAUDE.md), built custom
- * for this one form to match the reference screenshot pixel-for-pixel, not the centered-modal
- * shape every other form in this app uses. Every dimension here was given as an exact
- * measurement off the real reference at a 1917px viewport — re-derive from a fresh
- * measurement if it ever needs adjusting again, don't guess at proportions. `PART NO.` is
+ * toggle) AND its measured layout: a panel docked to the right edge of the screen, X +
+ * left-aligned title in a 72px header, fields in a column with 120px-equivalent left padding
+ * from the drawer edge (NOT centered), 53px field height, ~28px gap between fields, Cancel/
+ * Save in a footer bar — a deliberate exception to `FormModal.tsx`'s usual fixed-size
+ * centered-modal convention (see CLAUDE.md), built custom for this one form to match the
+ * reference screenshot, not the centered-modal shape every other form in this app uses.
+ *
+ * **Horizontal sizing is percentage-based (`vw`/`%`), not fixed px** — an earlier pass used
+ * the user's exact measured pixel values (drawer 1063px, field column 542px, 120px padding,
+ * all at their reported 1917px viewport) verbatim, but a re-check against the deployed build
+ * still showed a mismatch neither a stale-deploy check nor a display-scaling check could
+ * explain, and the user couldn't get a DevTools-measured ground-truth number to resolve it
+ * definitively. Converted to the same ratios instead (drawer ≈55.45vw, padding ≈11.29% of
+ * the drawer's width, field column ≈51% of the drawer's width) — proportional sizing that
+ * scales correctly across different screen/window sizes, unlike a fixed px value copied from
+ * one screenshot that may not reflect this codebase's actual rendered layout 1:1. Re-derive
+ * these ratios from a fresh, verified measurement if they ever need adjusting again — don't
+ * guess. `PART NO.` is
  * never shown here as an input — the backend computes it
  * server-side from the real, verified App Formula (services/npdPartCode.ts's
  * generateRmPartCode()) once the row is created, matching `computedFields` on the `rm-sku`
@@ -144,7 +153,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         className="rm-sku-form"
         style={{
           position: "relative",
-          width: isMobile ? "100%" : "min(1063px, 96vw)",
+          // Percentage-based, not a fixed px width — the previous fixed-px pass (1063px)
+          // still didn't match on re-check, and there's no reliable way from here to tell
+          // whether that was a real bug or a screenshot-scaling artifact (the user couldn't
+          // confirm via DevTools). Using the same ratio (1063/1917 ≈ 55.45% of the viewport,
+          // the exact numbers the user originally measured) makes this scale-correct
+          // regardless of the actual screen/window size, which a fixed px value can't do.
+          width: isMobile ? "100%" : "min(55.45vw, 1120px)",
           height: "100%",
           background: "var(--color-bg)",
           boxShadow: "var(--shadow-lg)",
@@ -186,8 +201,11 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>Raw Material SKU Form</h2>
         </div>
 
-        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 120px", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 542, maxWidth: "100%" }}>
+        {/* Left padding (11.29% ≈ 120/1063) and field width (51% ≈ 542/1063) are both
+            percentages of the drawer's own width, same reasoning as the drawer width above —
+            proportional, not a fixed px guess that can't adapt to the real screen size. */}
+        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 11.29%", overflowY: "auto", flex: 1 }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "51%", minWidth: isMobile ? undefined : 420, maxWidth: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
@@ -258,7 +276,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 11 }}>
               MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
-            <div style={{ display: "flex", gap: 1, width: 542, maxWidth: "100%", height: 47, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", gap: 1, width: "100%", height: 47, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}

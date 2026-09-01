@@ -1000,9 +1000,19 @@ rule would otherwise clobber via `!important`.
    `53px` (was `46px`), `~28px` gap between fields (was `~30px`), a `72px`-tall header with
    the title **left-aligned next to the close icon** rather than absolute-centered in the
    drawer (an earlier pass here had wrongly centered it), and the Make By row explicitly
-   `542px` wide with two `~271px` buttons. This is the authoritative layout now — if it
-   drifts again, re-derive from a fresh measurement of the reference, not from guessing at
-   proportions.
+   `542px` wide with two `~271px` buttons.
+7. **The fixed-px numbers still didn't visually match after a redeploy was confirmed**, and a
+   display-scaling check came back 100% (ruling out the most likely non-code explanation) —
+   the user was unable to get a DevTools-measured ground-truth width to settle it definitively.
+   **Converted the whole horizontal layout from fixed px to the equivalent percentages**
+   instead: drawer `min(55.45vw, 1120px)` (≈1063/1917), left padding `11.29%` of the drawer's
+   width (≈120/1063), field column `51%` of the drawer's width (≈542/1063), Make By row
+   `100%` of the field column (was hardcoded to `542px` directly, now inherits). Vertical
+   dimensions (heights, gaps) stayed in px — only the horizontal sizing was the disputed part.
+   Percentage sizing scales correctly across different screen/window sizes, which a value
+   copied from one screenshot's pixel coordinates can't guarantee — this is the authoritative
+   approach now; if it's ever revisited, get a DevTools-measured pixel value first rather than
+   reading another screenshot.
 
 ## Known gotchas (add to as they're found)
 
