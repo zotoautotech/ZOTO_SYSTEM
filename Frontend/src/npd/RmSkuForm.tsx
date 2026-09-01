@@ -98,7 +98,31 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />
+      {/* Scoped to this one form, not the shared TextField/SearchableSelect components
+          themselves (those are used app-wide — bolding their default border globally would
+          be a much bigger, unrequested visual change). Gives every field box here a
+          permanent, bolder rectangle border, always-on rather than only on focus, matching
+          the reference form's own visual weight. */}
+      <style>{`
+        .rm-sku-form input,
+        .rm-sku-form button[aria-haspopup="listbox"] {
+          border: 1.5px solid var(--color-text) !important;
+        }
+        .rm-sku-form input:focus,
+        .rm-sku-form button[aria-haspopup="listbox"]:focus-visible {
+          outline: none;
+          border-color: var(--color-primary) !important;
+        }
+        /* The SearchableSelect's own open dropdown panel has an unrelated search input with
+           its own borderless/bottom-border-only design — excluded from the bold-border rule
+           above, not just left to lose the specificity fight against it. */
+        .rm-sku-form [role="listbox"] input {
+          border: none !important;
+          border-bottom: 1px solid var(--color-border) !important;
+        }
+      `}</style>
       <div
+        className="rm-sku-form"
         style={{
           position: "relative",
           width: isMobile ? "100%" : "min(46vw, 620px)",

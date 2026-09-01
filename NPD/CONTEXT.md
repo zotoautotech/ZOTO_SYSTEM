@@ -950,6 +950,18 @@ panel-vs-modal layout (see above), all fixed:
   brand-new row that can't have anything referencing it yet regardless — same reason the
   reference form's own version of this block always starts empty too.
 
+## RmSkuForm.tsx: bolder always-on field borders, scoped to this form only (1 Sep 2026)
+
+Every input/dropdown box on this form now has a permanent, bolder (`1.5px`) border matching
+the reference form's own visual weight — not just on focus. Implemented as a scoped
+`<style>` block keyed off a `.rm-sku-form` wrapper class, not by editing `TextField.tsx`/
+`SearchableSelect.tsx`'s own default styles — those two components are used app-wide, so
+bolding their base border globally would be a much bigger, unrequested visual change than
+what was actually asked for (confirmed with the user: this form only, not every field in the
+app). The scoped rule explicitly excludes `[role="listbox"] input` — `SearchableSelect`'s own
+open-dropdown search box has an intentional borderless/bottom-border-only look that the bold
+rule would otherwise clobber via `!important`.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
