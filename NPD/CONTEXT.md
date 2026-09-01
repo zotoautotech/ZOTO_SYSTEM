@@ -1109,6 +1109,64 @@ matching the reference's own required-with-no-default Make By state) — `canSav
 `handleSave()` updated to require it explicitly. Verified live: the field is correctly blank
 (shows the `"000"` placeholder) on a fresh open now.
 
+## "+ New" Category, opened from RmSkuForm.tsx, with the real RM ref Category App Formulas (1 Sep 2026)
+
+The Category `SearchableSelect` on `RmSkuForm.tsx` now has a real create-inline flow — its
+existing generic `onAddNew`/`addNewLabel` props (already built into `SearchableSelect.tsx`,
+just unused everywhere in NPD until now) open `RmCategoryForm.tsx`, a nested right-docked
+panel (zIndex 60, stacked over RmSkuForm's own 50) matching the real legacy "RM ref Category
+Form" field-for-field, sourced directly from the user's own AppSheet field-config
+screenshots:
+
+- `RM ref Category.Against id` and `.DUPLICACY` are BOTH real App Formula columns —
+  confirmed live, not assumed. `Against id` is the exact same dead-pointer formula as `RM ref
+  Category DD`'s own `AGAINST ID` (reused `nextAgainstId()` verbatim, just written to this
+  table's differently-cased `"Against id"` column). `DUPLICACY` — `COUNT(SELECT(RM REF
+  CATEGORY[Unique ID], TRIM([_THISROW].[CATEGORY])=[CATEGORY]))` — is new:
+  `countCategoryDuplicates()` in `services/npdPartCode.ts`, a live count of existing rows
+  whose trimmed `CATEGORY` matches, NOT a uniqueness gate (a duplicate can still be saved,
+  the count is just surfaced). Both added to the `rm-category` taxonomy table's `fields`/
+  `computedFields` and wired into `taxonomy.ts`'s POST handler the same way `CODE` already
+  was.
+- **Every auto field shows a real LIVE value, not a "Generated on Save" placeholder** —
+  matching the reference's own live-updating preview, confirmed directly off the user's
+  screenshots showing values changing as they interacted with the real form:
+  - `TIMESTAMP` — a ticking clock (`setInterval`, updates every second while open).
+  - `USEREMAIL` — this app has no email field on doers (Employee Id + Password login); shows
+    the logged-in doer's Employee Id instead, the same substitution used everywhere else in
+    this app.
+  - `CODE` / `Against id` — real previews from a new **`GET /npd/taxonomy/rm-category/
+    preview`** endpoint (`taxonomy.ts`), a pure read-only call to the exact same
+    `nextCategoryCode()`/`nextAgainstId()` helpers the real POST handler uses — what's shown
+    is genuinely what would be saved (barring a race with another doer creating a category in
+    between). Falls back to `"—"` on a failed/errored preview fetch rather than hanging on
+    `"Loading…"` forever (caught live: an unauthenticated preview request left `CODE` stuck
+    on "Loading…" indefinitely before this fix — `isError` from the query now drives the
+    fallback).
+  - `DUPLICACY` — computed live client-side from `categoryRows` (passed down as a prop from
+    `RmSkuForm.tsx`, already loaded there — no extra fetch), recomputing on every keystroke
+    against whatever `CATEGORY` is currently typed.
+  - `Unique ID` — the one field that genuinely can't be previewed for real without minting an
+    actual row (`nextSequentialId()` isn't a pure/read-only lookup the way the CODE/Against id
+    helpers are) — shown as a client-generated random hex string instead, cosmetically
+    matching the reference's own opaque-looking ID but explicitly NOT the value that will
+    actually be saved (the server mints its own on POST). Documented clearly in the component
+    itself so this distinction isn't lost later.
+
+On save, `RmSkuForm.tsx` invalidates the `rm-category` taxonomy query and auto-selects the
+newly created category (clearing Sub Category, same as picking any other Category).
+
+**Verification note**: this feature's actual save round-trip (and the CODE/Against id/
+DUPLICACY previews, which need a valid auth token to return real data) could not be fully
+exercised live — this form sits behind `requireAuth`, and no test credentials were available
+this session (see "Bold border only on focus" section's earlier note on the same
+constraint). What WAS verified live: the "+ New" row renders inside the Category dropdown,
+clicking it opens the nested panel with the correct fields/layout, TIMESTAMP visibly ticks,
+Unique ID generates a fresh value, and CODE's fallback-to-"—" (instead of hanging on
+"Loading…") behaves correctly under a real failed request. The DUPLICACY/CODE/Against-id
+*real* live values, and the full create-and-select round trip, are unverified against actual
+authenticated data — worth a manual pass before relying on this in production.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

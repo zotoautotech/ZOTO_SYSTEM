@@ -39,6 +39,13 @@ export async function createTaxonomyRow(key: string, body: TaxonomyRow) {
   return res.data;
 }
 
+/** Read-only preview of the CODE/Against id `POST /taxonomy/rm-category` would actually
+ * generate, without writing anything — see the backend route's own doc comment. */
+export async function previewRmCategoryCode() {
+  const res = await api.get<{ code: string; againstId: string }>("/npd/taxonomy/rm-category/preview");
+  return res.data;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }

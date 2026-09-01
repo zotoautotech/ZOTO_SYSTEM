@@ -180,6 +180,25 @@ export async function categoryFromAgainstId(againstId: string): Promise<string> 
 }
 
 /**
+ * `RM ref Category.DUPLICACY` — real App Formula, verbatim:
+ *
+ *   COUNT(SELECT(RM REF CATEGORY[Unique ID], TRIM([_THISROW].[CATEGORY])=[CATEGORY]))
+ *
+ * A live count of every existing `RM ref Category` row whose own `CATEGORY` trims-equal this
+ * one's — i.e. a duplicate-name counter, not a uniqueness gate (nothing stops the row from
+ * being saved even if this comes back > 0; the reference just surfaces the count for a human
+ * to notice). Counted against rows that exist BEFORE this one is appended, matching how an
+ * App Formula evaluates at compute-time against already-committed data.
+ */
+export async function countCategoryDuplicates(category: string): Promise<string> {
+  const trimmed = category.trim();
+  if (!trimmed) return "0";
+  const rows = await readTable(env.sheets.npd, RM_CATEGORY_TAB, { refresh: true });
+  const count = rows.filter((r) => (r.CATEGORY ?? "").trim() === trimmed).length;
+  return String(count);
+}
+
+/**
  * RM Part Code generation — as of this pass, implemented against the REAL `PART NO.` App
  * Formula the user pulled directly off the live AppSheet column (not the earlier reverse-
  * engineered approximation), verbatim:

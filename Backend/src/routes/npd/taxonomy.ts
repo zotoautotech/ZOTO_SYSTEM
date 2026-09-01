@@ -12,6 +12,7 @@ import {
   nextPaintCode,
   generateRmPartCode,
   RmPartCodeLookupError,
+  countCategoryDuplicates,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -89,9 +90,14 @@ const TABLES: TaxonomyTableDef[] = [
     // letter after whichever Category was most recently created," and the POST handler below
     // does the same. Still listed in `fields` (so it displays/is editable afterward if a
     // correction is ever needed) but deliberately absent from `requiredFields`.
+    // `Against id` and `DUPLICACY` are also real App Formula columns (confirmed directly off
+    // the live field-config screenshots) — `Against id` is the same dead-pointer formula
+    // already implemented for `RM ref Category DD` (see nextAgainstId()'s doc comment;
+    // reused here verbatim, not table-specific), and `DUPLICACY` is a live count of existing
+    // rows whose trimmed CATEGORY matches this one's — see countCategoryDuplicates() below.
     requiredFields: ["CATEGORY"],
-    fields: ["CATEGORY", "CODE", "Against id"],
-    computedFields: ["CODE"],
+    fields: ["CATEGORY", "CODE", "Against id", "DUPLICACY"],
+    computedFields: ["CODE", "Against id", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -464,6 +470,21 @@ taxonomyRouter.get("/", async (_req, res) => {
   });
 });
 
+// Read-only preview of what CODE/Against id `POST /rm-category` would actually generate,
+// without writing anything — lets `RmCategoryForm.tsx` show the doer a real live value
+// instead of a "Generated on Save" placeholder before they've saved. Pure reads of the same
+// nextCategoryCode()/nextAgainstId() helpers the real POST handler uses; registered before
+// the generic "/:key" route below isn't actually necessary (different segment count so
+// Express can't confuse the two), but kept adjacent to it for discoverability.
+taxonomyRouter.get("/rm-category/preview", async (_req, res, next) => {
+  try {
+    const [code, againstId] = await Promise.all([nextCategoryCode(), nextAgainstId()]);
+    res.json({ code, againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/:key", async (req, res, next) => {
   try {
     const table = findTable(req.params.key);
@@ -533,6 +554,14 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // silently overwrites an intentional override.
     if (table.key === "rm-category" && !body.CODE) {
       body.CODE = await nextCategoryCode();
+    }
+    // `Against id` (the same dead-pointer formula as rm-category-dd's own `AGAINST ID`, just
+    // this table's own differently-cased column name) and `DUPLICACY` (a live duplicate-name
+    // count, see countCategoryDuplicates()'s doc comment) — both real App Formula columns,
+    // always computed, never client-supplied.
+    if (table.key === "rm-category") {
+      body["Against id"] = await nextAgainstId();
+      body.DUPLICACY = await countCategoryDuplicates((body.CATEGORY as string) ?? "");
     }
     if (table.key === "rm-category-dd" && !body.CODE) {
       body.CODE = await nextSubCategoryCode();

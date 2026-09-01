@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { isAxiosError } from "axios";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
 import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
+import { RmCategoryForm } from "./RmCategoryForm";
 
 interface Props {
   onClose: () => void;
@@ -38,6 +39,8 @@ interface Props {
  * neither of the real formula's two lookup branches can resolve it. */
 export function RmSkuForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -242,6 +245,8 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             }}
             options={categoryOptions}
             placeholder="Select Category…"
+            addNewLabel="New"
+            onAddNew={() => setCreatingCategory(true)}
           />
           {/* Greyed and inert until a Category is picked, matching the reference's own
               disabled Sub Category state — SearchableSelect has no built-in disabled prop, so
@@ -402,6 +407,19 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           </button>
         </div>
       </div>
+
+      {creatingCategory && (
+        <RmCategoryForm
+          categoryRows={categoryRows}
+          onClose={() => setCreatingCategory(false)}
+          onSaved={(newCategory) => {
+            setCreatingCategory(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-category"] });
+            setCategory(newCategory);
+            setSubCategory("");
+          }}
+        />
+      )}
     </div>
   );
 }
