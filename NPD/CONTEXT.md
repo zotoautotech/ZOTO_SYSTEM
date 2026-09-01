@@ -926,6 +926,30 @@ custom layout into other forms without being asked; if a right-docked-panel patt
 more broadly later, that's a `FormModal.tsx` variant to build deliberately, not something to
 silently reproduce form-by-form.
 
+## RmSkuForm.tsx field-level match to the reference (31 Aug 2026)
+
+A side-by-side against the real legacy screenshot caught three more mismatches beyond the
+panel-vs-modal layout (see above), all fixed:
+- Field labels now use the live sheet's own exact casing — `VENDOR NAME`/`MAKE BY` (real
+  ALL-CAPS headers), not the Title Case `Vendor Name`/`Make By` this form had been using.
+  `Category`/`Sub Category`/`Paint` stay Title Case since those ARE the real header casing.
+- `PART NO.` is marked required (red asterisk) even though it's a disabled/read-only
+  "Generated on Save" field — matches the reference form's own required-styled read-only
+  field. Deliberately does NOT reproduce the reference's "PART CODE LENGTH IS NOT EQUAL TO 9
+  DIGIT" validation message underneath it — that message only makes sense for a hand-typed
+  field, and this one is never hand-typed here, so showing it would misrepresent this form's
+  own actual behavior.
+- Vendor Name gets a decorative inline "+" icon on the right edge, matching the reference —
+  purely visual, no click handler, since there's no separate "add a new vendor" flow to open
+  (typing a new name directly into the field already works, per the field's own doc comment).
+- Added the reference's "Drawing RM entries that reference this entry in the AGAINST ID
+  column" block at the bottom (label + an inert "New" bar) for visual parity — also purely
+  decorative, not wired to anything. AGAINST ID is the dead-pointer formula documented
+  elsewhere in this file (a live pointer to "whichever SKU was most recently created
+  app-wide", not a real link to this specific SKU), and this form only ever creates a
+  brand-new row that can't have anything referencing it yet regardless — same reason the
+  reference form's own version of this block always starts empty too.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

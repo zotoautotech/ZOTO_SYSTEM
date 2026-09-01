@@ -160,7 +160,12 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         </div>
 
         <div style={{ padding: "24px var(--space)", overflowY: "auto", flex: 1 }}>
-          <TextField label="PART NO." value="" placeholder="Generated on Save" disabled />
+          {/* PART NO. is required on the real live column even though this form never lets a
+              doer type it — server-computed on Save (see this file's module doc comment) — so
+              it gets the same red-asterisk "required" treatment as the reference form's own
+              read-only PART NO. field, just without a fake length-validation message: this
+              form's PART NO. is never invalid, since it's never hand-typed here. */}
+          <TextField label="PART NO." required value="" placeholder="Generated on Save" disabled />
           <SearchableSelect
             label="Category"
             required
@@ -183,13 +188,47 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           {/* Free text, not a SearchableSelect off the `vendor-master` taxonomy table — that
               table has no rows yet in production, and the real RM SKU rows' own VENDOR NAME
               values (e.g. "NISIKI INDIA PRIVATE LIMITED") are plain text on the SKU row itself,
-              not a ref into Vendor Master. Matches the reference form's own inline "+" — a name
-              typed here that isn't already in Vendor Master just isn't one yet, not an error. */}
-          <TextField label="Vendor Name" required value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+              not a ref into Vendor Master. Label matches the live sheet's own ALL-CAPS header
+              text exactly (unlike Category/Sub Category/Paint, which are real Title Case
+              headers) — same discipline as every other field label in this app. The inline "+"
+              is decorative, matching the reference form's own icon — there's no separate
+              "add a new vendor" flow to open, since typing a new name here already works. */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+              VENDOR NAME<span style={{ color: "var(--color-error)" }}> *</span>
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                value={vendorName}
+                onChange={(e) => setVendorName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 40px 12px 14px",
+                  borderRadius: "var(--radius)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: 14,
+                }}
+              />
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--color-text-muted)",
+                  fontSize: 16,
+                  pointerEvents: "none",
+                }}
+              >
+                +
+              </span>
+            </div>
+          </div>
           <SearchableSelect label="Paint" required value={paint} onChange={setPaint} options={paintOptions} placeholder="Select Paint…" />
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-              Make By <span style={{ color: "var(--color-error)" }}>*</span>
+              MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
             <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
@@ -213,6 +252,32 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             </div>
           </div>
           {error && <p style={{ color: "var(--color-error)", fontSize: 13, marginTop: 8 }}>{error}</p>}
+
+          {/* The reference form's "Drawing RM entries that reference this entry in the
+              AGAINST ID column" reverse-ref block, kept for visual parity. Purely decorative
+              here — AGAINST ID is the dead-pointer formula documented on RM ref Category/
+              Category DD above (a live, constantly-shifting pointer to "whichever SKU was
+              created most recently app-wide", not a real link to THIS SKU), and this is a
+              brand-new row that can't have anything pointing at it yet regardless — same
+              reasoning the reference form's own "New" button always starts empty here too. */}
+          <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--color-border)" }}>
+            <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 10px" }}>
+              Drawing RM entries that reference this entry in the AGAINST ID column
+            </p>
+            <div
+              style={{
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius)",
+                padding: "10px 0",
+                textAlign: "center",
+                background: "var(--color-bg-page)",
+                color: "var(--color-text-muted)",
+                fontSize: 14,
+              }}
+            >
+              New
+            </div>
+          </div>
         </div>
       </div>
     </div>
