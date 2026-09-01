@@ -1276,6 +1276,38 @@ available to exercise the real authenticated save round-trip against a live shee
 untested branching, lower verification risk than the earlier live-value features in this
 section.
 
+## Real bug caught: Sub Category dropdown silently hid valid options (1 Sep 2026)
+
+The user created a new Category ("CONTROLLER SET") and a new Sub Category ("MASTER
+CONTROLLER") via the "+ New" flows, then noticed the just-created Sub Category never showed
+up in `RmSkuForm.tsx`'s Sub Category dropdown at all — reopening it showed "No matches".
+
+**Root cause**: `subCategoryOptions` filtered on `r.Category === category` (the picked parent
+Category), matching the punch form's own dependent-dropdown pattern elsewhere in this app —
+but `RM ref Category DD.Category` is the dead App Formula documented extensively elsewhere in
+this file (`categoryFromAgainstId()`'s doc comment): a live pointer to "whichever SKU was
+most recently created app-wide," not a real link to the Sub Category's actual parent. **This
+is true on every row, including ones from the real production AppSheet** — not something this
+session's new "+ New" flows introduced, just newly visible because a fresh, empty NPD
+database has nothing else masking it. Filtering against it silently hid the correct row every
+time the filter's own match failed (which is most of the time, since the dead pointer rarely
+happens to equal the currently-picked Category by coincidence).
+
+**Fix**: removed the filter entirely — `subCategoryOptions` now lists every `SUB CATEGORY` row
+once a Category is picked (still gated on picking one first, for the same top-to-bottom UX
+the punch form uses, just not narrowed further, since there's no reliable field to narrow by).
+There is currently NO reliable way to scope Sub Category to its real parent Category in this
+data — if that's ever needed for real (e.g. a Category with 200 Sub Categories becoming
+unwieldy as one flat list), it would need a NEW, real column added to the live sheet
+(replacing or supplementing the dead `Category`/`AGAINST ID` pair), not a client-side filter
+against data that was never trustworthy for this purpose.
+
+Also: the sheet's `RM ref Category DD.Category` column showing blank for a freshly-created
+row (not "CONTROLLER SET", the Category actually picked) is correct, expected behavior — that
+dead formula resolves to `""` when `AGAINST ID` is blank (no `Raw Material SKU` rows exist
+yet to point to), matching `categoryFromAgainstId()`'s own documented behavior exactly, not a
+bug.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

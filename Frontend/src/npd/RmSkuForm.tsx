@@ -86,11 +86,21 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   });
 
   const categoryOptions: SelectOption[] = categoryRows.map((r) => ({ value: r.CATEGORY, label: r.CATEGORY }));
-  // Sub Category is scoped to the picked Category, same dependent-dropdown pattern as the
-  // punch form's own Category/Sub Category selects elsewhere in this app.
-  const subCategoryOptions: SelectOption[] = subCategoryRows
-    .filter((r) => !category || r.Category === category)
-    .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
+  // NOT filtered by "r.Category === category" — that was tried first (matching the punch
+  // form's own dependent-dropdown pattern elsewhere in this app) but is a real bug: every
+  // `RM ref Category DD` row's own `Category` field is the dead App Formula documented
+  // elsewhere in this file (a live pointer to "whichever SKU was most recently created
+  // app-wide", not a real link to the Sub-Category's actual parent) — true on EVERY row,
+  // including ones from the real production AppSheet, not just ones created through this
+  // form's own "+ New" flow. Filtering against it silently hid valid Sub Categories, caught
+  // live: a Sub Category the user had just created didn't show up in the dropdown at all.
+  // There's no reliable Category<->Sub-Category link in the data to filter on, so this shows
+  // every Sub Category once a Category is picked (still gated behind picking one, for the
+  // same "fill top to bottom" UX the punch form uses — just not narrowed further).
+  const subCategoryOptions: SelectOption[] = subCategoryRows.map((r) => ({
+    value: r["SUB CATEGORY"],
+    label: r["SUB CATEGORY"],
+  }));
   const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
 
   // PART NO. live preview — client-side mirror of the real, verified App Formula
