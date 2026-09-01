@@ -1010,9 +1010,24 @@ rule would otherwise clobber via `!important`.
    `100%` of the field column (was hardcoded to `542px` directly, now inherits). Vertical
    dimensions (heights, gaps) stayed in px — only the horizontal sizing was the disputed part.
    Percentage sizing scales correctly across different screen/window sizes, which a value
-   copied from one screenshot's pixel coordinates can't guarantee — this is the authoritative
-   approach now; if it's ever revisited, get a DevTools-measured pixel value first rather than
-   reading another screenshot.
+   copied from one screenshot's pixel coordinates can't guarantee.
+8. **Still didn't visually match — this time actually verified live via DevTools**, not
+   guessed at again. Added a temporary unauthenticated route (`/__dev-rm-sku-form`, rendering
+   `RmSkuForm` directly, bypassing login since this form otherwise sits behind
+   `RequireAuth`), measured it with `getBoundingClientRect()` at `window.innerWidth: 1917`,
+   then removed the route in the same pass (never shipped/committed). Drawer and padding were
+   already exactly right (`1062.97px` / `854.03px` start, target `1063`/`854`) — **the field
+   column was the one genuinely broken value**: `width: "51%"` measured only `468.67px`, not
+   `≈542px`, because CSS `%` width resolves against the element's own immediate containing
+   block (the *padded* content wrapper, already narrowed by the drawer's own padding), not
+   the drawer two levels up. Fixed by sizing the field column directly off the viewport
+   instead of off its parent's percentage (`min(28.27vw, 571px)`, the equivalent `542/1917`
+   ratio) — re-measured afterward, confirmed `541.92px`. **This is the authoritative,
+   verified layout** — the `%`-relative-to-immediate-parent trap is worth remembering
+   anywhere else in this app that nests a percentage-sized element inside a padded
+   percentage-sized parent; if this form's layout is ever revisited, reuse the same
+   temporary-unauthenticated-route + DevTools measurement technique rather than reading
+   another screenshot.
 
 ## Known gotchas (add to as they're found)
 

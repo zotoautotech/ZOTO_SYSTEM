@@ -20,17 +20,20 @@ interface Props {
  * centered-modal convention (see CLAUDE.md), built custom for this one form to match the
  * reference screenshot, not the centered-modal shape every other form in this app uses.
  *
- * **Horizontal sizing is percentage-based (`vw`/`%`), not fixed px** — an earlier pass used
- * the user's exact measured pixel values (drawer 1063px, field column 542px, 120px padding,
- * all at their reported 1917px viewport) verbatim, but a re-check against the deployed build
- * still showed a mismatch neither a stale-deploy check nor a display-scaling check could
- * explain, and the user couldn't get a DevTools-measured ground-truth number to resolve it
- * definitively. Converted to the same ratios instead (drawer ≈55.45vw, padding ≈11.29% of
- * the drawer's width, field column ≈51% of the drawer's width) — proportional sizing that
- * scales correctly across different screen/window sizes, unlike a fixed px value copied from
- * one screenshot that may not reflect this codebase's actual rendered layout 1:1. Re-derive
- * these ratios from a fresh, verified measurement if they ever need adjusting again — don't
- * guess. `PART NO.` is
+ * **Horizontal sizing is `vw`-based, not fixed px** — verified against a live DevTools
+ * `getBoundingClientRect()` measurement (via a temporary unauthenticated route, since this
+ * form normally sits behind login — added, measured, and removed in the same pass, never
+ * shipped), not another screenshot read. At `window.innerWidth: 1917`: drawer
+ * `min(55.45vw, 1120px)` measures `1062.97px` (target `1063px`) starting at `x: 854.03`
+ * (target `854`); the field column starts at `x: 974.03` (target `974`, i.e. the drawer's
+ * own `11.29%` left padding lands exactly right). **The field column itself was the one
+ * genuinely broken value** — `width: "51%"` measured only `468.67px`, not the intended
+ * `≈542px`, because CSS `%` width resolves against the element's own immediate containing
+ * block (the *padded* content wrapper, already narrowed by the drawer's left/right padding),
+ * not the drawer two levels up — the same trap a plain `%` will hit again if reintroduced
+ * anywhere in this form. Fixed by sizing the field column directly off the viewport instead
+ * (`min(28.27vw, 571px)`, the equivalent `542/1917` ratio, re-verified to measure
+ * `541.92px` — matches). `PART NO.` is
  * never shown here as an input — the backend computes it
  * server-side from the real, verified App Formula (services/npdPartCode.ts's
  * generateRmPartCode()) once the row is created, matching `computedFields` on the `rm-sku`
@@ -205,7 +208,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             percentages of the drawer's own width, same reasoning as the drawer width above —
             proportional, not a fixed px guess that can't adapt to the real screen size. */}
         <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 11.29%", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "51%", minWidth: isMobile ? undefined : 420, maxWidth: "100%" }}>
+        {/* Was "51%" of the padded content box (its actual containing block), which computes
+            to a narrower width than 51% of the DRAWER (percentage width is relative to the
+            immediate parent, not the drawer two levels up) — confirmed live via DevTools:
+            51% gave 468.67px against a 1062.97px drawer, not the intended ≈542px. Using a
+            direct viewport-relative value instead (28.27vw ≈ 542/1917, the same ratio) sidesteps
+            that parent-relative trap entirely. */}
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "min(28.27vw, 571px)", minWidth: isMobile ? undefined : 420, maxWidth: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
