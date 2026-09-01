@@ -108,7 +108,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
           border-radius: 0 !important;
-          height: 51px !important;
+          height: 46px !important;
           box-sizing: border-box;
         }
         .rm-sku-form input:focus,
@@ -125,20 +125,23 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           border-radius: 0 !important;
           height: auto !important;
         }
-        /* Field gap — 7px, measured off the real running form, overriding TextField's/
-           SearchableSelect's own shared 20px default. Each field call renders one div as its
-           own root element, a direct child of .rm-sku-fields, so this catches all of them
+        /* Vertical gap between fields (~30px) and label-to-field gap (~11px) — measured off
+           the real reference form, overriding TextField's/SearchableSelect's own shared
+           20px/8px defaults. Each field call renders one div as its own root element with one
+           label inside, both direct children of .rm-sku-fields, so this catches all of them
            uniformly without needing to touch either shared component. */
         .rm-sku-fields > div {
-          margin-bottom: 7px !important;
+          margin-bottom: 30px !important;
+        }
+        .rm-sku-fields > div > label {
+          margin-bottom: 11px !important;
         }
       `}</style>
       <div
         className="rm-sku-form"
         style={{
           position: "relative",
-          width: isMobile ? "100%" : "min(54vw, 1040px)",
-          minWidth: isMobile ? undefined : 560,
+          width: isMobile ? "100%" : "min(1024px, 96vw)",
           height: "100%",
           background: "var(--color-bg)",
           boxShadow: "var(--shadow-lg)",
@@ -188,8 +191,8 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           </h2>
         </div>
 
-        <div style={{ padding: "24px var(--space)", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 630, maxWidth: "100%", margin: isMobile ? undefined : "0 auto" }}>
+        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 125px", overflowY: "auto", flex: 1 }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 568, maxWidth: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
@@ -223,8 +226,8 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               headers) — same discipline as every other field label in this app. The inline "+"
               is decorative, matching the reference form's own icon — there's no separate
               "add a new vendor" flow to open, since typing a new name here already works. */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 14, marginBottom: 11 }}>
               VENDOR NAME<span style={{ color: "var(--color-error)" }}> *</span>
             </label>
             <div style={{ position: "relative" }}>
@@ -234,7 +237,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
                 style={{
                   width: "100%",
                   padding: "12px 40px 12px 14px",
-                  borderRadius: "var(--radius)",
+                  borderRadius: 0,
                   border: "1px solid var(--color-border)",
                   fontSize: 14,
                 }}
@@ -256,11 +259,11 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             </div>
           </div>
           <SearchableSelect label="Paint" required value={paint} onChange={setPaint} options={paintOptions} placeholder="Select Paint…" />
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 11 }}>
               MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
-            <div style={{ display: "flex", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+            <div style={{ display: "flex", gap: 1, height: 48, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}
@@ -268,7 +271,6 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
                   onClick={() => setMakeBy(option)}
                   style={{
                     flex: 1,
-                    padding: "10px 0",
                     border: "none",
                     cursor: "pointer",
                     background: makeBy === option ? "var(--color-primary)" : "var(--color-bg)",

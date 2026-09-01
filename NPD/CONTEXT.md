@@ -983,10 +983,17 @@ rule would otherwise clobber via `!important`.
    fields is `7px` (`.rm-sku-fields > div { margin-bottom: 7px }`, overriding `TextField`'s/
    `SearchableSelect`'s own shared `20px` default the same scoped-not-global way as
    everything else in this section), and the footer Cancel/Save bar is a fixed `54px` tall.
-5. The fixed-`630px` field column is horizontally **centered** (`margin: "0 auto"`) inside
-   the padded content area rather than flush-left — the panel itself is wider than
-   `630px + padding` at most viewport sizes (it's `min(54vw, 1040px)`), so left-aligning the
-   column left a visibly lopsided gap on the right that the reference form didn't have.
+5. The fixed-`630px` field column was briefly centered (`margin: "0 auto"`), then the user
+   supplied an exact dimension spec from the real AppSheet reference, superseding every guess
+   above at once: panel `min(1024px, 96vw)` wide (not `54vw`-scaled), field column a fixed
+   `568px` (not `630px`), **left-aligned with `125px` of left padding from the drawer edge**
+   (explicitly NOT centered — the earlier centering was wrong), field height `46px` (not
+   `51px`), `~30px` vertical gap between fields and `~11px` label-to-field gap (both via the
+   same `.rm-sku-fields > div` / `> div > label` scoped rules, values just updated), and the
+   Make By toggle got a `48px`-tall row with a `1px` divider line between its two buttons
+   (a `background: var(--color-border)` bar under a `gap: 1px` flex row, rather than a plain
+   borderless split). This is the authoritative layout now — if it drifts again, re-derive
+   from a fresh measurement of the reference, not from guessing at proportions.
 
 ## Known gotchas (add to as they're found)
 
