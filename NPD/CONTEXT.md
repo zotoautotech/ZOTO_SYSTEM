@@ -1345,6 +1345,37 @@ byte-for-byte — but only when directly confirmed by the user pointing at the r
 formula that depends on it, as happened here, not as a excuse to freelance around any
 inconvenient-looking legacy formula.
 
+## RM SKU Detail rebuilt as a two-column dashboard, matching the reference (1 Sep 2026)
+
+`RmSkuDetail.tsx` was a flat single-column field list — the user pointed out it doesn't look
+like the reference's actual two-column dashboard layout at all. Rebuilt to match: a left
+column with the icon-action row (Upload Images & Drawings / UPDATE IQC PDF / Verified RM
+item — circular blue icon buttons, visual only for now, no upload/verification workflow
+behind them yet per the user: functionality to follow in a later pass) above the field card,
+and a right column of related-data cards (a `"{Category} Dimensions"` table, `"RM Images &
+Drawings"`). Two more real fields were added while at it — `Old Part Code` and `IQC PDF` —
+both already present in the live sheet and already returned by `GET /npd/taxonomy/rm-sku`
+(that endpoint returns the full raw row, not filtered by the table's `fields` allowlist,
+which only gates create/edit — see `taxonomy.ts`'s `GET /:key` handler), so no backend change
+was needed, just reading two more keys off the row already being fetched.
+
+**The right-side cards are genuinely empty, not faked** — this app has no per-category
+dimension tables (the reference needs ~26 of them, one per RM category — a much bigger
+version of the 6 FG-side item-spec tables already built in Sprint 6) or an image-upload
+feature yet. Shown as real empty states (`"Not available yet."`, count badge `0`, inert
+Expand/Add links) matching the reference's own card shape, rather than omitted entirely or
+filled with fabricated rows — same "flag it, don't fake it" convention as everywhere else in
+this app.
+
+**Verification note**: could not get a live-data screenshot this pass — `RmSkuDetail.tsx`
+sits behind `requireAuth` like every other NPD page, and unlike the other forms verified via
+a temp *route*, this one's `useQuery` supplies its own explicit `queryFn` (calling the real
+API), which takes priority over a `QueryClientProvider`'s default `queryFn` — a mocked-data
+preview harness tried here didn't actually intercept the real (failing, unauthenticated)
+fetch, so it rendered the component's own "not found" state instead of the mocked row.
+Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
+comparison against the reference still needs a genuine login session.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
