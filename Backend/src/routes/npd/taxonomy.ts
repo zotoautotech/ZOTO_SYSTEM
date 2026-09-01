@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { appendRow, deleteRows, readTable, updateRow } from "../../services/sheets.js";
-import { nextSequentialId } from "../../services/ids.js";
+import { nextPlainRandomId } from "../../services/ids.js";
 import { logChange } from "../../services/npdChangelog.js";
 import {
   nextCategoryCode,
@@ -542,7 +542,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // because rm-sku's PART NO. formula needs this row's own ID'S as an input (see
     // generateRmPartCode()'s doc comment, finding #1) — every other table just ignores it
     // being available a little earlier, so this is safe to hoist unconditionally.
-    const id = await nextSequentialId(table.spreadsheetId, table.tab, table.idColumn, table.idPrefix);
+    const id = await nextPlainRandomId(table.spreadsheetId, table.tab, table.idColumn);
 
     // Duplicate detection — server-side, the real gate, matching this project's convention
     // (Sales CRR's customer-assignment gate, part-code duplicate check, etc.). Case-insensitive

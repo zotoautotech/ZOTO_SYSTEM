@@ -4,10 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import { createTaxonomyRow, previewRmPaintCode, previewSequentialId, type TaxonomyRow } from "./lib/npdApi";
+import { createTaxonomyRow, previewRmPaintCode, previewPlainRandomId } from "./lib/npdApi";
 
 interface Props {
-  paintRows: TaxonomyRow[];
   onClose: () => void;
   onSaved: (paintDescription: string) => void;
 }
@@ -17,10 +16,9 @@ interface Props {
  * USEREMAIL, Unique ID, Code, Paint Description. Simpler than RmCategoryForm.tsx/
  * RmSubCategoryForm.tsx — `RM ref Paint` has no `Against id`/dead-pointer column and no
  * `DUPLICACY` at all (confirmed live — see npdPartCode.ts's nextPaintCode() doc comment), so
- * there's nothing to preview beyond `Code` itself. Same live-value approach as its two
- * siblings otherwise, including the REAL (not cosmetic-random) Unique ID preview — see
- * RmCategoryForm.tsx's own doc comment for the full reasoning. */
-export function RmPaintForm({ paintRows, onClose, onSaved }: Props) {
+ * there's nothing to preview beyond `Code` itself. Unique ID is a format-matching preview
+ * only, not a predicted real value — see RmCategoryForm.tsx's own doc comment for why. */
+export function RmPaintForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const [paintDescription, setPaintDescription] = useState("");
@@ -33,9 +31,7 @@ export function RmPaintForm({ paintRows, onClose, onSaved }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  // The REAL next Unique ID — see RmCategoryForm.tsx's own doc comment for why this replaced
-  // an earlier cosmetic-random-hex placeholder.
-  const previewUniqueId = previewSequentialId(paintRows, "Unique ID", "RMPAINT");
+  const [previewUniqueId] = useState(previewPlainRandomId);
 
   const { data: preview, isError: previewFailed } = useQuery({
     queryKey: ["npd", "taxonomy", "rm-paint", "preview"],

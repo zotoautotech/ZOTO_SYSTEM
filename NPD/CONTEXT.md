@@ -1232,6 +1232,50 @@ real `previewSequentialId()` output (`"RMCAT0001"`, matching the intended format
 place of the old random-hex placeholder, confirming the fix actually works even though the
 underlying data was empty (no auth) in the test session.
 
+## Real fix: NPD taxonomy tables' Unique ID switched to plain random hex, matching the live sheet (1 Sep 2026)
+
+The "matches the real saved value" claim from the previous section turned out to be wrong —
+the user showed the actual live `Unique ID` column values (`800ecd70`, `f6db8404`, `24a775fa`,
+…, `c92170ea`) and pointed at "use CRR IDS for hint": none of them are sequential
+`RMCAT0001`-style values, they're plain random hex, the same *idea* (not literal format) as
+this codebase's existing Sales CRR `nextIds()`/`nextId()` convention
+(`Backend/src/services/ids.ts`, `${prefix}-${8 random hex chars}`, e.g. `ORD-e76026d8`) —
+random + collision-checked against existing IDs, not a counter.
+
+**The backend generator itself was wrong, not just the frontend preview** — every NPD
+taxonomy table (`Backend/src/routes/npd/taxonomy.ts`'s generic `POST /:key` handler,
+covering ALL of them: `rm-category`, `rm-category-dd`, `rm-paint`, `vendor-master`,
+`vehicle-compatibility`, `fg-segment`, …, not just the three with dedicated "+ New" forms)
+was minting its own row ID via `nextSequentialId()` — a plain max-existing-numeric-suffix+1
+scan with no real atomicity guarantee against two doers creating a row at the same instant
+(both could read the same "current max" before either write lands). Switched to a new
+`nextPlainRandomId()` in `services/ids.ts` — same random+collision-check idea as `nextIds()`,
+but spreadsheet-agnostic (unlike `nextIds()`/`nextId()`, which stay hardcoded to
+`env.sheets.transactions` for their existing Sales CRR callers) and with NO prefix/dash,
+matching the live sheet's own real values exactly (`nextIds()`'s own dash-prefixed shape was
+NOT what the real `Unique ID` values look like — confirmed directly, not assumed). Also added
+the general-purpose `nextRandomIds()`/`nextRandomId()` (spreadsheet-agnostic siblings of
+`nextIds()`/`nextId()`, keeping the `PREFIX-hex` shape) alongside it, for any FUTURE NPD ID
+column that DOES want a prefix — `nextPlainRandomId()` is specifically for `Unique ID`
+columns matching this exact no-prefix shape, not a general "the new NPD ID scheme."
+`idPrefix` on `TaxonomyTableDef` is no longer used for ID generation as a result (left in
+place on the interface/table defs rather than removed — harmless, and removing it is a
+bigger, unrelated cleanup).
+
+**Frontend previews corrected to match**: the three "+ New" forms' `Unique ID` preview
+(`RmCategoryForm.tsx`/`RmSubCategoryForm.tsx`/`RmPaintForm.tsx`) no longer tries to predict
+an exact real value at all — `previewPlainRandomId()` in `lib/npdApi.ts` just matches the
+new FORMAT (plain 8-hex-char) cosmetically, same as the very first (correctly cosmetic, just
+wrongly-formatted) version before the "real sequential value" detour. `RmPaintForm.tsx`'s
+now-unused `paintRows` prop was removed along with it (nothing else in that form needed it —
+`RM ref Paint` has no `DUPLICACY` to compute either).
+
+**Verification note**: same constraint as every "+ New" flow in this file — no login session
+available to exercise the real authenticated save round-trip against a live sheet write.
+`tsc --noEmit` clean on both sides; the change is a straightforward function swap with no new
+untested branching, lower verification risk than the earlier live-value features in this
+section.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

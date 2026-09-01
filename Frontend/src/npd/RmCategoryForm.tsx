@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import { createTaxonomyRow, previewRmCategoryCode, previewSequentialId, type TaxonomyRow } from "./lib/npdApi";
+import { createTaxonomyRow, previewRmCategoryCode, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
 
 interface Props {
   categoryRows: TaxonomyRow[];
@@ -31,12 +31,17 @@ interface Props {
  * - DUPLICACY: computed live client-side from `categoryRows` (passed down from RmSkuForm,
  *   already loaded there) — a trimmed-equality count against whatever CATEGORY is currently
  *   typed, recomputing on every keystroke, mirroring the real formula exactly.
- * - Unique ID: the REAL next value (`previewSequentialId()` in `lib/npdApi.ts`), not a
- *   cosmetic placeholder — an earlier pass here showed a random hex string instead, on the
- *   assumption `nextSequentialId()` couldn't be mirrored client-side, but it turned out to be
- *   a pure function of `categoryRows` (already loaded here) — same regex/max/pad-4 logic as
- *   the backend, so this now matches the real saved sheet value exactly. Caught live: the
- *   user compared this form's shown Unique ID against the live sheet and they didn't match. */
+ * - Unique ID: a format-matching preview (`previewPlainRandomId()` in `lib/npdApi.ts`) — a
+ *   plain 8-hex-char string, no prefix/dash, matching the live sheet's own real `Unique ID`
+ *   values exactly in shape (confirmed directly against real saved rows — `800ecd70`,
+ *   `f6db8404`, …). Two wrong assumptions were corrected getting here: first a cosmetic
+ *   random-hex placeholder that didn't match the real backend's ID scheme at all, then a
+ *   "real next sequential value" preview built on the assumption `Unique ID` followed a
+ *   max+1 pattern like `RMCAT0001` — the user showed the actual live values, which are
+ *   neither of those, so the BACKEND generator itself was switched to match
+ *   (`nextPlainRandomId()` in `services/ids.ts`) and this preview simplified to just mirror
+ *   its format rather than trying to predict an exact value a collision-checked random
+ *   generator can't be predicted anyway. */
 export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -50,10 +55,9 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  // The REAL next Unique ID, not a cosmetic random one — nextSequentialId() on the backend
-  // turned out to be a pure function of the rows already loaded here (see
-  // previewSequentialId()'s own doc comment), so this now matches exactly what gets saved.
-  const previewUniqueId = previewSequentialId(categoryRows, "Unique ID", "RMCAT");
+  // Format-matching preview only — see this file's module doc comment for why this isn't
+  // trying to predict the exact real value.
+  const [previewUniqueId] = useState(previewPlainRandomId);
 
   const { data: preview, isError: previewFailed } = useQuery({
     queryKey: ["npd", "taxonomy", "rm-category", "preview"],

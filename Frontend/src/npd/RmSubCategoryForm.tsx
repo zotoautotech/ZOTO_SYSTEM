@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import { createTaxonomyRow, previewRmCategoryDdCode, previewSequentialId, type TaxonomyRow } from "./lib/npdApi";
+import { createTaxonomyRow, previewRmCategoryDdCode, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
 
 interface Props {
   /** The Category already picked in the parent RmSkuForm — sent along in the create payload
@@ -39,9 +39,9 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
     return () => clearInterval(id);
   }, []);
 
-  // The REAL next Unique ID — see RmCategoryForm.tsx's own doc comment for why this replaced
-  // an earlier cosmetic-random-hex placeholder.
-  const previewUniqueId = previewSequentialId(subCategoryRows, "Unique ID", "RMSUB");
+  // Format-matching preview only — see RmCategoryForm.tsx's own doc comment for why (the real
+  // live Unique ID values turned out to be plain random hex, not sequential like RMCAT0001).
+  const [previewUniqueId] = useState(previewPlainRandomId);
 
   const { data: preview, isError: previewFailed } = useQuery({
     queryKey: ["npd", "taxonomy", "rm-category-dd", "preview"],

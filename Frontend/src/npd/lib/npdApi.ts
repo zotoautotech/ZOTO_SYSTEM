@@ -24,21 +24,18 @@ export interface TaxonomyTableMeta {
 
 export type TaxonomyRow = Record<string, string>;
 
-/** Client-side mirror of `Backend/src/services/ids.ts`'s `nextSequentialId()` — same regex/
- * max/pad-4 logic, given the rows already loaded for a table's own dropdown/preview instead
- * of a fresh read. Used by the RM ref .../*Form.tsx "+ New" panels to show the REAL Unique ID
- * that will be saved (confirmed live: a previous cosmetic-random-hex preview didn't match the
- * real sheet value at all — `nextSequentialId` turned out to be a pure, easily-mirrored
- * computation, not something that needed a new backend endpoint to preview accurately). */
-export function previewSequentialId(rows: TaxonomyRow[], idColumn: string, prefix: string, pad = 4): string {
-  let max = 0;
-  for (const row of rows) {
-    const raw = row[idColumn];
-    if (!raw) continue;
-    const match = raw.match(/(\d+)\s*$/);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `${prefix}${String(max + 1).padStart(pad, "0")}`;
+/** Cosmetic preview of the RM ref .../*Form.tsx "+ New" panels' `Unique ID` field —
+ * `Backend/src/services/ids.ts`'s `nextPlainRandomId()` is collision-checked against
+ * existing rows server-side, which can't be meaningfully replicated client-side (there's
+ * nothing to check against that matters — the real check happens at save time regardless),
+ * so this just matches its FORMAT (plain 8-hex-char, no prefix, no dash) rather than
+ * predicting the exact value. An earlier version of this tried to predict the real value
+ * assuming `Unique ID` used a sequential max+1 scheme — the user then showed the actual live
+ * sheet values (`800ecd70`, `f6db8404`, …), which aren't sequential at all, so the backend
+ * generator was switched to match (see `nextPlainRandomId()`'s own doc comment) and this
+ * preview was simplified to match instead of trying to predict an exact value again. */
+export function previewPlainRandomId(): string {
+  return Math.random().toString(16).slice(2, 10).padEnd(8, "0");
 }
 
 export async function listTaxonomyTables() {

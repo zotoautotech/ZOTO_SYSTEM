@@ -451,7 +451,6 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
       )}
       {creatingPaint && (
         <RmPaintForm
-          paintRows={paintRows}
           onClose={() => setCreatingPaint(false)}
           onSaved={(newPaint) => {
             setCreatingPaint(false);
