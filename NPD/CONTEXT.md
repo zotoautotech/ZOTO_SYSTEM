@@ -1028,6 +1028,13 @@ rule would otherwise clobber via `!important`.
    percentage-sized parent; if this form's layout is ever revisited, reuse the same
    temporary-unauthenticated-route + DevTools measurement technique rather than reading
    another screenshot.
+9. **Pixel-matching the reference exactly left the field column visibly lopsided** — a large
+   empty gap on the right of the drawer, since the drawer itself is proportionally wider than
+   the reference's own AppSheet chrome. The user asked to center it instead of continuing to
+   chase the exact left-offset match. Reverted the fixed-left-padding layout back to
+   horizontal centering (`margin: "0 auto"` on `.rm-sku-fields`, plain `24px` padding on all
+   sides instead of the asymmetric `11.29%`-left version) — same centering this form had
+   briefly in an earlier round, now the final choice. Field width/height/gaps are unchanged.
 
 ## Known gotchas (add to as they're found)
 

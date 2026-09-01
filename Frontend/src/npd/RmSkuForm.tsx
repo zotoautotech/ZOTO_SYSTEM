@@ -204,17 +204,12 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>Raw Material SKU Form</h2>
         </div>
 
-        {/* Left padding (11.29% ≈ 120/1063) and field width (51% ≈ 542/1063) are both
-            percentages of the drawer's own width, same reasoning as the drawer width above —
-            proportional, not a fixed px guess that can't adapt to the real screen size. */}
-        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 11.29%", overflowY: "auto", flex: 1 }}>
-        {/* Was "51%" of the padded content box (its actual containing block), which computes
-            to a narrower width than 51% of the DRAWER (percentage width is relative to the
-            immediate parent, not the drawer two levels up) — confirmed live via DevTools:
-            51% gave 468.67px against a 1062.97px drawer, not the intended ≈542px. Using a
-            direct viewport-relative value instead (28.27vw ≈ 542/1917, the same ratio) sidesteps
-            that parent-relative trap entirely. */}
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "min(28.27vw, 571px)", minWidth: isMobile ? undefined : 420, maxWidth: "100%" }}>
+        {/* Left-padded-not-centered was matched pixel-for-pixel to the AppSheet reference on
+            request, but left a visibly lopsided empty gap on the right that the user then
+            asked to fix by centering instead — reverted to centering the field column in the
+            available width rather than pinning it to a fixed left offset. */}
+        <div style={{ padding: isMobile ? "24px var(--space)" : "24px", overflowY: "auto", flex: 1 }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "min(28.27vw, 571px)", minWidth: isMobile ? undefined : 420, maxWidth: "100%", margin: isMobile ? undefined : "0 auto" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
