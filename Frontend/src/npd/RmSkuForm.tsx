@@ -13,13 +13,16 @@ interface Props {
 
 /** "Raw Material SKU Form" — matches the real legacy AppSheet reference field-for-field
  * (PART NO. auto-computed/read-only, Category, Sub Category, Vendor Name, Paint, Make By
- * toggle) AND its layout: a panel docked to the right edge of the screen, full height, over a
- * dimmed backdrop — X (left) + centered title in the header, no tab strip, Cancel/Save in a
- * footer bar at the bottom instead — this is a deliberate exception to `FormModal.tsx`'s usual
- * fixed-size centered-modal convention (see CLAUDE.md), built custom for this one form on
- * explicit request to match the reference screenshot's own right-docked panel exactly, not the
- * centered-modal shape every other form in this app uses. `PART NO.` is never shown here as an
- * input — the backend computes it
+ * toggle) AND its exact measured layout: a panel docked to the right edge of the screen,
+ * `min(1063px, 96vw)` wide, X + left-aligned title in a 72px header, fields in a fixed 542px
+ * column with 120px left padding from the drawer edge (NOT centered), 53px field height,
+ * ~28px gap between fields, Cancel/Save in a footer bar — a deliberate exception to
+ * `FormModal.tsx`'s usual fixed-size centered-modal convention (see CLAUDE.md), built custom
+ * for this one form to match the reference screenshot pixel-for-pixel, not the centered-modal
+ * shape every other form in this app uses. Every dimension here was given as an exact
+ * measurement off the real reference at a 1917px viewport — re-derive from a fresh
+ * measurement if it ever needs adjusting again, don't guess at proportions. `PART NO.` is
+ * never shown here as an input — the backend computes it
  * server-side from the real, verified App Formula (services/npdPartCode.ts's
  * generateRmPartCode()) once the row is created, matching `computedFields` on the `rm-sku`
  * taxonomy table entry the same way every other computed-field table already works.
@@ -108,7 +111,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
           border-radius: 0 !important;
-          height: 46px !important;
+          height: 53px !important;
           box-sizing: border-box;
         }
         .rm-sku-form input:focus,
@@ -125,13 +128,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           border-radius: 0 !important;
           height: auto !important;
         }
-        /* Vertical gap between fields (~30px) and label-to-field gap (~11px) — measured off
+        /* Vertical gap between fields (~28px) and label-to-field gap (~11px) — measured off
            the real reference form, overriding TextField's/SearchableSelect's own shared
            20px/8px defaults. Each field call renders one div as its own root element with one
            label inside, both direct children of .rm-sku-fields, so this catches all of them
            uniformly without needing to touch either shared component. */
         .rm-sku-fields > div {
-          margin-bottom: 30px !important;
+          margin-bottom: 28px !important;
         }
         .rm-sku-fields > div > label {
           margin-bottom: 11px !important;
@@ -141,7 +144,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         className="rm-sku-form"
         style={{
           position: "relative",
-          width: isMobile ? "100%" : "min(1024px, 96vw)",
+          width: isMobile ? "100%" : "min(1063px, 96vw)",
           height: "100%",
           background: "var(--color-bg)",
           boxShadow: "var(--shadow-lg)",
@@ -151,10 +154,12 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
       >
         <div
           style={{
-            position: "relative",
             display: "flex",
             alignItems: "center",
-            padding: "18px var(--space)",
+            gap: 24,
+            height: 72,
+            flexShrink: 0,
+            padding: "0 24px",
             borderBottom: "1px solid var(--color-border)",
           }}
         >
@@ -176,23 +181,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           >
             ✕
           </button>
-          <h2
-            style={{
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)",
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Raw Material SKU Form
-          </h2>
+          {/* Left-aligned next to the close icon, matching the reference — not centered in
+              the browser (an earlier pass here wrongly absolute-centered it). */}
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>Raw Material SKU Form</h2>
         </div>
 
-        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 125px", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 568, maxWidth: "100%" }}>
+        <div style={{ padding: isMobile ? "24px var(--space)" : "24px 24px 24px 120px", overflowY: "auto", flex: 1 }}>
+        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : 542, maxWidth: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own
@@ -263,7 +258,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 11 }}>
               MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
-            <div style={{ display: "flex", gap: 1, height: 48, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", gap: 1, width: 542, maxWidth: "100%", height: 47, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}

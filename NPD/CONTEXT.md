@@ -992,8 +992,17 @@ rule would otherwise clobber via `!important`.
    same `.rm-sku-fields > div` / `> div > label` scoped rules, values just updated), and the
    Make By toggle got a `48px`-tall row with a `1px` divider line between its two buttons
    (a `background: var(--color-border)` bar under a `gap: 1px` flex row, rather than a plain
-   borderless split). This is the authoritative layout now — if it drifts again, re-derive
-   from a fresh measurement of the reference, not from guessing at proportions.
+   borderless split).
+6. **Superseded again by a second, more precise measurement pass** (same viewport, exact
+   pixel offsets this time: drawer left edge ≈854px, form left edge ≈974px, form right edge
+   ≈1516px, all at a 1917px-wide viewport) — panel `min(1063px, 96vw)` (was `1024px`), field
+   column a fixed `542px` (was `568px`) with `120px` left padding (was `125px`), field height
+   `53px` (was `46px`), `~28px` gap between fields (was `~30px`), a `72px`-tall header with
+   the title **left-aligned next to the close icon** rather than absolute-centered in the
+   drawer (an earlier pass here had wrongly centered it), and the Make By row explicitly
+   `542px` wide with two `~271px` buttons. This is the authoritative layout now — if it
+   drifts again, re-derive from a fresh measurement of the reference, not from guessing at
+   proportions.
 
 ## Known gotchas (add to as they're found)
 
