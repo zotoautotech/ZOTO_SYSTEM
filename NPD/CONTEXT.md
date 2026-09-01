@@ -962,16 +962,19 @@ app). The scoped rule explicitly excludes `[role="listbox"] input` — `Searchab
 open-dropdown search box has an intentional borderless/bottom-border-only look that the bold
 rule would otherwise clobber via `!important`.
 
-**Two more rounds needed to actually match** — the first pass alone still didn't look right:
-the reference form's fields have **square corners** (no `border-radius` at all — this app's
-`TextField`/`SearchableSelect` default to `var(--radius)`, rounded), and its border **doesn't
-change on focus** (no color swap to `var(--color-primary)`, just the same border whether idle
-or focused). Both fixed in the same scoped stylesheet — `border-radius: 0 !important` added
-to every rule, and the `:focus`/`:focus-visible` rule now sets the identical `1.5px solid
-var(--color-text)` border instead of swapping its color. The Make By ZOTO/SUPPLIER toggle's
-own wrapper (a plain inline style, not a shared component) got the same square-corner/bold-
-border treatment directly rather than through the stylesheet, for consistency across every
-field on the form.
+**Three rounds total to actually match, corrected each time against direct user feedback**:
+1. First pass made every field's border permanently bold (per an explicit answer to a
+   clarifying question that turned out to still be a misread).
+2. Second pass fixed square corners (`border-radius: 0`) but kept the border always-on.
+3. **User corrected this directly: the bold border was only ever supposed to show on
+   focus/touch, matching the app's own idle-vs-focused convention everywhere else** — the
+   `.rm-sku-form` stylesheet now only bolds the border in the `:focus`/`:focus-visible` rule
+   (idle fields fall through to `TextField`/`SearchableSelect`'s own normal default border,
+   with `border-radius: 0` still applied at all times for the square-corner look). The Make
+   By toggle wrapper's border was reverted the same way (plain default, not bold).
+   **Panel width was also corrected** to match a real measurement the user provided
+   (~1030px of a 1912px-wide screenshot, ~54%) — now `min(54vw, 1040px)`, up from the
+   original `min(46vw, 620px)` guess.
 
 ## Known gotchas (add to as they're found)
 

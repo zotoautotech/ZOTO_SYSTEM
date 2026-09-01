@@ -100,15 +100,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />
       {/* Scoped to this one form, not the shared TextField/SearchableSelect components
           themselves (those are used app-wide — changing their defaults globally would be a
-          much bigger, unrequested visual change). Matches the reference form's own field
-          boxes exactly: square corners (no border-radius, not this app's usual rounded
-          fields), a bold, always-on border, and — this is the part the two earlier passes at
-          this still got wrong — the SAME border on focus as when idle, no color swap. The
-          reference form's fields simply don't have a distinct focus style at all. */}
+          much bigger, unrequested visual change). Square corners (no border-radius, unlike
+          this app's usual rounded fields) matching the reference form's own field boxes —
+          but the bold border is ONLY on focus/touch, same idle border as every other form in
+          this app the rest of the time (an earlier pass here wrongly made it always-on). */}
       <style>{`
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
-          border: 1.5px solid var(--color-text) !important;
           border-radius: 0 !important;
         }
         .rm-sku-form input:focus,
@@ -129,8 +127,8 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
         className="rm-sku-form"
         style={{
           position: "relative",
-          width: isMobile ? "100%" : "min(46vw, 620px)",
-          minWidth: isMobile ? undefined : 460,
+          width: isMobile ? "100%" : "min(54vw, 1040px)",
+          minWidth: isMobile ? undefined : 560,
           height: "100%",
           background: "var(--color-bg)",
           boxShadow: "var(--shadow-lg)",
@@ -251,7 +249,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
               MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
             </label>
-            <div style={{ display: "flex", border: "1.5px solid var(--color-text)", overflow: "hidden" }}>
+            <div style={{ display: "flex", border: "1px solid var(--color-border)", overflow: "hidden" }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}
