@@ -13,31 +13,21 @@ interface Props {
 
 /** "Raw Material SKU Form" — matches the real legacy AppSheet reference field-for-field
  * (PART NO. auto-computed/read-only, Category, Sub Category, Vendor Name, Paint, Make By
- * toggle) AND its measured layout: a panel docked to the right edge of the screen, X +
- * left-aligned title in a 72px header, fields in a column with 120px-equivalent left padding
- * from the drawer edge (NOT centered), 53px field height, ~28px gap between fields, Cancel/
- * Save in a footer bar — a deliberate exception to `FormModal.tsx`'s usual fixed-size
- * centered-modal convention (see CLAUDE.md), built custom for this one form to match the
- * reference screenshot, not the centered-modal shape every other form in this app uses.
+ * segmented control) AND its exact styling per a detailed 12-point spec: a panel docked to
+ * the right edge, `min(48.18vw, 925px)` wide (≈925/1920), a 64px title-only header, a 64px
+ * footer bar for Cancel/Save (moved there, then briefly back to the header per the spec,
+ * then back to the footer again on direct follow-up — footer is where they've landed),
+ * 48px-tall rounded (6px) fields, ~30px gap between them. A deliberate exception to
+ * `FormModal.tsx`'s usual fixed-size centered-modal convention (see CLAUDE.md), built custom
+ * for this one form to match the reference.
  *
- * **Horizontal sizing is `vw`-based, not fixed px** — verified against a live DevTools
- * `getBoundingClientRect()` measurement (via a temporary unauthenticated route, since this
- * form normally sits behind login — added, measured, and removed in the same pass, never
- * shipped), not another screenshot read. At `window.innerWidth: 1917`: drawer
- * `min(55.45vw, 1120px)` measures `1062.97px` (target `1063px`) starting at `x: 854.03`
- * (target `854`); the field column starts at `x: 974.03` (target `974`, i.e. the drawer's
- * own `11.29%` left padding lands exactly right). **The field column itself was the one
- * genuinely broken value** — `width: "51%"` measured only `468.67px`, not the intended
- * `≈542px`, because CSS `%` width resolves against the element's own immediate containing
- * block (the *padded* content wrapper, already narrowed by the drawer's left/right padding),
- * not the drawer two levels up — the same trap a plain `%` will hit again if reintroduced
- * anywhere in this form. Fixed by sizing the field column directly off the viewport instead
- * (`min(28.27vw, 571px)`, the equivalent `542/1917` ratio, re-verified to measure
- * `541.92px` — matches). `PART NO.` is
- * never shown here as an input — the backend computes it
- * server-side from the real, verified App Formula (services/npdPartCode.ts's
- * generateRmPartCode()) once the row is created, matching `computedFields` on the `rm-sku`
- * taxonomy table entry the same way every other computed-field table already works.
+ * Colors here are literal hex from the spec, not this app's `--color-*` design tokens — the
+ * spec calls out exact values (`#1A1A1A` text, `#D1D5DB` borders, `#C0392B` the selected/
+ * primary red, `#F3F4F6`/`#F9FAFB` light greys) that don't necessarily match this app's own
+ * theme variables (light vs dark mode, `--color-primary`'s actual red). Matches the
+ * reference exactly in light mode; doesn't adapt to dark mode the way every other form in
+ * this app does — a known, deliberate tradeoff of pixel-matching an external reference
+ * rather than staying on this app's own theming system.
  *
  * **Make By's two options are "ZOTO"/"SUPPLIER", not "ADC"/"SUPPLIER"** — the old reference
  * screenshot (from the legacy "Copy of ADC" spreadsheet, ADC being this business's old company
@@ -112,60 +102,48 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />
-      {/* Scoped to this one form, not the shared TextField/SearchableSelect components
-          themselves (those are used app-wide — changing their defaults globally would be a
-          much bigger, unrequested visual change). Square corners (no border-radius, unlike
-          this app's usual rounded fields) matching the reference form's own field boxes —
-          but the bold border is ONLY on focus/touch, same idle border as every other form in
-          this app the rest of the time (an earlier pass here wrongly made it always-on). */}
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
       <style>{`
         .rm-sku-form input,
         .rm-sku-form button[aria-haspopup="listbox"] {
-          border-radius: 0 !important;
-          height: 53px !important;
+          height: 48px !important;
+          border-radius: 6px !important;
+          border: 1px solid #D1D5DB !important;
+          padding: 12px 16px !important;
+          font-size: 14px !important;
           box-sizing: border-box;
         }
         .rm-sku-form input:focus,
         .rm-sku-form button[aria-haspopup="listbox"]:focus-visible {
           outline: none;
-          border: 1.5px solid var(--color-text) !important;
+          border-color: #C0392B !important;
         }
         /* The SearchableSelect's own open dropdown panel has an unrelated search input with
            its own borderless/bottom-border-only design — excluded from the rules above, not
            just left to lose the specificity fight against them. */
         .rm-sku-form [role="listbox"] input {
           border: none !important;
-          border-bottom: 1px solid var(--color-border) !important;
           border-radius: 0 !important;
+          border-bottom: 1px solid #D1D5DB !important;
           height: auto !important;
+          padding: 10px 14px !important;
         }
-        /* Vertical gap between fields (~28px) and label-to-field gap (~11px) — measured off
-           the real reference form, overriding TextField's/SearchableSelect's own shared
-           20px/8px defaults. Each field call renders one div as its own root element with one
-           label inside, both direct children of .rm-sku-fields, so this catches all of them
-           uniformly without needing to touch either shared component. */
         .rm-sku-fields > div {
-          margin-bottom: 28px !important;
+          margin-bottom: 30px !important;
         }
         .rm-sku-fields > div > label {
           margin-bottom: 11px !important;
+          color: #1A1A1A !important;
         }
       `}</style>
       <div
         className="rm-sku-form"
         style={{
           position: "relative",
-          // Percentage-based, not a fixed px width — the previous fixed-px pass (1063px)
-          // still didn't match on re-check, and there's no reliable way from here to tell
-          // whether that was a real bug or a screenshot-scaling artifact (the user couldn't
-          // confirm via DevTools). Using the same ratio (1063/1917 ≈ 55.45% of the viewport,
-          // the exact numbers the user originally measured) makes this scale-correct
-          // regardless of the actual screen/window size, which a fixed px value can't do.
-          width: isMobile ? "100%" : "min(55.45vw, 1120px)",
+          width: isMobile ? "100%" : "min(48.18vw, 925px)",
           height: "100%",
-          background: "var(--color-bg)",
-          boxShadow: "var(--shadow-lg)",
+          background: "#fff",
+          boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
           display: "flex",
           flexDirection: "column",
         }}
@@ -174,49 +152,51 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 24,
-            height: 72,
+            gap: 8,
+            height: 64,
             flexShrink: 0,
             padding: "0 24px",
-            borderBottom: "1px solid var(--color-border)",
+            borderBottom: "1px solid #E5E7EB",
           }}
         >
           <button
             onClick={onClose}
             aria-label="Close"
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: "50%",
+              width: 20,
+              height: 20,
               border: "none",
               background: "transparent",
+              color: "#6B7280",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: 18,
+              lineHeight: 1,
               flexShrink: 0,
             }}
           >
             ✕
           </button>
-          {/* Left-aligned next to the close icon, matching the reference — not centered in
-              the browser (an earlier pass here wrongly absolute-centered it). */}
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>Raw Material SKU Form</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
+            Raw Material SKU Form
+          </h2>
         </div>
 
-        {/* Fields fill the available width (just the drawer's own 24px padding on each side)
-            instead of being capped to a narrow column — a capped width (whether left-padded
-            or centered) always left empty space on one or both sides that didn't match the
-            drawer's own actual proportions; letting the fields size off the real container
-            removes that gap entirely regardless of the drawer's width. */}
-        <div style={{ padding: isMobile ? "24px var(--space)" : "24px", overflowY: "auto", flex: 1 }}>
+        <div style={{ padding: isMobile ? "24px var(--space)" : "32px 40px 40px", overflowY: "auto", flex: 1 }}>
         <div className="rm-sku-fields" style={{ width: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
-              doer type it — server-computed on Save (see this file's module doc comment) — so
-              it gets the same red-asterisk "required" treatment as the reference form's own
-              read-only PART NO. field, just without a fake length-validation message: this
-              form's PART NO. is never invalid, since it's never hand-typed here. */}
-          <TextField label="PART NO." required value="" placeholder="Generated on Save" disabled />
+              doer type it — server-computed on Save (see this file's module doc comment).
+              Light grey background signals it's read-only/system-generated, matching the
+              reference's disabled-field treatment. */}
+          <TextField
+            label="PART NO."
+            required
+            value=""
+            placeholder="Generated on Save"
+            disabled
+            style={{ background: "#F9FAFB", color: "#9CA3AF" }}
+          />
           <SearchableSelect
             label="Category"
             required
@@ -228,47 +208,54 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             options={categoryOptions}
             placeholder="Select Category…"
           />
-          <SearchableSelect
-            label="Sub Category"
-            required
-            value={subCategory}
-            onChange={setSubCategory}
-            options={subCategoryOptions}
-            placeholder={category ? "Select Sub Category…" : "Pick a Category first"}
-          />
+          {/* Greyed and inert until a Category is picked, matching the reference's own
+              disabled Sub Category state — SearchableSelect has no built-in disabled prop, so
+              this wraps it instead of adding one just for this single form's use. */}
+          <div style={{ opacity: category ? 1 : 0.6, pointerEvents: category ? "auto" : "none" }}>
+            <SearchableSelect
+              label="Sub Category"
+              required
+              value={subCategory}
+              onChange={setSubCategory}
+              options={subCategoryOptions}
+              placeholder={category ? "Select Sub Category…" : "Pick a Category first"}
+            />
+          </div>
           {/* Free text, not a SearchableSelect off the `vendor-master` taxonomy table — that
               table has no rows yet in production, and the real RM SKU rows' own VENDOR NAME
               values (e.g. "NISIKI INDIA PRIVATE LIMITED") are plain text on the SKU row itself,
               not a ref into Vendor Master. Label matches the live sheet's own ALL-CAPS header
               text exactly (unlike Category/Sub Category/Paint, which are real Title Case
-              headers) — same discipline as every other field label in this app. The inline "+"
-              is decorative, matching the reference form's own icon — there's no separate
+              headers) — same discipline as every other field label in this app. The circular
+              "+" is decorative, matching the reference form's own icon — there's no separate
               "add a new vendor" flow to open, since typing a new name here already works. */}
           <div>
-            <label style={{ display: "block", fontSize: 14, marginBottom: 11 }}>
-              VENDOR NAME<span style={{ color: "var(--color-error)" }}> *</span>
+            <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 11, color: "#1A1A1A" }}>
+              VENDOR NAME<span style={{ color: "#DC2626" }}>*</span>
             </label>
             <div style={{ position: "relative" }}>
               <input
                 value={vendorName}
                 onChange={(e) => setVendorName(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "12px 40px 12px 14px",
-                  borderRadius: 0,
-                  border: "1px solid var(--color-border)",
-                  fontSize: 14,
-                }}
+                style={{ width: "100%", paddingRight: 48 }}
               />
               <span
                 aria-hidden
                 style={{
                   position: "absolute",
-                  right: 14,
+                  right: 10,
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "var(--color-text-muted)",
-                  fontSize: 16,
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  border: "1px solid #D1D5DB",
+                  color: "#6B7280",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 15,
+                  lineHeight: 1,
                   pointerEvents: "none",
                 }}
               >
@@ -278,10 +265,10 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           </div>
           <SearchableSelect label="Paint" required value={paint} onChange={setPaint} options={paintOptions} placeholder="Select Paint…" />
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 11 }}>
-              MAKE BY <span style={{ color: "var(--color-error)" }}>*</span>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 11, color: "#1A1A1A" }}>
+              MAKE BY<span style={{ color: "#DC2626" }}>*</span>
             </label>
-            <div style={{ display: "flex", gap: 1, width: "100%", height: 47, background: "var(--color-border)", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", gap: 2, width: "100%", height: 48 }}>
               {(["ZOTO", "SUPPLIER"] as const).map((option) => (
                 <button
                   key={option}
@@ -289,11 +276,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
                   onClick={() => setMakeBy(option)}
                   style={{
                     flex: 1,
+                    borderRadius: 6,
                     border: "none",
                     cursor: "pointer",
-                    background: makeBy === option ? "var(--color-primary)" : "var(--color-bg)",
-                    color: makeBy === option ? "#fff" : "var(--color-text)",
-                    fontWeight: 500,
+                    background: makeBy === option ? "#C0392B" : "#F3F4F6",
+                    color: makeBy === option ? "#fff" : "#374151",
+                    fontWeight: makeBy === option ? 700 : 500,
+                    fontSize: 14,
                   }}
                 >
                   {option}
@@ -301,7 +290,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               ))}
             </div>
           </div>
-          {error && <p style={{ color: "var(--color-error)", fontSize: 13, marginTop: 8 }}>{error}</p>}
+          {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
 
           {/* The reference form's "Drawing RM entries that reference this entry in the
               AGAINST ID column" reverse-ref block, kept for visual parity. Purely decorative
@@ -310,18 +299,18 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               created most recently app-wide", not a real link to THIS SKU), and this is a
               brand-new row that can't have anything pointing at it yet regardless — same
               reasoning the reference form's own "New" button always starts empty here too. */}
-          <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--color-border)" }}>
-            <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 10px" }}>
+          <div style={{ marginTop: 12, paddingTop: 20, borderTop: "1px solid #E5E7EB" }}>
+            <p style={{ fontSize: 12, fontStyle: "italic", color: "#DC2626", margin: "0 0 10px" }}>
               Drawing RM entries that reference this entry in the AGAINST ID column
             </p>
             <div
               style={{
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius)",
+                border: "1px solid #D1D5DB",
+                borderRadius: 6,
                 padding: "10px 0",
                 textAlign: "center",
-                background: "var(--color-bg-page)",
-                color: "var(--color-text-muted)",
+                background: "#F9FAFB",
+                color: "#6B7280",
                 fontSize: 14,
               }}
             >
@@ -336,17 +325,44 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            height: 54,
-            padding: "0 var(--space)",
-            boxSizing: "border-box",
-            borderTop: "1px solid var(--color-border)",
-            background: "var(--color-bg-page)",
+            height: 64,
+            flexShrink: 0,
+            padding: "0 24px",
+            borderTop: "1px solid #E5E7EB",
+            background: "#fff",
           }}
         >
-          <button className="btn" onClick={onClose} disabled={saving}>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            style={{
+              padding: "8px 20px",
+              borderRadius: 6,
+              border: "1px solid #D1D5DB",
+              background: "#fff",
+              color: "#1A1A1A",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave()}>
+          <button
+            onClick={handleSave}
+            disabled={!canSave()}
+            style={{
+              padding: "8px 20px",
+              borderRadius: 6,
+              border: "none",
+              background: "#C0392B",
+              color: "#fff",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: canSave() ? "pointer" : "default",
+              opacity: canSave() ? 1 : 0.6,
+            }}
+          >
             {saving ? "Saving…" : "Save"}
           </button>
         </div>

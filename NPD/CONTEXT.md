@@ -1042,6 +1042,27 @@ rule would otherwise clobber via `!important`.
     padded or centered): the fields now always fill whatever width the drawer actually is,
     so there's no ratio to get right or re-derive if the drawer's own width ever changes
     again. Re-verified live the same way (temp unauthenticated route + screenshot).
+11. **A detailed 12-point restyle spec superseded most of the above at once** — literal hex
+    colors (`#1A1A1A` text, `#D1D5DB` borders, `#C0392B` selected/primary red, `#F3F4F6`/
+    `#F9FAFB` light greys) instead of this app's `--color-*` theme tokens (so this form does
+    NOT adapt to dark mode, unlike every other form in this app — a known, deliberate
+    tradeoff of pixel-matching an external reference), panel `min(48.18vw, 925px)` (≈925/1920),
+    64px header (title only), 48px-tall 6px-rounded fields (not square-cornered — the earlier
+    "match the reference's square corners" round is superseded), PART NO. shown with a light
+    grey `#F9FAFB` disabled-look background, Sub Category visually greyed + `pointer-events:
+    none` until a Category is picked, Vendor Name's decorative `+` now a circular button
+    (28px, grey outline) instead of a plain `+` glyph, Make By recolored to filled `#C0392B`/
+    white when selected vs `#F3F4F6`/dark-grey text when not (was white-bg/border before), and
+    the "Drawing RM entries…" helper text now red italic `12px` matching the spec's own
+    warning-text treatment.
+12. **Cancel/Save moved three times across three direct follow-ups in the same round**: the
+    12-point spec explicitly asked for them in the header (moving them out of the footer bar
+    a prior round had put them in); the very next message asked to move them back to a
+    footer bar; the message after that asked to split them left/right within that footer
+    (`justifyContent: "space-between"` instead of `"flex-end"` — Cancel left, Save right).
+    Footer-with-space-between is where they've landed as of this pass. If asked to move them
+    again, don't assume header vs footer from this history — confirm which is currently
+    wanted, since this has flipped repeatedly.
 
 ## Known gotchas (add to as they're found)
 
