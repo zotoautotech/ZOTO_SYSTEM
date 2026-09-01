@@ -204,12 +204,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>Raw Material SKU Form</h2>
         </div>
 
-        {/* Left-padded-not-centered was matched pixel-for-pixel to the AppSheet reference on
-            request, but left a visibly lopsided empty gap on the right that the user then
-            asked to fix by centering instead — reverted to centering the field column in the
-            available width rather than pinning it to a fixed left offset. */}
+        {/* Fields fill the available width (just the drawer's own 24px padding on each side)
+            instead of being capped to a narrow column — a capped width (whether left-padded
+            or centered) always left empty space on one or both sides that didn't match the
+            drawer's own actual proportions; letting the fields size off the real container
+            removes that gap entirely regardless of the drawer's width. */}
         <div style={{ padding: isMobile ? "24px var(--space)" : "24px", overflowY: "auto", flex: 1 }}>
-        <div className="rm-sku-fields" style={{ width: isMobile ? "100%" : "min(28.27vw, 571px)", minWidth: isMobile ? undefined : 420, maxWidth: "100%", margin: isMobile ? undefined : "0 auto" }}>
+        <div className="rm-sku-fields" style={{ width: "100%" }}>
           {/* PART NO. is required on the real live column even though this form never lets a
               doer type it — server-computed on Save (see this file's module doc comment) — so
               it gets the same red-asterisk "required" treatment as the reference form's own

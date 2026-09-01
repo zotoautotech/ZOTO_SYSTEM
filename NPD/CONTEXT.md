@@ -1035,6 +1035,13 @@ rule would otherwise clobber via `!important`.
    horizontal centering (`margin: "0 auto"` on `.rm-sku-fields`, plain `24px` padding on all
    sides instead of the asymmetric `11.29%`-left version) — same centering this form had
    briefly in an earlier round, now the final choice. Field width/height/gaps are unchanged.
+10. **Centering still left empty space on both sides**, so the user asked to remove it
+    entirely — `.rm-sku-fields` now simply `width: "100%"` of its padded container (just the
+    drawer's own `24px` padding on each side), not capped to any narrow column width at all.
+    This is simpler and more robust than every capped-width attempt above (whether left-
+    padded or centered): the fields now always fill whatever width the drawer actually is,
+    so there's no ratio to get right or re-derive if the drawer's own width ever changes
+    again. Re-verified live the same way (temp unauthenticated route + screenshot).
 
 ## Known gotchas (add to as they're found)
 
