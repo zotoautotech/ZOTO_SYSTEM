@@ -8,11 +8,13 @@ import { createTaxonomyRow, previewRmCategoryDdCode, previewPlainRandomId, type 
 
 interface Props {
   /** The Category already picked in the parent RmSkuForm — sent along in the create payload
-   * (the real POST handler's dup-check needs it), but NOT shown as a field here: the real
-   * reference form's own "RM ref Category DD Form" has no Category input at all, matching
-   * how `Category` is a dead App Formula column on this table (see
-   * categoryFromAgainstId()'s doc comment on the backend) — nothing meaningful for a doer to
-   * pick, so the reference doesn't ask. */
+   * and actually SAVED as this row's real `Category` (the backend keeps the doer's submitted
+   * value now, not a dead-formula overwrite — see taxonomy.ts's rm-category-dd POST handler's
+   * own comment for why), but still not shown as a field here: the real reference form's own
+   * "RM ref Category DD Form" has no Category input at all — its equivalent auto-fill only
+   * works via an AppSheet-only runtime mechanism this stateless backend can't replicate, so
+   * this form fills the same role a different way (an explicit prop from the parent) while
+   * keeping the same "doer never sees a Category field here" UI shape. */
   category: string;
   subCategoryRows: TaxonomyRow[];
   onClose: () => void;

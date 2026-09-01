@@ -8,7 +8,6 @@ import {
   nextCategoryCode,
   nextSubCategoryCode,
   nextAgainstId,
-  categoryFromAgainstId,
   nextPaintCode,
   generateRmPartCode,
   RmPartCodeLookupError,
@@ -596,17 +595,32 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     if (table.key === "rm-paint" && !body.Code) {
       body.Code = await nextPaintCode();
     }
-    // `AGAINST ID`/`Category` on rm-category-dd are real AppSheet App Formula columns in the
-    // legacy sheet, meaning they were never client-editable there either — always computed,
-    // unconditionally overriding anything the client sent, matching that. See
-    // nextAgainstId()/categoryFromAgainstId()'s own doc comments for why these are known to be
-    // functionally meaningless (implemented on the user's explicit, informed instruction to
-    // match the legacy formulas verbatim, not because they're believed to be useful). Runs
-    // AFTER the duplicate check above, not before — see that check's own comment for why.
+    // `AGAINST ID` on rm-category-dd is a real AppSheet App Formula column in the legacy
+    // sheet — always computed, unconditionally overriding anything the client sent, matching
+    // that. See nextAgainstId()'s own doc comment for why it's known to be functionally
+    // meaningless in THIS backend (implemented on the user's explicit, informed instruction
+    // to match the legacy formula verbatim) — kept purely for that parity, harmless either
+    // way since nothing else reads it. Runs AFTER the duplicate check above, not before — see
+    // that check's own comment for why.
+    //
+    // `Category`, unlike `AGAINST ID`, is deliberately NOT overwritten anymore — an earlier
+    // pass here DID overwrite it with `categoryFromAgainstId(againstId)` (the same dead
+    // pointer), matching the legacy formula's literal text too. But the real live app's own
+    // `Raw Material SKU.Sub Category` ref field has its own Valid If —
+    // `SELECT(RM ref Category DD[SUB CATEGORY], [_THISROW].[Category]=[Category])` — which
+    // only works at all because AppSheet's client evaluates `AGAINST ID`'s MAXROW against the
+    // in-progress unsaved SKU row too (a client-side runtime quirk this stateless REST
+    // backend has no equivalent for: the SKU row genuinely doesn't exist yet when a doer
+    // opens the nested Sub Category form). Mirroring the dead-pointer version here left every
+    // new Sub Category's `Category` blank, which then broke that same Valid-If-style filter
+    // on the frontend (RmSkuForm.tsx's own Sub Category options) for real — a doer's own
+    // just-created Sub Category silently never appeared in the dropdown. Keeping the client-
+    // submitted `Category` (the doer's own picked value, already a required field) instead
+    // makes both sides actually correct, at the cost of no longer literally mirroring the
+    // formula text — the formula's own behavior depends on an AppSheet-only mechanism, so
+    // "mirror it exactly" and "make the feature actually work" aren't both achievable here.
     if (table.key === "rm-category-dd") {
-      const againstId = await nextAgainstId();
-      body["AGAINST ID"] = againstId;
-      body.Category = await categoryFromAgainstId(againstId);
+      body["AGAINST ID"] = await nextAgainstId();
       body.DUPLICACY = await countSubCategoryDuplicates((body["SUB CATEGORY"] as string) ?? "");
     }
     // `PART NO.` — the real, verified App Formula (see services/npdPartCode.ts's

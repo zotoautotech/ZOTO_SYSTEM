@@ -86,21 +86,19 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   });
 
   const categoryOptions: SelectOption[] = categoryRows.map((r) => ({ value: r.CATEGORY, label: r.CATEGORY }));
-  // NOT filtered by "r.Category === category" — that was tried first (matching the punch
-  // form's own dependent-dropdown pattern elsewhere in this app) but is a real bug: every
-  // `RM ref Category DD` row's own `Category` field is the dead App Formula documented
-  // elsewhere in this file (a live pointer to "whichever SKU was most recently created
-  // app-wide", not a real link to the Sub-Category's actual parent) — true on EVERY row,
-  // including ones from the real production AppSheet, not just ones created through this
-  // form's own "+ New" flow. Filtering against it silently hid valid Sub Categories, caught
-  // live: a Sub Category the user had just created didn't show up in the dropdown at all.
-  // There's no reliable Category<->Sub-Category link in the data to filter on, so this shows
-  // every Sub Category once a Category is picked (still gated behind picking one, for the
-  // same "fill top to bottom" UX the punch form uses — just not narrowed further).
-  const subCategoryOptions: SelectOption[] = subCategoryRows.map((r) => ({
-    value: r["SUB CATEGORY"],
-    label: r["SUB CATEGORY"],
-  }));
+  // Filtered by "r.Category === category" — matches the real live app's own Sub Category
+  // ref field Valid If: SELECT(RM ref Category DD[SUB CATEGORY],
+  // [_THISROW].[Category]=[Category]). This briefly got REMOVED entirely in an earlier pass
+  // here, on the theory that RM ref Category DD.Category is always the dead App Formula
+  // pointer documented elsewhere in this file — true when that formula is literally mirrored,
+  // but the backend (taxonomy.ts's rm-category-dd POST handler) no longer overwrites Category
+  // with the dead pointer; it keeps the doer's own real picked value instead (see that
+  // handler's own comment for why — the dead-pointer version only "works" in the real app via
+  // an AppSheet-only runtime quirk this stateless backend can't replicate). With Category now
+  // holding the real value, this filter is correct again and was restored.
+  const subCategoryOptions: SelectOption[] = subCategoryRows
+    .filter((r) => !category || r.Category === category)
+    .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
   const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
 
   // PART NO. live preview — client-side mirror of the real, verified App Formula

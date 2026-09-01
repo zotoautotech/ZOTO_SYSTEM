@@ -1308,6 +1308,43 @@ dead formula resolves to `""` when `AGAINST ID` is blank (no `Raw Material SKU` 
 yet to point to), matching `categoryFromAgainstId()`'s own documented behavior exactly, not a
 bug.
 
+## Correction: `RM ref Category DD.Category` keeps the real value, not the dead pointer (1 Sep 2026)
+
+The previous section's fix (dropping the Sub Category filter entirely) was itself wrong —
+the user pushed back with the real live app's own `Raw Material SKU.Sub Category` ref field
+Valid If, confirmed directly off its field-config screenshot:
+`SELECT(RM ref Category DD[SUB CATEGORY], [_THISROW].[Category]=[Category])`. This formula
+only works in the real AppSheet at all because of a runtime-only mechanism: AppSheet
+evaluates a nested "+ New" form's own `AGAINST ID`/`Category` App Formulas against the
+**in-progress, not-yet-saved** parent `Raw Material SKU` row too (its local device state
+includes pending unsaved rows, not just committed ones) — so when a doer opens the nested Sub
+Category form from partway through filling out a new SKU, `AGAINST ID`'s `MAXROW` picks up
+that very in-progress row, and `Category` correctly resolves to whatever the doer already
+picked. This stateless REST backend has no equivalent: the SKU row genuinely doesn't exist
+yet when `POST /taxonomy/rm-category-dd` is called from the nested form, so mirroring the
+formula literally (`categoryFromAgainstId(nextAgainstId())`) always resolves to something
+else or blank — which is exactly what broke the dropdown in the first place.
+
+**Fix, superseding both the original dead-pointer mirroring AND the "just remove the
+filter" fix**: `taxonomy.ts`'s `rm-category-dd` POST handler no longer overwrites `Category`
+at all — it keeps the doer's own submitted value (already a required field, already flowing
+through `RmSubCategoryForm.tsx`'s `category` prop). `AGAINST ID` is still computed via
+`nextAgainstId()` for parity (harmless, nothing else reads it). With `Category` now holding
+the real value, `RmSkuForm.tsx`'s `subCategoryOptions` filter (`r.Category === category`) was
+restored — it's correct again, matching the real app's own Valid If, now that the field it
+filters on actually holds what that formula assumes it holds.
+
+**The general lesson, worth remembering for any other "verbatim, even if it looks dead"
+formula in this app**: a legacy App Formula can rely on client-runtime behavior (unsaved-row
+visibility, live recalculation, `_THISROW` semantics inside a still-open form) that has no
+faithful equivalent in a stateless backend — mirroring such a formula's literal text can
+produce something that's provably wrong in this architecture even though it's "correct" in
+the source system. When that happens, matching the *practical result* the user actually
+needs (a working dependent dropdown) is the right call over matching the formula text
+byte-for-byte — but only when directly confirmed by the user pointing at the real downstream
+formula that depends on it, as happened here, not as a excuse to freelance around any
+inconvenient-looking legacy formula.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
