@@ -55,12 +55,18 @@ export async function generatePartCode(baseCode: string, employeeId: string): Pr
 const RM_CATEGORY_TAB = "RM ref Category";
 const RM_CATEGORY_DD_TAB = "RM ref Category DD";
 // Live tab was renamed "RM ref Paint" → "RM ref Brand" (2 Sep 2026, confirmed by dumping the
-// spreadsheet's real tab list) alongside the frontend's "Paint" field label becoming "Brand" —
-// columns unchanged (TIMESTAMP/USEREMAIL/Unique ID/Code/Paint Description still all real).
-// Every doc comment below that quotes the original AppSheet App Formula text verbatim still
-// says "RM ref Paint" — that's the formula's own historical wording, left unedited; only this
-// functional constant (and taxonomy.ts's `rm-paint` table's `tab` field) needed to change.
+// spreadsheet's real tab list) alongside the frontend's "Paint" field label becoming "Brand".
+// A SECOND live rename followed shortly after: the tab's own "Paint Description" COLUMN was
+// also renamed to "Brand Description" (caught because it broke edit-mode prefill — a doer's
+// saved RM SKU row still held e.g. "WHITE LABLE" in its own `Paint` column, but the dropdown
+// could no longer find a matching option since it was still reading the now-wrong "Paint
+// Description" key and getting `undefined` back for every row). Every doc comment below that
+// quotes the original AppSheet App Formula text verbatim still says "RM ref Paint"/"Paint
+// Description" — that's the formula's own historical wording, left unedited; only functional
+// code (this constant, RM_PAINT_DESCRIPTION_FIELD below, taxonomy.ts's `rm-paint` table)
+// needed to change both times.
 const RM_PAINT_TAB = "RM ref Brand";
+const RM_PAINT_DESCRIPTION_FIELD = "Brand Description";
 const RM_ALPHABET_TAB = "Alphabet";
 
 /** Shared by nextCategoryCode()/nextSubCategoryCode()/nextPaintCode() — all three real App
@@ -337,7 +343,7 @@ async function subCategoryCodeForNewRow(id: string, category: string, subCategor
 async function paintCodeFor(paintValue: string): Promise<string> {
   const rows = await readTable(env.sheets.npd, RM_PAINT_TAB, { refresh: true });
   const byDescription = rows.find(
-    (r) => (r["Paint Description"] ?? "").trim().toLowerCase() === paintValue.trim().toLowerCase()
+    (r) => (r[RM_PAINT_DESCRIPTION_FIELD] ?? "").trim().toLowerCase() === paintValue.trim().toLowerCase()
   );
   if (byDescription && (byDescription.Code ?? "").trim()) return byDescription.Code.trim();
   const byUniqueId = rows.find((r) => (r["Unique ID"] ?? "").trim() === paintValue.trim());

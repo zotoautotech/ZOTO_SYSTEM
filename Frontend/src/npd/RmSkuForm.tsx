@@ -101,7 +101,16 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
     queryFn: () => listTaxonomyRows("vendor-master"),
   });
 
-  const categoryOptions: SelectOption[] = categoryRows.map((r) => ({ value: r.CATEGORY, label: r.CATEGORY }));
+  // .trim() on every option's `value` below — a real live sheet has had trailing-space values
+  // on at least one taxonomy tab already (RM ref Brand's own Brand Description column, caught
+  // when it silently broke RmSkuDetail.tsx's edit-mode prefill: a saved RM SKU row's untrimmed
+  // "WHITE LABLE" couldn't strict-match this dropdown's "WHITE LABLE " with a trailing space).
+  // Trimming here — not just on the taxonomy tabs' own data — means this dropdown keeps working
+  // even if a similar stray space shows up on Category/Sub Category/Vendor Name later too.
+  const categoryOptions: SelectOption[] = categoryRows.map((r) => ({
+    value: r.CATEGORY.trim(),
+    label: r.CATEGORY.trim(),
+  }));
   // Filtered by "r.Category === category" — matches the real live app's own Sub Category
   // ref field Valid If: SELECT(RM ref Category DD[SUB CATEGORY],
   // [_THISROW].[Category]=[Category]). This briefly got REMOVED entirely in an earlier pass
@@ -113,16 +122,22 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // an AppSheet-only runtime quirk this stateless backend can't replicate). With Category now
   // holding the real value, this filter is correct again and was restored.
   const subCategoryOptions: SelectOption[] = subCategoryRows
-    .filter((r) => !category || r.Category === category)
-    .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
-  const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
+    .filter((r) => !category || (r.Category ?? "").trim() === category.trim())
+    .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: r["SUB CATEGORY"].trim() }));
+  // Live tab/column renamed "RM ref Paint"."Paint Description" → "RM ref Brand"."Brand
+  // Description" (2 Sep 2026, confirmed live) — see npdPartCode.ts's own
+  // RM_PAINT_DESCRIPTION_FIELD comment for the full story of catching this.
+  const paintOptions: SelectOption[] = paintRows.map((r) => ({
+    value: (r["Brand Description"] ?? "").trim(),
+    label: (r["Brand Description"] ?? "").trim(),
+  }));
   // Label shows "Vendor Firm Name + product" (e.g. "J.C.I Cables(India) - CABLES") per the
   // user's explicit request — the saved `value` stays just the firm name (what actually gets
   // written to the RM SKU row's own VENDOR NAME field), the product suffix is display-only,
   // helping a doer tell apart vendors who share a similar name but supply different goods.
   const vendorOptions: SelectOption[] = vendorRows.map((r) => ({
-    value: r["Vendor Firm Name"],
-    label: r.product ? `${r["Vendor Firm Name"]} - ${r.product}` : r["Vendor Firm Name"],
+    value: r["Vendor Firm Name"].trim(),
+    label: r.product ? `${r["Vendor Firm Name"].trim()} - ${r.product}` : r["Vendor Firm Name"].trim(),
   }));
 
   // PART NO. live preview — client-side mirror of the real, verified App Formula
@@ -136,10 +151,12 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // in, growing to the full 9 chars as Paint/Make By are picked too) — never sent to the
   // server; the actual create payload only ever carries the picked field values themselves
   // (see handleSave below), and the backend computes the real, final PART NO. independently.
-  const categoryCode = categoryRows.find((r) => r.CATEGORY === category)?.CODE ?? "";
+  const categoryCode = categoryRows.find((r) => r.CATEGORY.trim() === category.trim())?.CODE ?? "";
   const subCategoryCode =
-    subCategoryRows.find((r) => r.Category === category && r["SUB CATEGORY"] === subCategory)?.CODE ?? "";
-  const paintCode = paintRows.find((r) => r["Paint Description"] === paint)?.Code ?? "";
+    subCategoryRows.find(
+      (r) => (r.Category ?? "").trim() === category.trim() && r["SUB CATEGORY"].trim() === subCategory.trim()
+    )?.CODE ?? "";
+  const paintCode = paintRows.find((r) => (r["Brand Description"] ?? "").trim() === paint.trim())?.Code ?? "";
   // Matches the live `Alphabet` tab's own MAKED BY/MAKED CODE rows (ZOTO -> "0",
   // SUPPLIER -> "1") — see this file's module doc comment for how that was confirmed.
   const designByDigit = makeBy === "ZOTO" ? "0" : makeBy === "SUPPLIER" ? "1" : "";
@@ -156,9 +173,9 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // same as the create flow.
   const editUnchanged =
     !!editRow &&
-    category === (editRow.Category ?? "") &&
-    subCategory === (editRow["Sub Category"] ?? "") &&
-    paint === (editRow.Paint ?? "") &&
+    category.trim() === (editRow.Category ?? "").trim() &&
+    subCategory.trim() === (editRow["Sub Category"] ?? "").trim() &&
+    paint.trim() === (editRow.Paint ?? "").trim() &&
     makeBy === editRow["MAKE BY"];
   const livePartNo = editUnchanged
     ? editRow["PART NO."] ?? ""

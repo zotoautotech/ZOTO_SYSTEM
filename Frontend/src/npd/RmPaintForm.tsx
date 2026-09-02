@@ -15,12 +15,15 @@ interface Props {
  * RmSkuForm.tsx's "Paint" field label becoming "Brand" — see taxonomy.ts's `rm-paint` table
  * entry and npdPartCode.ts's `RM_PAINT_TAB` for the backend side of this rename) — the nested
  * "+ New" form opened from RmSkuForm.tsx's Brand SearchableSelect, matching the real reference
- * field-for-field, in order: TIMESTAMP, USEREMAIL, Unique ID, Code, Paint Description (column
- * name itself is unchanged, still "Paint Description"). Simpler than RmCategoryForm.tsx/
- * RmSubCategoryForm.tsx — this tab has no `Against id`/dead-pointer column and no `DUPLICACY`
- * at all (confirmed live — see npdPartCode.ts's nextPaintCode() doc comment), so there's
- * nothing to preview beyond `Code` itself. Unique ID is a format-matching preview only, not a
- * predicted real value — see RmCategoryForm.tsx's own doc comment for why. */
+ * field-for-field, in order: TIMESTAMP, USEREMAIL, Unique ID, Code, Brand Description. A
+ * SECOND live rename followed shortly after this file's own title update above: the column
+ * itself was also renamed "Paint Description" → "Brand Description" (see
+ * npdPartCode.ts's RM_PAINT_DESCRIPTION_FIELD comment for the full story) — updated here too.
+ * Simpler than RmCategoryForm.tsx/RmSubCategoryForm.tsx — this tab has no `Against id`/
+ * dead-pointer column and no `DUPLICACY` at all (confirmed live — see npdPartCode.ts's
+ * nextPaintCode() doc comment), so there's nothing to preview beyond `Code` itself. Unique ID
+ * is a format-matching preview only, not a predicted real value — see RmCategoryForm.tsx's own
+ * doc comment for why. */
 export function RmPaintForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -51,7 +54,7 @@ export function RmPaintForm({ onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await createTaxonomyRow("rm-paint", { "Paint Description": paintDescription.trim() });
+      await createTaxonomyRow("rm-paint", { "Brand Description": paintDescription.trim() });
       onSaved(paintDescription.trim());
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
@@ -115,11 +118,11 @@ export function RmPaintForm({ onClose, onSaved }: Props) {
           <TextField label="Unique ID" value={previewUniqueId} disabled />
           <TextField label="Code" value={preview ? preview.code : previewFailed ? "—" : "Loading…"} disabled />
           <TextField
-            label="Paint Description"
+            label="Brand Description"
             required
             value={paintDescription}
             onChange={(e) => setPaintDescription(e.target.value)}
-            placeholder="Type a paint description…"
+            placeholder="Type a brand description…"
           />
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>

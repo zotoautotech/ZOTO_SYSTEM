@@ -1541,6 +1541,39 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Real bug caught via the new Edit flow: "Brand Description" column rename + trailing-space data (2 Sep 2026, later)
+
+Testing the just-shipped Edit flow surfaced a real bug: opening Edit on an existing RM SKU
+showed every field prefilled correctly EXCEPT Brand, which showed the placeholder instead of
+the row's real saved value (e.g. "WHITE LABLE"). Two live-data causes, found by dumping the
+actual sheet cells directly rather than guessing:
+
+1. **The `RM ref Brand` tab's own column was renamed a second time** — `Paint Description` →
+   `Brand Description` (on top of the earlier tab rename `RM ref Paint` → `RM ref Brand`) —
+   confirmed live. Every place that read `r["Paint Description"]` was silently getting
+   `undefined` back: `npdPartCode.ts`'s `paintCodeFor()` (now reads a new
+   `RM_PAINT_DESCRIPTION_FIELD = "Brand Description"` constant), `taxonomy.ts`'s `rm-paint`
+   table's `requiredFields`/`fields` (now `["Code", "Brand Description"]` — NOT `fg-paint`'s
+   own separate `Paint Description` entry, which lives on the unrelated `FG_SHEET_ID`
+   spreadsheet and was correctly left alone), `RmSkuForm.tsx`'s `paintOptions`/`paintCode`
+   lookups, and `RmPaintForm.tsx`'s create payload + field label + placeholder text.
+2. **The tab's real Brand Description values carry a trailing space** (`"WHITE LABLE "`,
+   confirmed live) that the RM SKU row's own saved `Paint` value does not (`"WHITE LABLE"`) —
+   a strict `===` match between the two would never succeed even with the column name fixed.
+   Hardened EVERY option-matching comparison in `RmSkuForm.tsx` with `.trim()` — not just
+   Brand, but Category/Sub Category/Vendor Name too (`categoryOptions`, `subCategoryOptions`
+   + its Category filter, `paintOptions`, `vendorOptions`, `categoryCode`/`subCategoryCode`/
+   `paintCode` lookups, and the edit-mode `editUnchanged` comparison) — the same kind of
+   stray whitespace could just as easily show up on any of those tabs later, and now none of
+   them would silently break the same way Brand just did.
+
+Verified with a full-repo sweep (`grep -rn '\["Paint Description"\]'`) confirming zero
+remaining functional references to the old column key anywhere in Backend or Frontend — the
+only surviving mentions of "Paint Description"/"RM ref Paint" are historical comments quoting
+the original AppSheet App Formula text verbatim (deliberately left, per this project's
+"formula wording is historical fact, don't edit it" convention) or `fg-paint`'s own unrelated,
+still-correctly-named column on the FG spreadsheet.
+
 ## RM SKU Detail's Edit button now really opens the edit form (2 Sep 2026, later)
 
 Edit was visual-only since the first `RmSkuDetail.tsx` rebuild — the user asked for it to

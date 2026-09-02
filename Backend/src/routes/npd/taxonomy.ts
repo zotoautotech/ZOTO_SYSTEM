@@ -150,7 +150,10 @@ const TABLES: TaxonomyTableDef[] = [
   // Live tab renamed "RM ref Paint" → "RM ref Brand" (2 Sep 2026, confirmed live) alongside the
   // frontend's "Paint" field label becoming "Brand" — `key` stays "rm-paint" (internal API
   // contract, no reason to rename just because the display name/tab did), only `label`/`tab`
-  // changed. Columns unchanged (TIMESTAMP/USEREMAIL/Unique ID/Code/Paint Description).
+  // changed at first. A SECOND live rename followed shortly after: the tab's own "Paint
+  // Description" column was also renamed to "Brand Description" (caught because it broke
+  // RM SKU Form's edit-mode prefill — see npdPartCode.ts's own comment on
+  // RM_PAINT_DESCRIPTION_FIELD for the full story). `requiredFields`/`fields` updated to match.
   {
     key: "rm-paint",
     label: "RM Brand",
@@ -160,8 +163,8 @@ const TABLES: TaxonomyTableDef[] = [
     idPrefix: "RMPAINT",
     // `Code` is auto-generated the same way as RM ref Category/Category DD's own CODE
     // columns — see nextPaintCode()'s doc comment for the real App Formula this replicates.
-    requiredFields: ["Paint Description"],
-    fields: ["Code", "Paint Description"],
+    requiredFields: ["Brand Description"],
+    fields: ["Code", "Brand Description"],
     computedFields: ["Code"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
