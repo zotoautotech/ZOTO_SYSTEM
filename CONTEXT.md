@@ -1376,6 +1376,37 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail — sixth pass: rebuilt on TripDetail.tsx's real pattern, not hand-guessed hex (2 Sep 2026, same day)
+
+Four passes of hand-guessing colors/spacing against the AppSheet reference screenshot still
+didn't land — the user then showed a screenshot of **this app's own `TripDetail.tsx`**
+(Sales CRR's Transport trip detail page) and said "i want like this." Rebuilt the whole file
+on that real, already-working pattern instead of continuing to invent styling:
+
+- `Section`/`Field`/`FieldFile`-shaped private helpers, copied in structure from
+  `TripDetail.tsx` (not imported — they're private to that file, same small-helper-per-file
+  convention used elsewhere rather than extracting a shared component for a two-file reuse).
+- The three action buttons (Upload Images & Drawings / UPDATE IQC PDF / Verified RM item) are
+  now real `QuickAction`s (`components/FloatingActionButton.tsx`) — the same shared red
+  circular action button `TripDetail.tsx`/`OrderDetail.tsx`/`PdiItemDetail.tsx`/
+  `DispatchApprovalItemDetail.tsx` already use, stacked via `stackIndex`, not a custom blue
+  icon row invented in an earlier pass. Still no real handler behind them (`onClick={() => {}}`)
+  — per the user, functionality is a follow-up.
+- `className="card"` + this app's `--color-*` tokens throughout, replacing every literal hex
+  color from the prior four passes — there was never a real reason for this one page to opt
+  out of the app's light/dark theming (unlike `RmSkuForm.tsx`'s own literal-hex exception,
+  which pixel-matches a specific panel the user asked to match exactly).
+- Dimensions/Drawing & Photos/RM Images are now `TableCard`-shaped (title + count badge + red
+  "Expand" + table), matching `TripDetail.tsx`'s own list-card shape — still genuinely 0 rows,
+  no fabricated data.
+- Field list unchanged from the previous pass (real live headers): TIMESTAMP, USEREMAIL,
+  ID'S, PART NO., Category, Sub Category, Paint, MAKE BY, VENDOR NAME, IQC PDF, IQC PDF
+  UPDATE LAST.
+
+Every earlier "pixel spec"/AppSheet-reference-matching pass in the sections below is now
+superseded by this one — kept in this file as history of what was tried and why it didn't
+land, not as still-current guidance for this page.
+
 ## RM SKU Detail — fifth pass: one card, clickable-looking action buttons (2 Sep 2026, same day)
 
 Still "not look same": the Action row and the field list were two SEPARATE white bordered
