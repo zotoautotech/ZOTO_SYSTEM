@@ -1376,6 +1376,41 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail — fourth pass: header dedupe + real field order/columns (2 Sep 2026, same day)
+
+Still not matching — two further concrete fixes, both against the LIVE sheet, not assumption:
+
+- **Double-header bug, finally caught**: the page had TWO stacked headers — this app's own
+  global route-driven breadcrumb (`Layout.tsx`, unrelated to this file) PLUS this file's own
+  circular-back-button + big "id" heading row directly underneath it, duplicating what the
+  breadcrumb already showed. The reference has one clean header line (breadcrumb + Edit +
+  Previous/Next, nothing else). Removed the redundant back-button/heading row entirely — this
+  file's own header is now just right-aligned Edit + Previous/Next, letting the existing
+  breadcrumb (which already ends in the bolded id) be the only "where am I" indicator, same as
+  the reference.
+- **Field list was wrong** — dumped the real live `Raw Material SKU` header row directly
+  (`TIMESTAMP, USEREMAIL, ID'S, PART NO., Category, Sub Category, Paint, MAKE BY, VENDOR NAME,
+  Old Part Code, Old Part Name, IQC PDF, IQC PDF UPDATE LAST, TrF tO Master Rm`) rather than
+  continuing to assume the order from the second pass (which was `ID'S`-first and missing `Old
+  Part Name` entirely) — reordered to match exactly, added the missing field.
+  **`Old Part Code`/`Old Part Name` were then deleted from the live sheet by the user only
+  minutes later** ("I DELETE") — removed from this file's field list again immediately after,
+  so the current field list is `TIMESTAMP, USEREMAIL, ID'S, PART NO., Category, Sub Category,
+  Paint, MAKE BY, VENDOR NAME, IQC PDF, IQC PDF UPDATE LAST` (`TrF tO Master Rm` still excluded
+  — an internal transfer-tracking field). **This tab's schema is evidently still being actively
+  edited live** — re-dump headers before trusting this file's field list again if it's touched
+  further, same discipline this project already applies everywhere else a tab has drifted.
+- Also shrank the Drawing & Photos tile to a fixed width (220px) rather than stretching it
+  full-card-width, leaving visible whitespace beside it — matches the reference's own tile
+  proportions, where there's clearly room for more tiles in a row.
+
+A separate ambiguous instruction ("THESE COLUMN SHOW IN CENTER", sent alongside a screenshot
+of the live sheet's own bold, center-aligned header row) was NOT acted on this pass — unclear
+whether it meant "center-align the Details card's values" or was just pointing at the real
+column list being shown (which the field-order fix above already addresses). Left as-is rather
+than guessing a third time on an ambiguous instruction; ask if the Details card's text
+alignment still needs to change.
+
 ## RM SKU Detail — third pass, pixel spec applied (2 Sep 2026, same day)
 
 Still "not same" after the second pass — the user supplied a very detailed, coordinate-level

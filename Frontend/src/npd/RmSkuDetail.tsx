@@ -43,19 +43,25 @@ export function RmSkuDetail() {
   if (isLoading) return <p className="text-muted" style={{ marginTop: 16 }}>Loading…</p>;
   if (!row) return <p className="text-muted" style={{ marginTop: 16 }}>RM SKU not found.</p>;
 
+  // Field list AND order dumped live off the real "Raw Material SKU" tab (this app's standing
+  // discipline — never assume a column order). The tab briefly had "Old Part Code"/"Old Part
+  // Name" columns (added between VENDOR NAME and IQC PDF) — the user deleted both live in the
+  // sheet moments after this file first surfaced them, so they're removed here too. Current
+  // real order: TIMESTAMP → USEREMAIL → ID'S → PART NO. → Category → Sub Category → Paint →
+  // MAKE BY → VENDOR NAME → IQC PDF → IQC PDF UPDATE LAST (`TrF tO Master Rm` excluded — an
+  // internal transfer-tracking field, not something a doer reads here).
   const fields: { label: string; value: string; linked?: boolean; file?: boolean }[] = [
-    { label: "ID'S", value: row["ID'S"] },
     { label: "TIMESTAMP", value: row.TIMESTAMP ? new Date(row.TIMESTAMP).toLocaleString() : "—" },
     { label: "USEREMAIL", value: row.USEREMAIL || "—" },
-    { label: "Old Part Code", value: row["Old Part Code"] || "—" },
+    { label: "ID'S", value: row["ID'S"] },
     { label: "PART NO.", value: row["PART NO."] || "—" },
     { label: "Category", value: row.Category || "—", linked: true },
     { label: "Sub Category", value: row["Sub Category"] || "—" },
     { label: "Paint", value: row.Paint || "—", linked: true },
     { label: "MAKE BY", value: row["MAKE BY"] || "—" },
     { label: "VENDOR NAME", value: row["VENDOR NAME"] || "—" },
-    { label: "IQC PDF UPDATE LAST", value: row["IQC PDF UPDATE LAST"] || "—" },
     { label: "IQC PDF", value: row["IQC PDF"] || "—", file: true },
+    { label: "IQC PDF UPDATE LAST", value: row["IQC PDF UPDATE LAST"] || "—" },
   ];
 
   const actions = [
@@ -79,19 +85,16 @@ export function RmSkuDetail() {
 
   return (
     <div style={{ marginTop: 20, paddingBottom: 24 }}>
-      {/* Header row: back button (this app's own OrderDetail.tsx circular-button convention),
-          title, then the reference's own Edit + Previous/Next controls on the right. Edit is
-          visual-only for now — no RM SKU edit form exists yet, same "flag it, don't fake it"
-          treatment as the three action-card icons below. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <NavCircleButton onClick={() => navigate("/npd/rm-sku")} label="Back">
-            ‹
-          </NavCircleButton>
-          <h2 style={{ margin: 0, fontWeight: 400, fontSize: 21, color: C.heading, wordBreak: "break-word" }}>
-            {row["ID'S"]}
-          </h2>
-        </div>
+      {/* The reference has ONE clean header line — its own breadcrumb (ending in the bolded
+          id) plus Edit/Previous/Next, nothing more. This app's global `Layout.tsx` already
+          renders that breadcrumb above every page (route-driven, not this file's to touch) —
+          the first two passes at this file ALSO rendered a redundant circular-back-button +
+          big "id" heading row directly under it, duplicating what the breadcrumb already
+          shows and creating the double-header look the user flagged. Removed entirely — this
+          row is now just the reference's own Edit + Previous/Next controls, right-aligned,
+          nothing on the left. Edit is visual-only for now — no RM SKU edit form exists yet,
+          same "flag it, don't fake it" treatment as the three action-card icons below. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 16, gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             type="button"
@@ -320,12 +323,16 @@ function DrawingPhotosCard({ partNo, category, colors }: { partNo: string; categ
   return (
     <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 4, padding: "18px 18px 14px" }}>
       <CardHeading title="Drawing & Photos" colors={colors} />
+      {/* Tile is a fixed width, not full-card — the reference leaves visible whitespace beside
+          it (room for further tiles in a row, once more than one drawing exists), not a single
+          tile stretched to the card's full width. */}
       <div
         style={{
           border: `1px solid ${colors.tableBorder}`,
           borderRadius: 4,
           padding: 14,
-          minHeight: 180,
+          width: 220,
+          minHeight: 160,
           background: "#fff",
         }}
       >
