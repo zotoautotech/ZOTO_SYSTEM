@@ -1405,11 +1405,10 @@ Still not matching — two further concrete fixes, both against the LIVE sheet, 
   proportions, where there's clearly room for more tiles in a row.
 
 A separate ambiguous instruction ("THESE COLUMN SHOW IN CENTER", sent alongside a screenshot
-of the live sheet's own bold, center-aligned header row) was NOT acted on this pass — unclear
-whether it meant "center-align the Details card's values" or was just pointing at the real
-column list being shown (which the field-order fix above already addresses). Left as-is rather
-than guessing a third time on an ambiguous instruction; ask if the Details card's text
-alignment still needs to change.
+of the live sheet's own bold, center-aligned header row) was left unactioned this pass —
+confirmed on follow-up ("yes center align the values too") to mean the Details card's
+**values** column, which was right-aligned. Changed to center-aligned (labels stay
+left-aligned in their own 195px column, unchanged).
 
 ## RM SKU Detail — third pass, pixel spec applied (2 Sep 2026, same day)
 

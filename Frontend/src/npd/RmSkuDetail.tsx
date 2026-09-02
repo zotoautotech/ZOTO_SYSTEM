@@ -180,7 +180,8 @@ export function RmSkuDetail() {
             </div>
           </div>
 
-          {/* Details card — 195px label column, 52px rows, per the spec. */}
+          {/* Details card — 195px label column, 52px rows, per the spec; values center-aligned
+              per explicit follow-up request. */}
           <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, padding: "12px 18px" }}>
             {fields.map((f) => (
               <div
@@ -198,12 +199,15 @@ export function RmSkuDetail() {
                     flex: 1,
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "flex-end",
+                    // Center-aligned per the user's explicit request, matching the live
+                    // sheet's own bold/centered header row formatting shown alongside that
+                    // instruction — was right-aligned before.
+                    justifyContent: "center",
                     gap: 8,
                     fontSize: 18,
                     color: C.value,
                     fontWeight: 400,
-                    textAlign: "right",
+                    textAlign: "center",
                     wordBreak: "break-word",
                   }}
                 >
