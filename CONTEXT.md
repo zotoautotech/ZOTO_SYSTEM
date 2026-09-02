@@ -1376,6 +1376,42 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail — third pass, pixel spec applied (2 Sep 2026, same day)
+
+Still "not same" after the second pass — the user supplied a very detailed, coordinate-level
+pixel spec (sidebar/header measurements, exact hex colors, card positions/sizes, table column
+widths, typography sizes) generated against the real reference screenshot, and asked for a
+pixel-accurate rebuild.
+
+Applied faithfully: literal hex colors (`#2f82d5`/`#438edb` blue action icons/Edit button —
+not this app's red `--color-primary`, same deliberate pixel-match-over-theme exception
+`RmSkuForm.tsx` already takes; `#243b53` headings, `#4e6276` labels, `#8a969f` muted,
+`#e9edf1`/`#596b7b` badge, `#dedede`/`#dfe3e6` borders), Details card's 195px label column +
+52px row height, an Edit button (blue, pencil icon, visual-only — no RM SKU edit form exists
+yet, same treatment as the 3 action icons), Dimensions rebuilt as a REAL table (Unique ID/
+TIMESTAMP/AGAINST ID/CATEGORY headers, matching the reference's actual table shape — still
+genuinely 0 rows, shown as an empty table body rather than a placeholder sentence, since no
+per-category dimension tables exist yet), Drawing & Photos rebuilt as the reference's own
+photo-tile shape (PART NO. + Category text over a large empty bordered area, no fabricated
+thumbnail).
+
+**One deliberate deviation from the supplied spec, flagged rather than silently followed**:
+the spec's x/y coordinates place the Action card and Details card SIDE BY SIDE (three columns:
+Action | Details | Dimensions-stack). Every actual screenshot of this screen the user has
+shared — the real AppSheet reference AND this app's own two earlier attempts — shows the
+Action card stacked ABOVE the Details card in one left column, with Dimensions/Drawing &
+Photos/RM Images in a separate right column. The coordinate spec reads like an automated
+screenshot-to-code tool's guess rather than a hand-verified measurement, and contradicts every
+piece of real visual evidence gathered so far — kept the two-column stacked structure that
+actually matches what's been shown, applied every other color/spacing/typography/table detail
+from the spec. If this is still wrong, the next step is a fresh screenshot of the ACTUAL
+current deployed page (not the reference) to compare pixel-for-pixel, since three iterations
+of code-only guessing haven't converged.
+
+**Verification note**: typechecked clean; same live-screenshot limitation as the two prior
+passes at this file (`useQuery`'s own `queryFn` always wins over a mocked provider default) —
+reviewed the JSX/layout/color logic directly instead of a rendered screenshot.
+
 ## RM SKU Detail corrected to match the reference more closely, using CRR's own chrome (2 Sep 2026)
 
 The user compared the deployed detail page against the real reference screenshot side by side
