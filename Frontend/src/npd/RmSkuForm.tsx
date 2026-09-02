@@ -313,13 +313,16 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             addNewLabel="New"
             onAddNew={() => setCreatingVendor(true)}
           />
+          {/* Label shown to the doer is "Brand" per explicit request — the underlying field
+              stays Paint/RM ref Paint end to end (value, options, "+ New" flow, taxonomy
+              table key), only the visible label text changed. */}
           <SearchableSelect
-            label="Paint"
+            label="Brand"
             required
             value={paint}
             onChange={setPaint}
             options={paintOptions}
-            placeholder="Select Paint…"
+            placeholder="Select Brand…"
             addNewLabel="New"
             onAddNew={() => setCreatingPaint(true)}
           />
