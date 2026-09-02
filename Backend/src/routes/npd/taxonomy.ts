@@ -147,11 +147,15 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
+  // Live tab renamed "RM ref Paint" → "RM ref Brand" (2 Sep 2026, confirmed live) alongside the
+  // frontend's "Paint" field label becoming "Brand" — `key` stays "rm-paint" (internal API
+  // contract, no reason to rename just because the display name/tab did), only `label`/`tab`
+  // changed. Columns unchanged (TIMESTAMP/USEREMAIL/Unique ID/Code/Paint Description).
   {
     key: "rm-paint",
-    label: "RM Paint",
+    label: "RM Brand",
     spreadsheetId: env.sheets.npd,
-    tab: "RM ref Paint",
+    tab: "RM ref Brand",
     idColumn: "Unique ID",
     idPrefix: "RMPAINT",
     // `Code` is auto-generated the same way as RM ref Category/Category DD's own CODE

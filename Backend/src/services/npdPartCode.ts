@@ -54,7 +54,13 @@ export async function generatePartCode(baseCode: string, employeeId: string): Pr
  */
 const RM_CATEGORY_TAB = "RM ref Category";
 const RM_CATEGORY_DD_TAB = "RM ref Category DD";
-const RM_PAINT_TAB = "RM ref Paint";
+// Live tab was renamed "RM ref Paint" → "RM ref Brand" (2 Sep 2026, confirmed by dumping the
+// spreadsheet's real tab list) alongside the frontend's "Paint" field label becoming "Brand" —
+// columns unchanged (TIMESTAMP/USEREMAIL/Unique ID/Code/Paint Description still all real).
+// Every doc comment below that quotes the original AppSheet App Formula text verbatim still
+// says "RM ref Paint" — that's the formula's own historical wording, left unedited; only this
+// functional constant (and taxonomy.ts's `rm-paint` table's `tab` field) needed to change.
+const RM_PAINT_TAB = "RM ref Brand";
 const RM_ALPHABET_TAB = "Alphabet";
 
 /** Shared by nextCategoryCode()/nextSubCategoryCode()/nextPaintCode() — all three real App
@@ -338,7 +344,7 @@ async function paintCodeFor(paintValue: string): Promise<string> {
   if (!byUniqueId || !(byUniqueId.Code ?? "").trim()) {
     throw new RmPartCodeLookupError(
       "MISSING_PAINT_CODE",
-      `No Code found on "RM ref Paint" for Paint="${paintValue}" — add it via Taxonomy admin first.`
+      `No Code found on "RM ref Brand" for Brand="${paintValue}" — add it via Taxonomy admin first.`
     );
   }
   return byUniqueId.Code.trim();

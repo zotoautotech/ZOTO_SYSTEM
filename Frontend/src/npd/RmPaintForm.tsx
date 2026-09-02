@@ -11,13 +11,16 @@ interface Props {
   onSaved: (paintDescription: string) => void;
 }
 
-/** "RM ref Paint Form" — the nested "+ New" form opened from RmSkuForm.tsx's Paint
- * SearchableSelect, matching the real reference field-for-field, in order: TIMESTAMP,
- * USEREMAIL, Unique ID, Code, Paint Description. Simpler than RmCategoryForm.tsx/
- * RmSubCategoryForm.tsx — `RM ref Paint` has no `Against id`/dead-pointer column and no
- * `DUPLICACY` at all (confirmed live — see npdPartCode.ts's nextPaintCode() doc comment), so
- * there's nothing to preview beyond `Code` itself. Unique ID is a format-matching preview
- * only, not a predicted real value — see RmCategoryForm.tsx's own doc comment for why. */
+/** "RM ref Brand Form" (live tab renamed from "RM ref Paint" 2 Sep 2026, alongside
+ * RmSkuForm.tsx's "Paint" field label becoming "Brand" — see taxonomy.ts's `rm-paint` table
+ * entry and npdPartCode.ts's `RM_PAINT_TAB` for the backend side of this rename) — the nested
+ * "+ New" form opened from RmSkuForm.tsx's Brand SearchableSelect, matching the real reference
+ * field-for-field, in order: TIMESTAMP, USEREMAIL, Unique ID, Code, Paint Description (column
+ * name itself is unchanged, still "Paint Description"). Simpler than RmCategoryForm.tsx/
+ * RmSubCategoryForm.tsx — this tab has no `Against id`/dead-pointer column and no `DUPLICACY`
+ * at all (confirmed live — see npdPartCode.ts's nextPaintCode() doc comment), so there's
+ * nothing to preview beyond `Code` itself. Unique ID is a format-matching preview only, not a
+ * predicted real value — see RmCategoryForm.tsx's own doc comment for why. */
 export function RmPaintForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -102,7 +105,7 @@ export function RmPaintForm({ onClose, onSaved }: Props) {
             ✕
           </button>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
-            RM ref Paint Form
+            RM ref Brand Form
           </h2>
         </div>
 

@@ -1541,6 +1541,25 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Paint → Brand: label rename followed by a real live tab rename (2 Sep 2026, later)
+
+After the "Paint" field label was renamed to "Brand" (display-only, previous entry), the user
+went and renamed the LIVE SHEET TAB itself from `RM ref Paint` to `RM ref Brand` (confirmed by
+dumping the spreadsheet's tab list directly — columns unchanged: TIMESTAMP/USEREMAIL/Unique
+ID/Code/Paint Description). Updated everywhere this app hardcodes that tab name:
+- `npdPartCode.ts`'s `RM_PAINT_TAB` constant → `"RM ref Brand"`, and its
+  `MISSING_PAINT_CODE` error message text.
+- `taxonomy.ts`'s `rm-paint` table entry → `tab: "RM ref Brand"`, `label: "RM Brand"` (`key`
+  stays `"rm-paint"` — internal API contract, no reason to rename just because the display
+  name/tab did).
+- `RmPaintForm.tsx`'s panel title → "RM ref Brand Form" (was "RM ref Paint Form").
+
+Doc comments elsewhere in `npdPartCode.ts` that quote the ORIGINAL AppSheet App Formula text
+verbatim still say "RM ref Paint" — that's the formula's own historical wording (what the real
+legacy formula literally said when it was decoded), left unedited on purpose; only the
+functional tab-name constant and the user-facing form title changed. `Paint Description` stays
+the real column name — only the tab and the app's field label changed, not that header.
+
 ## Vendor dropdown label shows "Vendor Firm Name - product" (2 Sep 2026, later)
 
 `RmSkuForm.tsx`'s Vendor Name `SearchableSelect` options now display as e.g. "J.C.I
