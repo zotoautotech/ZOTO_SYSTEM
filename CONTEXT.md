@@ -1376,6 +1376,31 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail — seventh pass: Edit/Prev/Next moved into the real header-actions slot (2 Sep 2026, same day)
+
+Two more concrete fixes:
+
+- **Edit + Previous/Next now live in `lib/headerActions.tsx`'s `useSetHeaderActions` slot** —
+  the same top-right breadcrumb-row mechanism `RmSkuCatalog.tsx`'s own "+ New" button already
+  uses, not a second row rendered by this page itself. This is what the reference screenshot
+  actually showed (Edit/arrows sitting IN the breadcrumb row) — the earlier five passes kept
+  trying to build that as a second header row on the page, which either duplicated the
+  breadcrumb or looked wrong next to it. Registered via a new `HeaderNavButton` (same 38×38
+  bordered icon-button shape `RmSkuCatalog.tsx`'s header action already uses). The standalone
+  "‹ Back" button was removed entirely, per the user's own explicit request — no longer needed
+  once Edit/Prev/Next live in the breadcrumb row and the breadcrumb itself still provides a way
+  back to the catalog.
+- **Removed the trailing chevron (`›`) from Category/Paint** — the `FieldLink` variant added a
+  "this links elsewhere" affordance with no real drill-through behind it yet; the user asked
+  for it gone. Both fields are now plain `Field`s like every other row; `FieldLink` deleted
+  entirely (dead code once nothing used it).
+
+**A hook-ordering note for future edits to this file**: `useSetHeaderActions` (and any other
+hook) must be called before the `isLoading`/`!row` early returns — React forbids a
+conditional hook call, so the header-actions registration and the `prevRow`/`nextRow`
+computation both happen unconditionally near the top of the component now, not after the row
+is confirmed to exist.
+
 ## RM SKU Detail — sixth pass: rebuilt on TripDetail.tsx's real pattern, not hand-guessed hex (2 Sep 2026, same day)
 
 Four passes of hand-guessing colors/spacing against the AppSheet reference screenshot still

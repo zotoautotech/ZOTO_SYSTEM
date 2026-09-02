@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listTaxonomyRows } from "./lib/npdApi";
 import { QuickAction } from "../components/FloatingActionButton";
+import { useSetHeaderActions } from "../lib/headerActions";
 
 /** RM SKU detail — rebuilt to follow this app's OWN real detail-page pattern
  * (`Frontend/src/modules/transport/TripDetail.tsx`) instead of hand-guessing colors/spacing
@@ -28,7 +29,12 @@ import { QuickAction } from "../components/FloatingActionButton";
  *   MAKE BY, VENDOR NAME, IQC PDF, IQC PDF UPDATE LAST (`TrF tO Master Rm` excluded — internal
  *   transfer-tracking, not doer-facing).
  * - Dimensions/Drawing & Photos/RM Images stay as `TableCard`-style cards, genuinely empty (no
- *   per-category dimension tables or image-upload feature exist yet) — not fabricated. */
+ *   per-category dimension tables or image-upload feature exist yet) — not fabricated.
+ * - Edit + Previous/Next now live in the app's own breadcrumb-row header actions slot
+ *   (`lib/headerActions.tsx`'s `useSetHeaderActions`, the same mechanism `RmSkuCatalog.tsx`'s
+ *   own "+ New" button already uses) — not a second row on the page itself. This removed the
+ *   need for the standalone "‹ Back" button entirely (the breadcrumb already provides a way
+ *   back to the catalog), per the user's own explicit follow-up request. */
 export function RmSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -37,6 +43,57 @@ export function RmSkuDetail() {
     queryKey: ["npd", "taxonomy", "rows", "rm-sku"],
     queryFn: () => listTaxonomyRows("rm-sku"),
   });
+
+  const rowIndex = rows.findIndex((r) => r["ID'S"] === id);
+  const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : undefined;
+  const nextRow = rowIndex >= 0 && rowIndex < rows.length - 1 ? rows[rowIndex + 1] : undefined;
+
+  // Registered unconditionally, before the loading/not-found early returns below — a hook
+  // call can never be conditional on those (React's own rule), and the header actions still
+  // need to render (disabled Prev/Next, Edit still visually present) while the row loads.
+  useSetHeaderActions(
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <button
+        type="button"
+        title="Coming soon"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          height: 36,
+          padding: "0 14px",
+          borderRadius: 6,
+          border: "none",
+          background: "var(--color-primary)",
+          color: "#fff",
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "default",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        Edit
+      </button>
+      <div style={{ width: 1, height: 22, background: "var(--color-border)" }} />
+      <HeaderNavButton
+        onClick={() => prevRow && navigate(`/npd/rm-sku/${prevRow["ID'S"]}`)}
+        label="Previous RM SKU"
+        disabled={!prevRow}
+      >
+        ‹
+      </HeaderNavButton>
+      <HeaderNavButton
+        onClick={() => nextRow && navigate(`/npd/rm-sku/${nextRow["ID'S"]}`)}
+        label="Next RM SKU"
+        disabled={!nextRow}
+      >
+        ›
+      </HeaderNavButton>
+    </div>
+  );
 
   const row = rows.find((r) => r["ID'S"] === id);
 
@@ -51,10 +108,6 @@ export function RmSkuDetail() {
 
   return (
     <div>
-      <button onClick={() => navigate("/npd/rm-sku")} className="btn" style={{ marginBottom: 16 }}>
-        ‹ Back
-      </button>
-
       <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
         <div style={{ flex: "0 0 260px" }}>
           <h2 style={{ margin: "8px 0 0", wordBreak: "break-word" }}>{row["ID'S"]}</h2>
@@ -74,9 +127,9 @@ export function RmSkuDetail() {
           <Section title="RM Details">
             <Field label="USEREMAIL" value={row.USEREMAIL} />
             <Field label="PART NO." value={row["PART NO."]} />
-            <FieldLink label="Category" value={row.Category} />
+            <Field label="Category" value={row.Category} />
             <Field label="Sub Category" value={row["Sub Category"]} />
-            <FieldLink label="Paint" value={row.Paint} />
+            <Field label="Paint" value={row.Paint} />
             <Field label="MAKE BY" value={row["MAKE BY"]} />
             <Field label="VENDOR NAME" value={row["VENDOR NAME"]} />
           </Section>
@@ -130,26 +183,6 @@ function Field({ label, value }: { label: string; value?: string }) {
         {label}
       </div>
       <div style={{ fontSize: 14, flex: 1 }}>{value}</div>
-    </div>
-  );
-}
-
-// Same field shape as Field, plus a trailing chevron — Category/Paint are ref fields into
-// their own taxonomy tables (RM ref Category / RM ref Paint), matching the reference's own
-// "this value links elsewhere" affordance, even though no drill-through page exists yet.
-function FieldLink({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
-  return (
-    <div style={{ display: "flex", gap: 16, marginBottom: 12, alignItems: "center" }}>
-      <div className="text-muted" style={{ fontSize: 12, flex: "0 0 160px" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 14, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-        {value}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" style={{ flexShrink: 0 }}>
-          <path d="m9 6 6 6-6 6" />
-        </svg>
-      </div>
     </div>
   );
 }
@@ -239,6 +272,46 @@ function TableCard({
         </div>
       )}
     </div>
+  );
+}
+
+// Same 38x38 bordered icon-button shape RmSkuCatalog.tsx's own "+ New" header action already
+// uses in this exact header-actions slot — reused here for Previous/Next.
+function HeaderNavButton({
+  onClick,
+  label,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      style={{
+        width: 36,
+        height: 36,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        background: "var(--color-bg)",
+        color: "var(--color-text)",
+        fontSize: 16,
+        flexShrink: 0,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
