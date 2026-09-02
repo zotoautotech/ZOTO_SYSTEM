@@ -1376,6 +1376,34 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail corrected to match the reference more closely, using CRR's own chrome (2 Sep 2026)
+
+The user compared the deployed detail page against the real reference screenshot side by side
+("are you sure both look same?, i want same to same") and found two real gaps:
+
+- **A whole card was missing.** The reference's right column has THREE cards — a category
+  dimensions table, **"Drawing & Photos"**, and **"RM Images & Drawings"** — this file only had
+  two (skipped "Drawing & Photos" entirely, an oversight from the first pass, not a deliberate
+  cut). Added as a third `RelatedCard`, same genuinely-empty treatment as the other two (no
+  backing upload feature yet — see this file's own module doc comment).
+- **Header chrome had no Edit/prev-next affordances at all**, unlike the reference's
+  breadcrumb + Edit button + `<`/`>` record navigation. Rather than copying the reference's
+  literal chrome (blue circular icons, its own breadcrumb style), the user's explicit
+  instruction was to **"take CRR details hint"** — so the back button was changed from a
+  full-width "← Back to RM SKU Catalog" button to the exact same 30×30 circular bordered "‹"
+  button + title-below-it shape `OrderDetail.tsx` (Sales CRR) already uses, and a new
+  `NavCircleButton` component (same visual shape) adds Previous/Next record navigation by
+  walking the already-loaded `rows` array in list order — genuinely new (no CRR page has
+  prev/next), but built in the same visual language rather than inventing something else. An
+  "Edit" action was NOT added — there's no RM SKU edit form built yet, unlike the reference's
+  own; flagged rather than stubbed with a non-functional button.
+
+**Verification note**: typechecked clean; could not get a live-data screenshot again for the
+same reason as the first pass at this file (see the entry below) — `useQuery`'s own explicit
+`queryFn` always wins over a mocked `QueryClientProvider` default, so the temp-route mock
+harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
+instead; a real visual comparison against the reference still needs a genuine login session.
+
 ## VENDOR NAME connected to the real live "ZOTO/MASTER-VENDOR" spreadsheet (2 Sep 2026)
 
 The user shared Editor access to a genuinely separate, already-live production spreadsheet —

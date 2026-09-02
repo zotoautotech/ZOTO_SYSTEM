@@ -6,14 +6,25 @@ import { listTaxonomyRows } from "./lib/npdApi";
 /** RM SKU detail — matches the real legacy reference screen's own two-column dashboard
  * layout: a left column with the icon-action row (Upload Images & Drawings / UPDATE IQC PDF /
  * Verified RM item) above the field card, and a right column of related-data cards (a
- * category-specific "{Category} Dimensions" table, "RM Images & Drawings"). The three icon
- * actions are visual-only for now — no upload/verification workflow behind them yet (per the
- * user: functionality to follow later, this pass is the layout). The right-side cards are
- * genuinely empty here, not faked — this app has no per-category dimension tables (the
- * reference needs ~26 of them, one per RM category, a much bigger version of the 6 FG-side
- * item-spec tables already built in Sprint 6) or an image-upload feature yet; shown as real
- * empty states with an "Add" affordance stubbed in, matching the reference's own card shape,
- * rather than omitted or filled with fabricated rows. */
+ * category-specific "{Category} Dimensions" table, "Drawing & Photos", "RM Images &
+ * Drawings" — the reference genuinely shows all three as separate cards, confirmed against
+ * the user's own screenshot, not two). The three icon actions are visual-only for now — no
+ * upload/verification workflow behind them yet (per the user: functionality to follow later,
+ * this pass is the layout). The right-side cards are genuinely empty here, not faked — this
+ * app has no per-category dimension tables (the reference needs ~26 of them, one per RM
+ * category, a much bigger version of the 6 FG-side item-spec tables already built in Sprint 6)
+ * or an image-upload feature yet; shown as real empty states with an "Add" affordance stubbed
+ * in, matching the reference's own card shape, rather than omitted or filled with fabricated
+ * rows.
+ *
+ * Header/back-button/prev-next chrome deliberately follows this app's OWN existing detail-page
+ * convention instead of literally copying the reference's chrome — same circular "‹" back
+ * button + title-below-it shape as Sales CRR's OrderDetail.tsx, not a full-width "← Back to…"
+ * button (that was this file's first pass, corrected on direct instruction to "take CRR
+ * details hint" instead of inventing new chrome). Prev/Next (the reference's own `<`/`>`
+ * record-navigation arrows) walk `rows` in the order the catalog list already returns them —
+ * genuinely new here (no CRR detail page has this), but a reasonable, low-risk addition since
+ * `rows` is already loaded for the field lookup below. */
 export function RmSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -25,6 +36,9 @@ export function RmSkuDetail() {
   });
 
   const row = rows.find((r) => r["ID'S"] === id);
+  const rowIndex = rows.findIndex((r) => r["ID'S"] === id);
+  const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : undefined;
+  const nextRow = rowIndex >= 0 && rowIndex < rows.length - 1 ? rows[rowIndex + 1] : undefined;
 
   if (isLoading) return <p className="text-muted" style={{ marginTop: 16 }}>Loading…</p>;
   if (!row) return <p className="text-muted" style={{ marginTop: 16 }}>RM SKU not found.</p>;
@@ -51,10 +65,35 @@ export function RmSkuDetail() {
   ];
 
   return (
-    <div style={{ marginTop: 16 }}>
-      <button className="btn" onClick={() => navigate("/npd/rm-sku")} style={{ marginBottom: 16 }}>
-        ← Back to RM SKU Catalog
-      </button>
+    <div style={{ marginTop: 20, paddingBottom: 24 }}>
+      {/* Same circular back-button + title shape as OrderDetail.tsx (Sales CRR), not a
+          full-width "← Back to…" button — see this file's own module doc comment. Prev/Next
+          are new here, not a CRR pattern, but a small addition in the same visual language
+          (circular bordered icon buttons). */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <NavCircleButton onClick={() => navigate("/npd/rm-sku")} label="Back">
+            ‹
+          </NavCircleButton>
+          <h2 style={{ margin: 0, fontWeight: 500, wordBreak: "break-word" }}>{row["ID'S"]}</h2>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <NavCircleButton
+            onClick={() => prevRow && navigate(`/npd/rm-sku/${prevRow["ID'S"]}`)}
+            label="Previous RM SKU"
+            disabled={!prevRow}
+          >
+            ‹
+          </NavCircleButton>
+          <NavCircleButton
+            onClick={() => nextRow && navigate(`/npd/rm-sku/${nextRow["ID'S"]}`)}
+            label="Next RM SKU"
+            disabled={!nextRow}
+          >
+            ›
+          </NavCircleButton>
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, alignItems: "start" }}>
         <div>
@@ -122,10 +161,51 @@ export function RmSkuDetail() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <RelatedCard title={row.Category ? `${row.Category} Dimensions` : "Dimensions"} />
+          <RelatedCard title="Drawing & Photos" />
           <RelatedCard title="RM Images & Drawings" />
         </div>
       </div>
     </div>
+  );
+}
+
+// Same 30x30 circular bordered button OrderDetail.tsx (Sales CRR) uses for its own back
+// button — reused here for Back/Previous/Next rather than inventing new chrome.
+function NavCircleButton({
+  onClick,
+  label,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        border: "1px solid var(--color-border)",
+        background: "var(--color-bg)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 15,
+        flexShrink: 0,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "default" : "pointer",
+        color: "var(--color-text)",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
