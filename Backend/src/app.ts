@@ -13,6 +13,14 @@ import { uploadsRouter } from "./routes/uploads.js";
 import { checklistRouter } from "./routes/checklist.js";
 import { npdRouter } from "./routes/npd/index.js";
 import { permissionAuditRouter } from "./routes/permissionAudit.js";
+import { imsMastersRouter } from "./routes/ims/imsMasters.js";
+import { imsStockRouter } from "./routes/ims/imsStock.js";
+import { imsRacksRouter } from "./routes/ims/imsRacks.js";
+import { imsProductionRouter } from "./routes/ims/imsProduction.js";
+import { imsRequisitionsRouter } from "./routes/ims/imsRequisitions.js";
+import { imsKycRouter } from "./routes/ims/imsKyc.js";
+import { imsInventoryRouter } from "./routes/ims/imsInventory.js";
+import { imsSettingsRouter } from "./routes/ims/imsSettings.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 // helmet's own type declarations sometimes resolve as a non-callable namespace on Vercel's
@@ -70,6 +78,14 @@ app.use("/api/v1/uploads", uploadsRouter);
 app.use("/api/v1/checklist", checklistRouter);
 app.use("/api/v1/npd", npdRouter);
 app.use("/api/v1/admin", permissionAuditRouter);
+app.use("/api/v1/ims/masters", imsMastersRouter);
+app.use("/api/v1/ims/stock", imsStockRouter);
+app.use("/api/v1/ims/racks", imsRacksRouter);
+app.use("/api/v1/ims/production", imsProductionRouter);
+app.use("/api/v1/ims/requisitions", imsRequisitionsRouter);
+app.use("/api/v1/ims/kyc", imsKycRouter);
+app.use("/api/v1/ims/inventory", imsInventoryRouter);
+app.use("/api/v1/ims/settings", imsSettingsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

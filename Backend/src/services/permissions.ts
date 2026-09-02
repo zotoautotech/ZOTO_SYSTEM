@@ -34,6 +34,19 @@ const MODULE_ALIASES: Record<string, string> = {
   delivery: "delivery",
   remarks: "remarks",
   sample: "sample",
+
+  // IMS module — see Backend/src/routes/ims/*.ts. "IMS" alone grants shared reads via
+  // requireAnyModule; each write route is gated on its own specific sub-key below.
+  ims: "ims",
+  imsmasters: "ims-masters",
+  imsstock: "ims-stock",
+  imsracks: "ims-racks",
+  imsproduction: "ims-production",
+  imsrequisitions: "ims-requisitions",
+  imskyc: "ims-kyc",
+  imsinventory: "ims-inventory",
+  imssettings: "ims-settings",
+  imswipweight: "ims-wip-weight",
 };
 
 function normalize(name: string): string {
