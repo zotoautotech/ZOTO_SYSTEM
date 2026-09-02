@@ -49,6 +49,20 @@ export const env = {
     // this service account; no separate spreadsheet was created since the service account has no
     // Drive quota of its own to create one in — see NPD/CONTEXT.md).
     npd: process.env.NPD_SHEET_ID ?? "",
+
+    // IMS module — 10 new spreadsheets created by Backend/create-ims-sheets.mjs (Sale/
+    // Transport data reuses `transactions`/`transport` above — no separate IMS Sale sheet,
+    // see docs/work/ims-sheet-header-spec.md's "Resolved ambiguities" section).
+    imsStock: process.env.IMS_SHEET_STOCK_ID ?? "",
+    imsRmWip: process.env.IMS_SHEET_RM_WIP_ID ?? "",
+    imsPurchase: process.env.IMS_SHEET_PURCHASE_ID ?? "",
+    imsProduction: process.env.IMS_SHEET_PRODUCTION_ID ?? "",
+    imsFg: process.env.IMS_SHEET_FG_ID ?? "",
+    imsMasterFg: process.env.IMS_SHEET_MASTER_FG_ID ?? "",
+    imsProductMaster: process.env.IMS_SHEET_PRODUCT_MASTER_ID ?? "",
+    imsDataStorage: process.env.IMS_SHEET_DATA_STORAGE_ID ?? "",
+    imsCustomer: process.env.IMS_SHEET_CUSTOMER_ID ?? "",
+    imsMasterCust: process.env.IMS_SHEET_MASTER_CUST_ID ?? "",
   },
 
   driveFolderId: process.env.DRIVE_FOLDER_ID ?? "",
