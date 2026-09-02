@@ -110,9 +110,13 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     .filter((r) => !category || r.Category === category)
     .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
   const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
+  // Label shows "Vendor Firm Name + product" (e.g. "J.C.I Cables(India) - CABLES") per the
+  // user's explicit request — the saved `value` stays just the firm name (what actually gets
+  // written to the RM SKU row's own VENDOR NAME field), the product suffix is display-only,
+  // helping a doer tell apart vendors who share a similar name but supply different goods.
   const vendorOptions: SelectOption[] = vendorRows.map((r) => ({
     value: r["Vendor Firm Name"],
-    label: r["Vendor Firm Name"],
+    label: r.product ? `${r["Vendor Firm Name"]} - ${r.product}` : r["Vendor Firm Name"],
   }));
 
   // PART NO. live preview — client-side mirror of the real, verified App Formula

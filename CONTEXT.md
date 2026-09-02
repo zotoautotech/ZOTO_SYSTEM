@@ -1541,6 +1541,17 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Vendor dropdown label shows "Vendor Firm Name - product" (2 Sep 2026, later)
+
+`RmSkuForm.tsx`'s Vendor Name `SearchableSelect` options now display as e.g. "J.C.I
+Cables(India) - CABLES" — the real `ZOTO/MASTER-VENDOR` sheet's `product` column (column Y,
+confirmed live) appended to the firm name — per the user's explicit request, to help tell
+apart vendors with similar names but different goods. Display-only: the saved `value` stays
+just the plain firm name (what's actually written to the RM SKU row's own `VENDOR NAME`
+field) — only the dropdown's visible `label` changes. No backend change needed: `GET
+/npd/taxonomy/vendor-master` already returns the full raw row (including `product`) regardless
+of the table's `fields` whitelist, same as every other taxonomy table.
+
 ## VENDOR NAME connected to the real live "ZOTO/MASTER-VENDOR" spreadsheet (2 Sep 2026)
 
 The user shared Editor access to a genuinely separate, already-live production spreadsheet —
