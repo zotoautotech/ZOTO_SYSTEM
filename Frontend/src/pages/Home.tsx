@@ -23,6 +23,7 @@ export function Home() {
     if (name.startsWith("SALES CRR")) return "/modules";
     if (name.startsWith("CHECKLIST")) return "/checklist";
     if (name.startsWith("NPD")) return "/npd";
+    if (name.startsWith("IMS")) return "/ims";
     return `/home/${encodeURIComponent(tile.view)}`;
   }
 

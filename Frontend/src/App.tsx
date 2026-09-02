@@ -37,6 +37,10 @@ import { DashboardList } from "./checklist/DashboardList";
 import { DoerPendingList } from "./checklist/DoerPendingList";
 import { AccountDashboardExpand } from "./checklist/AccountDashboardExpand";
 import { AccountPendingDataList } from "./checklist/AccountPendingDataList";
+import { ImsHome } from "./ims/ImsHome";
+import { ImsMastersList } from "./ims/ImsMastersList";
+import { ImsStockRecordEntry } from "./ims/ImsStockRecordEntry";
+import { ImsRacksList } from "./ims/ImsRacksList";
 import { NpdHome } from "./npd/NpdHome";
 import { BomBuilder } from "./npd/BomBuilder";
 import { RmSkuCatalog } from "./npd/RmSkuCatalog";
@@ -73,6 +77,10 @@ export default function App() {
         <Route path="checklist/dashboard" element={<DashboardList />} />
         <Route path="checklist/dashboard/account" element={<AccountDashboardExpand />} />
         <Route path="checklist/dashboard/account/data" element={<AccountPendingDataList />} />
+        <Route path="ims" element={<ImsHome />} />
+        <Route path="ims/masters/:type" element={<ImsMastersList />} />
+        <Route path="ims/stock/:type" element={<ImsStockRecordEntry />} />
+        <Route path="ims/racks" element={<ImsRacksList />} />
         <Route path="npd" element={<NpdHome />} />
         <Route path="npd/bom" element={<BomBuilder />} />
         <Route path="npd/bom/:fgId" element={<BomBuilder />} />
