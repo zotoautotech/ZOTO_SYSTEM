@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import { appendRow, deleteRows, readTable, updateRow } from "../../services/sheets.js";
-import { nextPlainRandomId } from "../../services/ids.js";
+import { nextPlainRandomId, nextSequentialId } from "../../services/ids.js";
 import { logChange } from "../../services/npdChangelog.js";
 import {
   nextCategoryCode,
@@ -72,6 +72,15 @@ interface TaxonomyTableDef {
    * that gets silently discarded would be actively misleading). Still listed in `fields` and
    * still editable via the PUT/edit path, for a manual correction afterward. */
   computedFields?: string[];
+  /** @default "random" (nextPlainRandomId, matching every brand-new NPD taxonomy tab's real
+   * live Unique ID format). `vendor-master` is the one exception: it points at an already-live
+   * production sheet whose real rows are sequential `VEND-0001` IDs (confirmed live, 27+ real
+   * rows) — minting a random-hex ID there would be inconsistent with every existing row, not
+   * matching-the-sheet like it is everywhere else. Set `idStrategy: "sequential"` +
+   * `idSequencePrefix`/`idSequencePad` for that case. */
+  idStrategy?: "random" | "sequential";
+  idSequencePrefix?: string;
+  idSequencePad?: number;
 }
 
 const TABLES: TaxonomyTableDef[] = [
@@ -161,17 +170,29 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
+  // Points at the real, already-live "ZOTO/MASTER-VENDOR" spreadsheet (27+ real rows,
+  // VEND-0001... sequential IDs), shared Editor with the service account directly by the user
+  // (2 Sep 2026) — NOT the empty placeholder tab this entry used to point to on `env.sheets.npd`
+  // (see env.ts's `vendorMaster` doc comment). Fields/headers below are the real live headers,
+  // dumped directly rather than assumed (this app's standing discipline) — `Vendor Firm Name`/
+  // `Vendor Id`, not `Vendor Name`/`Vendor ID`. Only a subset of the real sheet's 26 columns are
+  // exposed here (the ones a doer creating a vendor from the RM SKU Form's "+ New" flow would
+  // plausibly fill); every other real column (GSTIN, Bank details, Segment, etc.) stays intact
+  // on the sheet, just not surfaced through this generic form.
   {
     key: "vendor-master",
     label: "Vendor Master",
-    spreadsheetId: env.sheets.npd,
+    spreadsheetId: env.sheets.vendorMaster,
     tab: "Vendor Master",
-    idColumn: "Vendor ID",
-    idPrefix: "VEN",
-    requiredFields: ["Vendor Name"],
-    fields: ["Vendor Name", "Contact No.", "Email", "GSTIN", "Address"],
-    timestampField: "TIMESTAMP",
-    useremailField: "USEREMAIL",
+    idColumn: "Vendor Id",
+    idPrefix: "VEND",
+    idStrategy: "sequential",
+    idSequencePrefix: "VEND-",
+    idSequencePad: 4,
+    requiredFields: ["Vendor Firm Name"],
+    fields: ["Vendor Firm Name", "Status", "Contact Person Name", "Email", "Mobile", "Address", "Vendor GSTIN"],
+    timestampField: "Date Of Joining",
+    skipDuplicateCheck: true,
   },
   {
     key: "vehicle-compatibility",
@@ -541,7 +562,16 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // because rm-sku's PART NO. formula needs this row's own ID'S as an input (see
     // generateRmPartCode()'s doc comment, finding #1) — every other table just ignores it
     // being available a little earlier, so this is safe to hoist unconditionally.
-    const id = await nextPlainRandomId(table.spreadsheetId, table.tab, table.idColumn);
+    const id =
+      table.idStrategy === "sequential"
+        ? await nextSequentialId(
+            table.spreadsheetId,
+            table.tab,
+            table.idColumn,
+            table.idSequencePrefix ?? table.idPrefix,
+            table.idSequencePad ?? 4
+          )
+        : await nextPlainRandomId(table.spreadsheetId, table.tab, table.idColumn);
 
     // Duplicate detection — server-side, the real gate, matching this project's convention
     // (Sales CRR's customer-assignment gate, part-code duplicate check, etc.). Case-insensitive
@@ -636,9 +666,18 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
       body["PART NO."] = result.partCode;
     }
 
+    // vendor-master's real live rows format their timestamp column as "DD.MM.YYYY HH:mm:ss"
+    // (e.g. "02.09.2026 13:40:21"), not ISO — match the sheet's own existing convention rather
+    // than mixing formats down one column.
+    const now = new Date();
+    const timestampValue =
+      table.key === "vendor-master"
+        ? `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`
+        : now.toISOString();
+
     const record: Record<string, string> = {
       [table.idColumn]: id,
-      [table.timestampField]: new Date().toISOString(),
+      [table.timestampField]: timestampValue,
       ...(table.useremailField ? { [table.useremailField]: req.user!.employeeId } : {}),
       ...body,
     };

@@ -49,6 +49,13 @@ export const env = {
     // this service account; no separate spreadsheet was created since the service account has no
     // Drive quota of its own to create one in — see NPD/CONTEXT.md).
     npd: process.env.NPD_SHEET_ID ?? "",
+    // "ZOTO/MASTER-VENDOR" — a separate, already-live, real production vendor sheet (27+ real
+    // rows, VEND-0001... sequential IDs) shared Editor with the service account by the user
+    // directly (2 Sep 2026), NOT the empty placeholder "Vendor Master" tab on `npd` above —
+    // taxonomy.ts's `vendor-master` table entry now points here instead. See that entry's own
+    // comment for the header/ID-scheme differences (real headers use "Vendor Firm Name"/
+    // "Vendor Id", not the placeholder's "Vendor Name"/"Vendor ID").
+    vendorMaster: process.env.VENDOR_MASTER_SHEET_ID ?? "",
 
     // IMS module — 10 new spreadsheets created by Backend/create-ims-sheets.mjs (Sale/
     // Transport data reuses `transactions`/`transport` above — no separate IMS Sale sheet,

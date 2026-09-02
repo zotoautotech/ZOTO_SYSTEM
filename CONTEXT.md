@@ -1376,6 +1376,64 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## VENDOR NAME connected to the real live "ZOTO/MASTER-VENDOR" spreadsheet (2 Sep 2026)
+
+The user shared Editor access to a genuinely separate, already-live production spreadsheet —
+**"ZOTO/MASTER-VENDOR"** (`1LHuLmcZmkYG461Tfvvusbv2zcKzhi96W88Z3usiTUjw`, new env var
+`VENDOR_MASTER_SHEET_ID`, `env.sheets.vendorMaster`) — one tab, `Vendor Master`, already
+holding 27+ real rows (`VEND-0001`… sequential IDs, real firms like "J.C.I Cables(India)").
+**This is NOT the same as the empty placeholder `Vendor Master` tab that already existed on
+`env.sheets.npd`** (`taxonomy.ts`'s Sprint-1 `vendor-master` entry, headers `Vendor Name`/
+`Vendor ID`/`Contact No.`/`GSTIN`/`Address` — invented, never populated). Confirmed the real
+sheet's actual headers by dumping them directly (this app's standing discipline) rather than
+guessing from the screenshot alone: `Date Of Joining`, `Vendor Id`, `Vendor Firm Name`,
+`Status`, `Payement Terms`, `Contact Person Name`, `Address`, `Email`, `Country Name`,
+`Pin Code`, `Mobile`, `Mobile No.2`, a second `Contact Person Name`, `Contact Person Mobile
+No.`, `Contact Person Designaiton`, `Vendor GSTIN`, `State Name`, `Logo's`, `Payment Term
+(Days)`, `Bank Name`, `BRANCH IFSC CODE`, `Account No. RTGS`, `GOODS TYPE SUPPLY`, `Segment`,
+`product`, `Account Type` — 26 columns total, no `Timestamp`/`Useremail` pair (uses `Date Of
+Joining` as its own timestamp-ish column, no per-row editor-email column at all).
+
+`taxonomy.ts`'s `vendor-master` table entry was repointed at this real sheet (`spreadsheetId:
+env.sheets.vendorMaster`, `idColumn: "Vendor Id"`), exposing only a practical subset of the 26
+real columns for now (`Vendor Firm Name`, `Status`, `Contact Person Name`, `Email`, `Mobile`,
+`Address`, `Vendor GSTIN`) — every other real column stays intact on the sheet untouched, just
+not surfaced through this generic taxonomy form yet.
+
+**ID generation needed its own escape hatch from the "every taxonomy table uses
+`nextPlainRandomId`" convention** (see the "Real fix: NPD taxonomy tables' Unique ID switched
+to plain random hex" section above) — this sheet's real, already-existing rows are sequential
+`VEND-0001` style, not random hex, so minting a random ID here would be inconsistent with
+every row already in the sheet, the opposite of "match what's really there." Added
+`TaxonomyTableDef.idStrategy` (`"random"` default, `"sequential"` opt-in +
+`idSequencePrefix`/`idSequencePad`) — `vendor-master` is the one table using `"sequential"`
+(`nextSequentialId(..., "VEND-", 4)`), matching its real existing rows exactly. Every other
+taxonomy table is unaffected (still random hex, unchanged). The timestamp write for this one
+table also matches the sheet's own real format (`DD.MM.YYYY HH:mm:ss` into `Date Of Joining`)
+rather than the ISO string every other table's timestamp column gets, and it has no
+`useremailField` at all (the real sheet has no such column).
+
+**Frontend**: `RmSkuForm.tsx`'s VENDOR NAME field — previously a plain free-text `<input>`
+with a decorative "+" icon (written when this sheet's existence wasn't yet known, see that
+field's own now-superseded doc comment/history) — is now a real `SearchableSelect` sourced
+from `vendor-master`'s live rows, with the same "+ New" inline-create flow as Category/Sub
+Category/Paint. New `RmVendorForm.tsx` (mirrors `RmPaintForm.tsx`'s shape/simplicity) captures
+Vendor Firm Name (required) + Contact Person Name/Email/Mobile (optional), submitting a new
+vendor straight into the real live sheet with `Status: "NEW"` (distinguishing app-created
+vendors from the sheet's pre-existing `"EXISTING"` rows at a glance). Unlike
+`RmCategoryForm`/`RmSubCategoryForm`/`RmPaintForm`, there's no live-preview value shown for
+`Vendor Id` — it's a plain "Generated on Save" — since previewing the next sequential number
+would need its own extra preview endpoint that wasn't judged worth building for this one field
+alone (the other three preview a *formula-derived* CODE the doer needs to see before saving;
+Vendor Id is just an opaque sequence number, nothing to preview meaningfully).
+
+**Verification note**: typechecked clean on both sides (`tsc --noEmit`); did not run a live
+create-and-verify round-trip against the real vendor sheet this pass — per the user's own
+stated token-budget preference, live-sheet verification scripts are skipped by default unless
+asked for. The real header dump above WAS done live (a one-off Sheets API read, not assumed),
+consistent with this project's non-negotiable "never trust an assumed schema" rule — only the
+end-to-end create flow itself is unverified.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

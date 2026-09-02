@@ -8,6 +8,7 @@ import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
 import { RmCategoryForm } from "./RmCategoryForm";
 import { RmSubCategoryForm } from "./RmSubCategoryForm";
 import { RmPaintForm } from "./RmPaintForm";
+import { RmVendorForm } from "./RmVendorForm";
 
 interface Props {
   onClose: () => void;
@@ -45,6 +46,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingSubCategory, setCreatingSubCategory] = useState(false);
   const [creatingPaint, setCreatingPaint] = useState(false);
+  const [creatingVendor, setCreatingVendor] = useState(false);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -84,6 +86,14 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     queryKey: ["npd", "taxonomy", "rows", "rm-sku"],
     queryFn: () => listTaxonomyRows("rm-sku"),
   });
+  // Real, already-live "ZOTO/MASTER-VENDOR" spreadsheet (see taxonomy.ts's `vendor-master`
+  // table entry) — the user shared Editor access directly (2 Sep 2026) and asked for this
+  // field to be a real connected dropdown with its own "+ New" flow, matching Category/Sub
+  // Category/Paint above, rather than the free-text input this used to be.
+  const { data: vendorRows = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "vendor-master"],
+    queryFn: () => listTaxonomyRows("vendor-master"),
+  });
 
   const categoryOptions: SelectOption[] = categoryRows.map((r) => ({ value: r.CATEGORY, label: r.CATEGORY }));
   // Filtered by "r.Category === category" — matches the real live app's own Sub Category
@@ -100,6 +110,10 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     .filter((r) => !category || r.Category === category)
     .map((r) => ({ value: r["SUB CATEGORY"], label: r["SUB CATEGORY"] }));
   const paintOptions: SelectOption[] = paintRows.map((r) => ({ value: r["Paint Description"], label: r["Paint Description"] }));
+  const vendorOptions: SelectOption[] = vendorRows.map((r) => ({
+    value: r["Vendor Firm Name"],
+    label: r["Vendor Firm Name"],
+  }));
 
   // PART NO. live preview — client-side mirror of the real, verified App Formula
   // (services/npdPartCode.ts's generateRmPartCode() on the backend is the actual source of
@@ -277,48 +291,24 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
               onAddNew={category ? () => setCreatingSubCategory(true) : undefined}
             />
           </div>
-          {/* Free text, not a SearchableSelect off the `vendor-master` taxonomy table — that
-              table has no rows yet in production, and the real RM SKU rows' own VENDOR NAME
-              values (e.g. "NISIKI INDIA PRIVATE LIMITED") are plain text on the SKU row itself,
-              not a ref into Vendor Master. Label matches the live sheet's own ALL-CAPS header
-              text exactly (unlike Category/Sub Category/Paint, which are real Title Case
-              headers) — same discipline as every other field label in this app. The circular
-              "+" is decorative, matching the reference form's own icon — there's no separate
-              "add a new vendor" flow to open, since typing a new name here already works. */}
-          <div>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 11, color: "#1A1A1A" }}>
-              VENDOR NAME<span style={{ color: "#DC2626" }}>*</span>
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                value={vendorName}
-                onChange={(e) => setVendorName(e.target.value)}
-                style={{ width: "100%", paddingRight: 48 }}
-              />
-              <span
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: 28,
-                  height: 28,
-                  borderRadius: "50%",
-                  border: "1px solid #D1D5DB",
-                  color: "#6B7280",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 15,
-                  lineHeight: 1,
-                  pointerEvents: "none",
-                }}
-              >
-                +
-              </span>
-            </div>
-          </div>
+          {/* Real connected dropdown off the live "ZOTO/MASTER-VENDOR" spreadsheet's `Vendor
+              Firm Name` column (`vendor-master` taxonomy table — see taxonomy.ts's own comment
+              on that entry), matching the Category/Sub Category/Paint fields' own SearchableSelect
+              + "+ New" pattern above. Label kept as the live RM SKU sheet's own ALL-CAPS
+              "VENDOR NAME" header text (unlike Category/Sub Category/Paint's Title Case
+              headers) — same discipline as every other field label in this app; only the
+              *options* come from the separate vendor sheet, the value saved onto the RM SKU
+              row is still this SKU tab's own VENDOR NAME field. */}
+          <SearchableSelect
+            label="VENDOR NAME"
+            required
+            value={vendorName}
+            onChange={setVendorName}
+            options={vendorOptions}
+            placeholder="Select Vendor…"
+            addNewLabel="New"
+            onAddNew={() => setCreatingVendor(true)}
+          />
           <SearchableSelect
             label="Paint"
             required
@@ -464,6 +454,16 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             setCreatingPaint(false);
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-paint"] });
             setPaint(newPaint);
+          }}
+        />
+      )}
+      {creatingVendor && (
+        <RmVendorForm
+          onClose={() => setCreatingVendor(false)}
+          onSaved={(newVendor) => {
+            setCreatingVendor(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "vendor-master"] });
+            setVendorName(newVendor);
           }}
         />
       )}
