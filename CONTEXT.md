@@ -1541,6 +1541,31 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail's Edit button now really opens the edit form (2 Sep 2026, later)
+
+Edit was visual-only since the first `RmSkuDetail.tsx` rebuild — the user asked for it to
+actually work. `RmSkuForm.tsx` gained an optional `editRow: TaxonomyRow` prop:
+
+- **Prefill**: `category`/`subCategory`/`vendorName`/`paint`/`makeBy` state all initialize
+  from `editRow`'s existing values instead of blank/`null`.
+- **PART NO. on edit — the tricky part**: the live-preview formula's running "count" (how many
+  existing rows already share this Category+Sub Category prefix) counts the row being edited
+  too, so naively recomputing it for an unchanged row would silently produce a DIFFERENT, wrong
+  PART NO. purely from being in that count. Fixed with an `editUnchanged` check — while
+  Category/Sub Category/Paint/Make By all still match what the row was saved with, PART NO.
+  shows the row's own real saved value verbatim; only once the doer actually changes one of
+  those four does the live formula take back over (same behavior as create).
+- **Save**: `editRow` present → `updateTaxonomyRow("rm-sku", id, {...fields, "PART NO.":
+  livePartNo})` (PUT) instead of `createTaxonomyRow` (POST). The generic PUT
+  `/npd/taxonomy/:key/:id` route (`taxonomy.ts`) does NOT recompute PART NO. server-side the
+  way POST does (that's a create-only `computedFields` step) — sending the client's own
+  `livePartNo` in the update body is what keeps it correct if those four inputs changed.
+- Panel title switches to "Edit Raw Material SKU" when `editRow` is present.
+
+`RmSkuDetail.tsx`'s Edit button (in the header-actions slot from the previous pass) now opens
+`RmSkuForm` with `editRow={row}`, disabled until the row itself has loaded; `onSaved`
+invalidates the `rm-sku` rows query so the detail page picks up the change immediately.
+
 ## Paint → Brand: label rename followed by a real live tab rename (2 Sep 2026, later)
 
 After the "Paint" field label was renamed to "Brand" (display-only, previous entry), the user

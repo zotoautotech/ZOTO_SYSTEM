@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listTaxonomyRows } from "./lib/npdApi";
 import { QuickAction } from "../components/FloatingActionButton";
 import { useSetHeaderActions } from "../lib/headerActions";
+import { RmSkuForm } from "./RmSkuForm";
 
 /** RM SKU detail — rebuilt to follow this app's OWN real detail-page pattern
  * (`Frontend/src/modules/transport/TripDetail.tsx`) instead of hand-guessing colors/spacing
@@ -34,10 +36,17 @@ import { useSetHeaderActions } from "../lib/headerActions";
  *   (`lib/headerActions.tsx`'s `useSetHeaderActions`, the same mechanism `RmSkuCatalog.tsx`'s
  *   own "+ New" button already uses) — not a second row on the page itself. This removed the
  *   need for the standalone "‹ Back" button entirely (the breadcrumb already provides a way
- *   back to the catalog), per the user's own explicit follow-up request. */
+ *   back to the catalog), per the user's own explicit follow-up request.
+ * - **Edit is now real**, not visual-only — clicking it opens `RmSkuForm.tsx` (the same "Raw
+ *   Material SKU Form" the catalog's own "+ New" uses) with its new `editRow` prop, prefilling
+ *   every field from this row and PUTting the changes back on Save instead of POSTing a new
+ *   row (see `RmSkuForm.tsx`'s own doc comment for how PART NO. is kept correct across an
+ *   edit). Disabled until the row itself has loaded. */
 export function RmSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showEditForm, setShowEditForm] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "rm-sku"],
@@ -47,15 +56,17 @@ export function RmSkuDetail() {
   const rowIndex = rows.findIndex((r) => r["ID'S"] === id);
   const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : undefined;
   const nextRow = rowIndex >= 0 && rowIndex < rows.length - 1 ? rows[rowIndex + 1] : undefined;
+  const row = rows.find((r) => r["ID'S"] === id);
 
   // Registered unconditionally, before the loading/not-found early returns below — a hook
   // call can never be conditional on those (React's own rule), and the header actions still
-  // need to render (disabled Prev/Next, Edit still visually present) while the row loads.
+  // need to render (disabled Edit/Prev/Next) while the row loads.
   useSetHeaderActions(
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
-        title="Coming soon"
+        onClick={() => row && setShowEditForm(true)}
+        disabled={!row}
         style={{
           display: "flex",
           alignItems: "center",
@@ -68,7 +79,8 @@ export function RmSkuDetail() {
           color: "#fff",
           fontSize: 13,
           fontWeight: 600,
-          cursor: "default",
+          cursor: row ? "pointer" : "default",
+          opacity: row ? 1 : 0.5,
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -94,8 +106,6 @@ export function RmSkuDetail() {
       </HeaderNavButton>
     </div>
   );
-
-  const row = rows.find((r) => r["ID'S"] === id);
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
   if (!row) return <p className="text-muted">RM SKU not found.</p>;
@@ -159,6 +169,17 @@ export function RmSkuDetail() {
           <TableCard title="RM Images & Drawings" count={0} rows={[]} columns={[{ header: "File" }]} />
         </div>
       </div>
+
+      {showEditForm && (
+        <RmSkuForm
+          editRow={row}
+          onClose={() => setShowEditForm(false)}
+          onSaved={() => {
+            setShowEditForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "rm-sku"] });
+          }}
+        />
+      )}
     </div>
   );
 }

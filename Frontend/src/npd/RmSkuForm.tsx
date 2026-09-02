@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
 import { useIsMobile } from "../lib/responsive";
-import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
+import { listTaxonomyRows, createTaxonomyRow, updateTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 import { RmCategoryForm } from "./RmCategoryForm";
 import { RmSubCategoryForm } from "./RmSubCategoryForm";
 import { RmPaintForm } from "./RmPaintForm";
@@ -13,6 +13,10 @@ import { RmVendorForm } from "./RmVendorForm";
 interface Props {
   onClose: () => void;
   onSaved: (id: string) => void;
+  /** Present only when opened from RmSkuDetail.tsx's "Edit" action — the existing row (its raw
+   * "ID'S" plus whatever fields it already has) to prefill from and PUT back to on Save,
+   * instead of the default POST-a-new-row create flow. */
+  editRow?: TaxonomyRow;
 }
 
 /** "Raw Material SKU Form" — matches the real legacy AppSheet reference field-for-field
@@ -40,22 +44,24 @@ interface Props {
  * already been updated to store `"ZOTO"` for that same row (`MAKED CODE: "0"`) — confirmed by
  * reading the live tab directly, not assumed from the stale screenshot. Sending "ADC" 422s:
  * neither of the real formula's two lookup branches can resolve it. */
-export function RmSkuForm({ onClose, onSaved }: Props) {
+export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingSubCategory, setCreatingSubCategory] = useState(false);
   const [creatingPaint, setCreatingPaint] = useState(false);
   const [creatingVendor, setCreatingVendor] = useState(false);
-  const [category, setCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
-  const [vendorName, setVendorName] = useState("");
-  const [paint, setPaint] = useState("");
-  // No default selection — a preselected ZOTO/SUPPLIER would have contributed its digit to
-  // `livePartNo` below before the doer touched anything, showing a premature "0" with a
-  // validation error on an otherwise-untouched form. Matches the reference's own required
-  // (no default) Make By state.
-  const [makeBy, setMakeBy] = useState<"ZOTO" | "SUPPLIER" | null>(null);
+  const [category, setCategory] = useState(editRow?.Category ?? "");
+  const [subCategory, setSubCategory] = useState(editRow?.["Sub Category"] ?? "");
+  const [vendorName, setVendorName] = useState(editRow?.["VENDOR NAME"] ?? "");
+  const [paint, setPaint] = useState(editRow?.Paint ?? "");
+  // No default selection when creating — a preselected ZOTO/SUPPLIER would have contributed
+  // its digit to `livePartNo` below before the doer touched anything, showing a premature "0"
+  // with a validation error on an otherwise-untouched form. Matches the reference's own
+  // required (no default) Make By state. Editing prefills from the row's real saved value.
+  const [makeBy, setMakeBy] = useState<"ZOTO" | "SUPPLIER" | null>(
+    editRow?.["MAKE BY"] === "ZOTO" || editRow?.["MAKE BY"] === "SUPPLIER" ? editRow["MAKE BY"] : null
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -141,7 +147,22 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
   const count = prefix
     ? String(rmSkuRows.filter((r) => (r["PART NO."] ?? "").startsWith(prefix)).length).padStart(3, "0")
     : "";
-  const livePartNo = categoryCode + subCategoryCode + count + paintCode + designByDigit;
+  // While editing an existing row, if Category/Sub Category/Paint/Make By haven't actually
+  // changed from what the row was saved with, keep its real saved PART NO. verbatim rather
+  // than recomputing the running-count formula above — that formula counts EVERY existing row
+  // sharing this prefix (including this row itself), so recomputing it for an unchanged row
+  // would produce a different (and wrong) number purely from being in the list already. Only
+  // once the doer actually changes one of those four inputs does the live formula take over,
+  // same as the create flow.
+  const editUnchanged =
+    !!editRow &&
+    category === (editRow.Category ?? "") &&
+    subCategory === (editRow["Sub Category"] ?? "") &&
+    paint === (editRow.Paint ?? "") &&
+    makeBy === editRow["MAKE BY"];
+  const livePartNo = editUnchanged
+    ? editRow["PART NO."] ?? ""
+    : categoryCode + subCategoryCode + count + paintCode + designByDigit;
 
   function canSave() {
     return !!category && !!subCategory && !!vendorName && !!paint && !!makeBy && !saving;
@@ -152,14 +173,32 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      const result = await createTaxonomyRow("rm-sku", {
-        Category: category,
-        "Sub Category": subCategory,
-        "VENDOR NAME": vendorName,
-        Paint: paint,
-        "MAKE BY": makeBy,
-      });
-      onSaved(result.id);
+      if (editRow) {
+        const id = editRow["ID'S"];
+        // Include the (possibly recomputed) PART NO. in the update — the generic PUT
+        // /npd/taxonomy/:key/:id route (taxonomy.ts) doesn't recompute it server-side the way
+        // POST does (that's a create-only computedField), so if Category/Sub Category/Paint/
+        // Make By changed, this is what keeps PART NO. consistent with the new values instead
+        // of silently going stale.
+        await updateTaxonomyRow("rm-sku", id, {
+          Category: category,
+          "Sub Category": subCategory,
+          "VENDOR NAME": vendorName,
+          Paint: paint,
+          "MAKE BY": makeBy,
+          "PART NO.": livePartNo,
+        });
+        onSaved(id);
+      } else {
+        const result = await createTaxonomyRow("rm-sku", {
+          Category: category,
+          "Sub Category": subCategory,
+          "VENDOR NAME": vendorName,
+          Paint: paint,
+          "MAKE BY": makeBy,
+        });
+        onSaved(result.id);
+      }
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ?? "Could not save — please try again.");
@@ -246,7 +285,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
             ✕
           </button>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
-            Raw Material SKU Form
+            {editRow ? "Edit Raw Material SKU" : "Raw Material SKU Form"}
           </h2>
         </div>
 
