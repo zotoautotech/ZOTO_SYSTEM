@@ -24,7 +24,15 @@ import { listTaxonomyRows } from "./lib/npdApi";
  * genuinely empty (no per-category dimension tables exist yet, see below), just shaped like
  * the reference's table instead of a placeholder sentence. Drawing & Photos gets the
  * reference's own photo-tile shape (ID + category text, large empty white area below) rather
- * than a generic empty-state card. Both stay honestly empty — no fabricated rows/images. */
+ * than a generic empty-state card. Both stay honestly empty — no fabricated rows/images.
+ *
+ * The Action row and the field list are now ONE card, not two separate bordered cards with a
+ * gap between them — matching the reference, which has no visible second border there. Action
+ * buttons are real clickable buttons (`cursor: pointer`, no "Coming soon" inert styling) even
+ * though the actual upload/verify/update handlers are still a follow-up — per the user: "every
+ * button is clickable, i will tell me later." Field values are center-aligned (confirmed on
+ * explicit follow-up — an earlier "these column show in center" note was ambiguous until the
+ * user clarified it meant the values column, previously right-aligned). */
 export function RmSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -137,15 +145,18 @@ export function RmSkuDetail() {
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18, alignItems: "start" }}>
         <div>
-          {/* Action card — 3 icon buttons, blue circular per the reference's own color, not
-              this app's red --color-primary (deliberate pixel-match exception). */}
-          <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, padding: "20px 18px", marginBottom: 18 }}>
-            <div style={{ display: "flex", gap: 24, justifyContent: "space-around" }}>
+          {/* ONE card holds both the action row and the field list — the reference has no
+              visible gap/second border between them, unlike the earlier two-separate-cards
+              version. Action buttons are now real clickable buttons (cursor: pointer, hover
+              feedback) rather than inert/greyed — per the user: "every button is clickable,
+              i will tell me later" (the actual upload/verify/update handlers are still a
+              follow-up; this is just making them look and feel like real buttons now). */}
+          <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, padding: "20px 18px 12px" }}>
+            <div style={{ display: "flex", gap: 24, justifyContent: "space-around", paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
               {actions.map((a) => (
                 <button
                   key={a.label}
                   type="button"
-                  title="Coming soon"
                   style={{
                     display: "flex",
                     flexDirection: "column",
@@ -154,7 +165,7 @@ export function RmSkuDetail() {
                     width: 105,
                     border: "none",
                     background: "transparent",
-                    cursor: "default",
+                    cursor: "pointer",
                   }}
                 >
                   <span
@@ -178,11 +189,7 @@ export function RmSkuDetail() {
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* Details card — 195px label column, 52px rows, per the spec; values center-aligned
-              per explicit follow-up request. */}
-          <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, padding: "12px 18px" }}>
             {fields.map((f) => (
               <div
                 key={f.label}

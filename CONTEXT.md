@@ -1376,6 +1376,17 @@ fetch, so it rendered the component's own "not found" state instead of the mocke
 Confirmed `tsc --noEmit` clean and reviewed the JSX structure directly; a real screenshot
 comparison against the reference still needs a genuine login session.
 
+## RM SKU Detail — fifth pass: one card, clickable-looking action buttons (2 Sep 2026, same day)
+
+Still "not look same": the Action row and the field list were two SEPARATE white bordered
+cards with a visible gap between them; the reference has no such gap/second border — it reads
+as one continuous card. Merged into a single card (action row on top, a `border-bottom`
+divider, then the field rows — no second `border`/gap). Also: "every button is clickable — i
+will tell me later" — the three action-card buttons had `cursor: default` and a "Coming soon"
+tooltip making them look inert; changed to `cursor: pointer` with no inert styling, even
+though the actual upload/verify/update handlers behind them are still a genuine follow-up (not
+built this pass, per the user's own "i will tell me later").
+
 ## RM SKU Detail — fourth pass: header dedupe + real field order/columns (2 Sep 2026, same day)
 
 Still not matching — two further concrete fixes, both against the LIVE sheet, not assumption:
