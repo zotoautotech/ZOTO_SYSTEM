@@ -1114,6 +1114,119 @@ future-dated tasks into the pending list. `checklist.ts`'s `parsePlannedDate()` 
 day-first explicitly instead of trusting `Date.parse`'s guessing — reuse it (or the same
 pattern) anywhere else this app reads a Planned/date-ish cell back from Sheets.
 
+## IMS module (Inventory Management System)
+
+A third top-level app off HOME (`/ims`, flat routes like Checklist/NPD — not nested under
+`/modules`), reached from the `IMS-*` tile via `Home.tsx`'s `hrefFor()`. Rebuilt from a
+reference Next.js+Supabase app (`ims-adc-share-main`, given to Claude as a functional/data-
+model spec only — nothing ported code-for-code) as a plain Sheets-backed module matching
+every other app in this repo: no Supabase, no sync/mirror pipeline, reads go straight through
+`readTable`'s existing 30s cache. The reference's own `docs/*.md` form specs and
+`lib/google-sheets.ts` were mined into **`docs/work/ims-sheet-header-spec.md`** — the literal
+column spec every new tab was created from; consult it (not the reference project directly)
+before touching any IMS tab's shape.
+
+**10 new spreadsheets**, created by the one-off `Backend/create-ims-sheets.mjs` script (not a
+route — run once, safe to rerun since it resumes from an `ALREADY_CREATED` checkpoint rather
+than duplicating). IDs live in `Backend/.env` / `env.sheets.ims*` (`imsStock`, `imsRmWip`,
+`imsPurchase`, `imsProduction`, `imsFg`, `imsMasterFg`, `imsProductMaster`, `imsDataStorage`,
+`imsCustomer`, `imsMasterCust`) — **not yet added to Vercel's env vars**, do that before
+deploying Backend. **IMS's Sale/Transport data deliberately has no spreadsheet of its own** —
+the reference's own "Sale" tabs (`SO_Confirmation`, `Dispatch Items Approval`, `Pre
+Transport`, `Tax_Invoice`+`Tax_Invoice_SO`/`Products`, etc.) turned out to be the same tabs
+Sales CRR's pipeline already writes on `ZOTO_TRANSACTIONS_SHEET_ID`/`TRANSPORT_SHEET_ID` —
+confirmed by dumping live headers directly, not assumed. If IMS ever needs to read/write
+sales-pipeline data, use those existing sheet ids, never create a duplicate.
+
+**Why a brand-new spreadsheet at all, rather than reusing an existing one**: the service
+account is plain/unimpersonated with **zero Drive storage quota of its own** (see
+`googleAuth.ts`'s Drive comment — impersonation was fully revoked after a real incident, see
+Known Gotchas) — it can't own a spreadsheet created in a normal Drive location. Every IMS
+spreadsheet was instead created as a file **inside the existing Shared Drive folder**
+(`DRIVE_FOLDER_ID`, via the Drive API with `parents: [DRIVE_FOLDER_ID]` +
+`supportsAllDrives: true`), which has real storage independent of who creates a file in it —
+the same reasoning `drive.ts`'s upload path already relies on. If a future module needs yet
+another new spreadsheet, create it the same way — never assume the service account can just
+`spreadsheets.create()` a standalone file in "My Drive".
+
+**Header-name-driven, not column-position-driven.** Several of the reference's own tabs
+(`Racks`, `WIP MASTER`, `ASSEMBLE RM FG`, `MASTER OF FG INVENTORY`, `Product Master`,
+`CUSTOMER MASTER V2`, `MASTER CUSTOMER DATA`) only had column *names* confirmed, not exact
+left-to-right order — this doesn't matter here the way it mattered for the old AppSheet
+reference's own column-letter-driven forms, because this repo's `sheets.ts` (`readTable`/
+`appendRows`) matches every field by **header text**, not position. `MASTER CUSTOMER DATA` in
+particular was reproduced with only its ~35 actually-used columns (not the reference's full
+302-column width) for the same reason — the unused ~267 columns would never be read or
+written by anything in this app.
+
+**Backend**: `Backend/src/routes/ims/` — `imsMasters.ts` (FG/RM/WIP/Other/Customer
+catalogues), `imsStock.ts` (Record Entry IN/OUT/TRANSFER for FG/RM/WIP/Other — four separate
+handlers, not one parameterized one, since each product type's balance rule and field shape
+genuinely differs: FG is rack-scoped, RM is whole-part, WIP has no OUT rule but caps IN at a
+batch's Casted Quantity, Other has no rule at all), `imsRacks.ts`, `imsProduction.ts` (Batch
+Production/Followup, Batch Assembly/Followup, Produced Part + warehouse-in), `imsKyc.ts`
+(Customer -> KYC copy flow), `imsInventory.ts` (live balances + read-only quarterly
+snapshots), `imsSettings.ts` (requisition-email recipient storage only — no actual send path
+yet, see below), and `imsRequisitions.ts` — all mounted under `/api/v1/ims/*` in `app.ts`.
+`Backend/src/services/imsBalance.ts` holds the shared balance formulas so every route agrees
+on the same number.
+
+**`imsRequisitions.ts` replaces the reference's external, un-shared Google Apps Script** (the
+reference app only ever flipped a `Requested` flag and read the result back from a Supabase
+mirror — the actual BOM-explosion lived in a script this repo never had access to). Real
+implementation here: `POST /production/:batchId/request` / `/assembly/:assemblyId/request`
+explode `ASSEMBLE RM FG` (`No. Of Qty Use` x batch/assembly quantity) into one Raw Materials
+Requisition / Assembly RM Requisition row per ingredient. `POST /release` does FIFO release
+(oldest requisition filled first) against a new `Stock Release Log` tab (this tab has no
+reference-app sheet counterpart — reconstructed from the reference's Supabase-only
+`ims_stock_release` table, since a Sheets-only build needs a real tab, not an app-side-only
+log) — rejects a release exceeding either the ticked requisitions' pending total or the
+chosen rack's own balance, writes the RM OUT row through the same Stock Record RM path a
+manual entry uses (requisition ids comma-joined into the `Batch ID` cell), and records exactly
+what each requisition received in an `Allocations JSON` column (the OUT row itself only ever
+carries one merged quantity). `DELETE /release/:id` undoes it — removes the RM OUT row first,
+only removing the log row if that succeeds, so the log can never claim material came back if
+the ledger still shows it gone (same ordering discipline as this project's other audit-log-
+then-advance routes).
+
+**Permissions**: `ims` + per-area sub-keys (`ims-masters`, `ims-stock`, `ims-racks`,
+`ims-production`, `ims-requisitions`, `ims-kyc`, `ims-inventory`, `ims-settings`,
+`ims-wip-weight`) added to `permissions.ts`'s `MODULE_ALIASES`. Every write route uses its
+own specific `requireModule(...)` — **no blanket router-level guard**, per this repo's own
+documented PDI/Stock-Release gotcha. `ims-wip-weight` specifically replaces the reference's
+hardcoded 4-email restriction on Casted Weight updates with a real sheet-driven permission.
+Not yet added to `permissionAudit.ts`'s `AUDITED_APPS` — do that once the HOME tile is live.
+
+**Frontend**: `Frontend/src/ims/` — flat routes (`ims`, `ims/masters/:type`,
+`ims/stock/:type`, `ims/racks`) registered in `App.tsx` next to Checklist/NPD's own,
+`lib/imsApi.ts` (typed wrappers for every backend route, including the ones with no page
+yet), `ImsHome.tsx` (landing nav grid, honestly marks which areas have a page built vs
+backend-only), `ImsMastersList.tsx`, `ImsStockRecordEntry.tsx`, `ImsRacksList.tsx` — all
+composing the existing `DataTable`/`FormModal` primitives, no new list/modal code.
+
+**What's NOT built yet** (backend routes exist and are verified; no frontend page):
+Production (batches/assembly), Requisitions, KYC, Inventory (balances/snapshots), Settings.
+`imsSettingsRouter` only stores the requisition-email recipient list — actual sending was
+deliberately not built, since ZOTO SYSTEM has no existing Gmail/email-send path to reuse and
+this repo's own convention (see the Docs API section above) is to isolate a new Google API
+scope on its own client rather than add one speculatively; wire it up as its own follow-up
+when requisition-mail is actually needed, sharing `getGoogleAuth()`'s pattern of a
+dedicated scope/client per feature.
+
+**Verification performed**: Backend typechecks clean; every new GET route exercised live
+against the real new sheets (all empty, as expected for brand-new data); every write helper
+(`appendRow`/`updateRow`/`deleteRows`) round-tripped directly against `Stock Record RM`,
+`Racks`, and `Batch Production` with headers matching exactly, then cleaned up. Frontend
+typechecks clean; dev server boots with zero console errors; `/ims` correctly redirects to
+`/login` under `RequireAuth`. **Not verified**: any authenticated frontend flow (no login
+credentials available this pass), the requisition BOM-explosion/release logic against real
+`ASSEMBLE RM FG` data (the new sheets have no BOM rows yet), and the "PARTIAL"-confidence
+tabs' exact real-world usability (`Racks`, `WIP MASTER`, `ASSEMBLE RM FG`, `MASTER OF FG
+INVENTORY`, `Product Master`, `CUSTOMER MASTER V2`'s ~7 unaccounted trailing columns,
+`Customer Addresses`/`Contacts`/`Revisions`) — these were built from the header spec's best
+reconstruction, not a live dump, since no live IMS sheet existed before this session; treat
+as reference's Needs-manual-confirmation list until a doer actually uses each form once.
+
 ## Known gotchas
 
 - **A brand-new Backend dependency can fail `tsc` on Vercel with "This expression is not
