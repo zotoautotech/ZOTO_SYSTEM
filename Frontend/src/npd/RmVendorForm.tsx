@@ -2,24 +2,35 @@ import { useState } from "react";
 import { isAxiosError } from "axios";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
-import { createTaxonomyRow } from "./lib/npdApi";
+import { createTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 
 interface Props {
+  vendorRows: TaxonomyRow[];
   onClose: () => void;
   onSaved: (vendorFirmName: string) => void;
 }
 
 /** Nested "+ New" form opened from RmSkuForm.tsx's Vendor Name field, connected to the real,
  * already-live "ZOTO/MASTER-VENDOR" spreadsheet (`vendor-master` taxonomy table — see
- * taxonomy.ts's own comment on that entry for the real headers/sequential-ID scheme). Only a
- * handful of that sheet's 26 real columns are exposed here — the ones a doer creating a vendor
- * from this flow would plausibly know — matching the same "don't build a field per column"
- * restraint RmCategoryForm/RmSubCategoryForm/RmPaintForm already use. Vendor Id is minted
- * server-side as the next sequential VEND-000N (matching the sheet's own real existing rows),
- * so unlike those three sibling forms there's no live-preview value to show here — the ID is
- * simply "Generated on Save". */
-export function RmVendorForm({ onClose, onSaved }: Props) {
+ * taxonomy.ts's own comment on that entry for the real headers). Only a handful of that
+ * sheet's 26 real columns are exposed here — the ones a doer creating a vendor from this flow
+ * would plausibly know — matching the same "don't build a field per column" restraint
+ * RmCategoryForm/RmSubCategoryForm/RmPaintForm already use.
+ *
+ * **Vendor Id is a live spreadsheet ARRAYFORMULA** (`=ARRAYFORMULA(IF(C2:C<>"","VEND-"&
+ * TEXT(ROW(C2:C)-1,"0000"),""))`, confirmed live) — the exact same trap as Sales CRR's
+ * `CUSTOMER MASTER.CUST ID` (see CLAUDE.md's Known Gotchas). The backend never writes into
+ * this column (see taxonomy.ts's `idGeneratedByArrayFormula`); this preview is purely a
+ * client-side mirror of that same formula — "next row number" = current row count + 1,
+ * zero-padded to 4 digits — computed from `vendorRows` (already loaded by the parent form for
+ * the dropdown options), so a new vendor's real id can be shown live before Save, same as the
+ * live CODE previews on the Category/Sub Category/Paint forms. The actual id written to the
+ * sheet is still whatever the formula generates server-side, read back after append — this is
+ * a prediction, not the source of truth, but the formula's own "next row" logic makes it
+ * reliable in the normal case of one doer creating one vendor at a time. */
+export function RmVendorForm({ vendorRows, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
+  const previewVendorId = `VEND-${String(vendorRows.length + 1).padStart(4, "0")}`;
   const [vendorFirmName, setVendorFirmName] = useState("");
   const [contactPersonName, setContactPersonName] = useState("");
   const [email, setEmail] = useState("");
@@ -101,7 +112,7 @@ export function RmVendorForm({ onClose, onSaved }: Props) {
         </div>
 
         <div style={{ padding: "32px 24px", overflowY: "auto", flex: 1 }}>
-          <TextField label="Vendor Id" value="Generated on Save" disabled />
+          <TextField label="Vendor Id" value={previewVendorId} disabled />
           <TextField
             label="Vendor Firm Name"
             required

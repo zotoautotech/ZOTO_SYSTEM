@@ -1400,19 +1400,6 @@ real columns for now (`Vendor Firm Name`, `Status`, `Contact Person Name`, `Emai
 `Address`, `Vendor GSTIN`) — every other real column stays intact on the sheet untouched, just
 not surfaced through this generic taxonomy form yet.
 
-**ID generation needed its own escape hatch from the "every taxonomy table uses
-`nextPlainRandomId`" convention** (see the "Real fix: NPD taxonomy tables' Unique ID switched
-to plain random hex" section above) — this sheet's real, already-existing rows are sequential
-`VEND-0001` style, not random hex, so minting a random ID here would be inconsistent with
-every row already in the sheet, the opposite of "match what's really there." Added
-`TaxonomyTableDef.idStrategy` (`"random"` default, `"sequential"` opt-in +
-`idSequencePrefix`/`idSequencePad`) — `vendor-master` is the one table using `"sequential"`
-(`nextSequentialId(..., "VEND-", 4)`), matching its real existing rows exactly. Every other
-taxonomy table is unaffected (still random hex, unchanged). The timestamp write for this one
-table also matches the sheet's own real format (`DD.MM.YYYY HH:mm:ss` into `Date Of Joining`)
-rather than the ISO string every other table's timestamp column gets, and it has no
-`useremailField` at all (the real sheet has no such column).
-
 **Frontend**: `RmSkuForm.tsx`'s VENDOR NAME field — previously a plain free-text `<input>`
 with a decorative "+" icon (written when this sheet's existence wasn't yet known, see that
 field's own now-superseded doc comment/history) — is now a real `SearchableSelect` sourced
@@ -1420,19 +1407,52 @@ from `vendor-master`'s live rows, with the same "+ New" inline-create flow as Ca
 Category/Paint. New `RmVendorForm.tsx` (mirrors `RmPaintForm.tsx`'s shape/simplicity) captures
 Vendor Firm Name (required) + Contact Person Name/Email/Mobile (optional), submitting a new
 vendor straight into the real live sheet with `Status: "NEW"` (distinguishing app-created
-vendors from the sheet's pre-existing `"EXISTING"` rows at a glance). Unlike
-`RmCategoryForm`/`RmSubCategoryForm`/`RmPaintForm`, there's no live-preview value shown for
-`Vendor Id` — it's a plain "Generated on Save" — since previewing the next sequential number
-would need its own extra preview endpoint that wasn't judged worth building for this one field
-alone (the other three preview a *formula-derived* CODE the doer needs to see before saving;
-Vendor Id is just an opaque sequence number, nothing to preview meaningfully).
+vendors from the sheet's pre-existing `"EXISTING"` rows at a glance).
 
-**Verification note**: typechecked clean on both sides (`tsc --noEmit`); did not run a live
-create-and-verify round-trip against the real vendor sheet this pass — per the user's own
-stated token-budget preference, live-sheet verification scripts are skipped by default unless
-asked for. The real header dump above WAS done live (a one-off Sheets API read, not assumed),
-consistent with this project's non-negotiable "never trust an assumed schema" rule — only the
-end-to-end create flow itself is unverified.
+### Correction (2 Sep 2026, same day): Vendor Id is a live ARRAYFORMULA — the first pass here was wrong
+
+The first version of this feature minted a sequential `VEND-000N` id server-side
+(`TaxonomyTableDef.idStrategy: "sequential"`, mirroring `nextSequentialId`) and wrote it as a
+literal into the sheet's `Vendor Id` column, reasoning that the real rows "looked sequential."
+**This was the exact same bug already documented in CLAUDE.md's Known Gotchas for
+`CUSTOMER MASTER.CUST ID`** — the user showed the real cell formula
+(`=ARRAYFORMULA(IF(C2:C<>"","VEND-"&TEXT(ROW(C2:C)-1,"0000"),""))`) live in the sheet, which a
+literal value in that column's spill range would have broken (Google Sheets refuses to expand
+an ARRAYFORMULA into a cell that already holds content, turning the source formula cell into
+`#REF!` and blanking every other row's id). This would have silently corrupted every one of
+the 27 existing vendors' ids the first time a doer used this feature — caught before it ever
+shipped to a real user, but only because the user happened to have the sheet open and pointed
+it out directly.
+
+**Real fix**: `TaxonomyTableDef.idStrategy`/`idSequencePrefix`/`idSequencePad` were replaced
+for this table by `idGeneratedByArrayFormula: true` — the POST handler now never mints or
+writes into `Vendor Id` at all (the key is omitted entirely from the `appendRow` record, not
+even sent as `""` — an empty string still counts as "content" for the spill-range check, per
+the same lesson from the `CUST ID` fix), then re-reads the tab after appending and picks up
+whatever id the sheet's own formula generated for the new last row — mirroring
+`masters.ts`'s existing `CUST_ID_NOT_GENERATED` recovery pattern for the identical situation
+on `CUSTOMER MASTER`. 500s with a clear message if the formula somehow didn't fire, same as
+that pattern's `CUST_ID_NOT_GENERATED`. Every other taxonomy table is unaffected — this is a
+per-table opt-in, not a change to the default `nextPlainRandomId` path.
+
+**Frontend**: `RmVendorForm.tsx`'s Vendor Id field is a **live preview**, not a static
+"Generated on Save" placeholder (the user explicitly asked for this) — computed client-side as
+`VEND-${(vendorRows.length + 1) padded to 4 digits}`, mirroring the sheet's own formula logic
+(`"next row number"`) using `vendorRows` already loaded by the parent `RmSkuForm` for the
+dropdown options. This is a *prediction*, not the source of truth — the real id actually
+written is still whatever the sheet's ARRAYFORMULA generates server-side and is read back
+after save — but it's reliable for the normal case of one doer creating one vendor at a time,
+same "live preview of a server-computed value" spirit as the Category/Sub Category/Paint
+CODE previews (those preview a *formula-derived* value via a real backend endpoint; this one
+predicts a *row-position-derived* value client-side since there's no meaningful lookup to
+preview — just "how many rows exist right now").
+
+**Verification note**: typechecked clean on both sides (`tsc --noEmit`) after this fix too;
+still did not run a live create-and-verify round-trip against the real vendor sheet (per the
+user's own stated token-budget preference, live-sheet verification scripts are skipped by
+default unless asked for) — so the actual "does the sheet still cleanly regenerate every id
+after an app-created row" behavior is unverified beyond code review. Worth a real create once
+deployed, watching column B in the live sheet directly.
 
 ## Known gotchas (add to as they're found)
 

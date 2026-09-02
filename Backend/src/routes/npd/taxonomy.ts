@@ -81,6 +81,13 @@ interface TaxonomyTableDef {
   idStrategy?: "random" | "sequential";
   idSequencePrefix?: string;
   idSequencePad?: number;
+  /** @default false. The id column is a live spreadsheet ARRAYFORMULA (e.g. vendor-master's
+   * `Vendor Id`) rather than a value this app is meant to write — same trap as Sales CRR's
+   * `CUSTOMER MASTER.CUST ID` (see CLAUDE.md's Known Gotchas). When true, the POST handler
+   * never mints or writes the id column at all (appendRow leaves that cell blank, letting the
+   * formula spill into it), then re-reads the tab to pick up whatever id the sheet actually
+   * generated for the new row, mirroring masters.ts's own `CUST_ID_NOT_GENERATED` recovery. */
+  idGeneratedByArrayFormula?: boolean;
 }
 
 const TABLES: TaxonomyTableDef[] = [
@@ -179,6 +186,14 @@ const TABLES: TaxonomyTableDef[] = [
   // exposed here (the ones a doer creating a vendor from the RM SKU Form's "+ New" flow would
   // plausibly fill); every other real column (GSTIN, Bank details, Segment, etc.) stays intact
   // on the sheet, just not surfaced through this generic form.
+  // Vendor Id (column B) is an ARRAYFORMULA spilling down from row 2 —
+  // =ARRAYFORMULA(IF(C2:C<>"","VEND-"&TEXT(ROW(C2:C)-1,"0000"),"")) — confirmed live, the
+  // EXACT same trap as CUSTOMER MASTER's own `CUST ID` column (see CLAUDE.md's Known
+  // Gotchas): writing any literal into a cell in the spill range breaks the formula and
+  // blanks every other row's id. `idStrategy: "sequential"` was the WRONG fix (it would have
+  // written a literal VEND-0028 straight into this column) — never mint/write this table's
+  // id column; `idGeneratedByArrayFormula: true` instead leaves it untouched on append and
+  // reads back whatever the sheet's own formula generated for the new row.
   {
     key: "vendor-master",
     label: "Vendor Master",
@@ -186,9 +201,7 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "Vendor Master",
     idColumn: "Vendor Id",
     idPrefix: "VEND",
-    idStrategy: "sequential",
-    idSequencePrefix: "VEND-",
-    idSequencePad: 4,
+    idGeneratedByArrayFormula: true,
     requiredFields: ["Vendor Firm Name"],
     fields: ["Vendor Firm Name", "Status", "Contact Person Name", "Email", "Mobile", "Address", "Vendor GSTIN"],
     timestampField: "Date Of Joining",
@@ -562,8 +575,11 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // because rm-sku's PART NO. formula needs this row's own ID'S as an input (see
     // generateRmPartCode()'s doc comment, finding #1) — every other table just ignores it
     // being available a little earlier, so this is safe to hoist unconditionally.
-    const id =
-      table.idStrategy === "sequential"
+    // `idGeneratedByArrayFormula` tables (vendor-master) skip this entirely — there is no id
+    // to mint, the sheet's own formula generates it once the row is appended (see below).
+    const id = table.idGeneratedByArrayFormula
+      ? ""
+      : table.idStrategy === "sequential"
         ? await nextSequentialId(
             table.spreadsheetId,
             table.tab,
@@ -676,12 +692,37 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
         : now.toISOString();
 
     const record: Record<string, string> = {
-      [table.idColumn]: id,
+      // Never write into an ARRAYFORMULA-generated id column — see idGeneratedByArrayFormula's
+      // own doc comment. Leaving the key out entirely (not even `""`) matters: an empty string
+      // is still "content" as far as the sheet's spill range is concerned (confirmed the hard
+      // way on CUSTOMER MASTER's identical CUST ID formula — see CLAUDE.md's Known Gotchas), so
+      // `appendRow` must never send this cell any value at all, blank or otherwise.
+      ...(table.idGeneratedByArrayFormula ? {} : { [table.idColumn]: id }),
       [table.timestampField]: timestampValue,
       ...(table.useremailField ? { [table.useremailField]: req.user!.employeeId } : {}),
       ...body,
     };
     await appendRow(table.spreadsheetId, table.tab, record);
+
+    if (table.idGeneratedByArrayFormula) {
+      // Read back the id the sheet's own ARRAYFORMULA just generated for the row we appended
+      // (it's the very last row in the tab — appendRow always writes to the next empty row) —
+      // same "the write happened, now find out what id resulted" pattern as masters.ts's own
+      // CUST_ID_NOT_GENERATED recovery for CUSTOMER MASTER's identical formula. Bail loudly
+      // rather than returning a blank id that would silently orphan anything keyed on it.
+      const afterRows = await readTable(table.spreadsheetId, table.tab, { refresh: true });
+      const generatedId = (afterRows[afterRows.length - 1]?.[table.idColumn] ?? "").trim();
+      if (!generatedId) {
+        return res.status(500).json({
+          error: {
+            code: "ID_NOT_GENERATED",
+            message: `Row was saved, but "${table.tab}" did not generate an id. Check that column "${table.idColumn}" still holds its ARRAYFORMULA and that no literal value was typed into it (a literal blocks the formula and blanks every id).`,
+          },
+        });
+      }
+      return res.status(201).json({ id: generatedId, ...body });
+    }
+
     res.status(201).json({ id, ...body });
   } catch (err) {
     // A missing-CODE lookup failure (e.g. rm-sku's Category/Sub Category/Paint/Make By don't

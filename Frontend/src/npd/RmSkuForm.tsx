@@ -459,6 +459,7 @@ export function RmSkuForm({ onClose, onSaved }: Props) {
       )}
       {creatingVendor && (
         <RmVendorForm
+          vendorRows={vendorRows}
           onClose={() => setCreatingVendor(false)}
           onSaved={(newVendor) => {
             setCreatingVendor(false);
