@@ -382,8 +382,14 @@ const TABLES: TaxonomyTableDef[] = [
   // the real verified App Formula (services/npdPartCode.ts's generateRmPartCode()) — see the
   // POST handler below — never client-supplied, hence `computedFields`. `skipDuplicateCheck`
   // stays true: many legitimately different SKUs share the same Category/Sub Category/Vendor/
-  // Paint/Make By (only the generated PART NO. is meant to be unique, and that's computed, not
+  // Brand/Make By (only the generated PART NO. is meant to be unique, and that's computed, not
   // user input, so there's nothing meaningful to dup-check here).
+  // **Live column renamed "Paint" → "Brand"** (confirmed live, 3 Sep 2026) — the RM SKU tab's
+  // own field, not `RM ref Brand`'s already-renamed `Brand Description` (a separate, earlier
+  // rename). `generateRmPartCode()`'s own `paint` input parameter name is left as-is (it still
+  // looks up against `RM ref Brand.Brand Description`, unaffected by this RM SKU column
+  // rename) — only the value passed into it, and the field key read from/written to this row,
+  // changed.
   {
     key: "rm-sku",
     label: "RM SKU Catalog",
@@ -391,8 +397,8 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "Raw Material SKU",
     idColumn: "ID'S",
     idPrefix: "RM",
-    requiredFields: ["Category", "Sub Category", "VENDOR NAME", "Paint", "MAKE BY"],
-    fields: ["PART NO.", "Category", "Sub Category", "Paint", "MAKE BY", "VENDOR NAME", "IQC PDF UPDATE LAST", "TrF tO Master Rm"],
+    requiredFields: ["Category", "Sub Category", "VENDOR NAME", "Brand", "MAKE BY"],
+    fields: ["PART NO.", "Category", "Sub Category", "Brand", "MAKE BY", "VENDOR NAME", "IQC PDF UPDATE LAST", "TrF tO Master Rm"],
     computedFields: ["PART NO."],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
@@ -775,7 +781,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
         id,
         category: (body.Category as string) ?? "",
         subCategory: (body["Sub Category"] as string) ?? "",
-        paint: (body.Paint as string) ?? "",
+        paint: (body.Brand as string) ?? "",
         makeBy: (body["MAKE BY"] as string) ?? "",
       });
       body["PART NO."] = result.partCode;

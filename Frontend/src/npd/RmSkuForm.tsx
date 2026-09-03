@@ -54,7 +54,10 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   const [category, setCategory] = useState(editRow?.Category ?? "");
   const [subCategory, setSubCategory] = useState(editRow?.["Sub Category"] ?? "");
   const [vendorName, setVendorName] = useState(editRow?.["VENDOR NAME"] ?? "");
-  const [paint, setPaint] = useState(editRow?.Paint ?? "");
+  // Live column renamed "Paint" → "Brand" (confirmed live, 3 Sep 2026) — state var/setter names
+  // (paint/setPaint) are left as-is (internal naming only, no reason to churn every reference),
+  // just the row-key read here changed.
+  const [paint, setPaint] = useState(editRow?.Brand ?? "");
   // No default selection when creating — a preselected ZOTO/SUPPLIER would have contributed
   // its digit to `livePartNo` below before the doer touched anything, showing a premature "0"
   // with a validation error on an otherwise-untouched form. Matches the reference's own
@@ -175,7 +178,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
     !!editRow &&
     category.trim() === (editRow.Category ?? "").trim() &&
     subCategory.trim() === (editRow["Sub Category"] ?? "").trim() &&
-    paint.trim() === (editRow.Paint ?? "").trim() &&
+    paint.trim() === (editRow.Brand ?? "").trim() &&
     makeBy === editRow["MAKE BY"];
   const livePartNo = editUnchanged
     ? editRow["PART NO."] ?? ""
@@ -201,7 +204,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
           Category: category,
           "Sub Category": subCategory,
           "VENDOR NAME": vendorName,
-          Paint: paint,
+          Brand: paint,
           "MAKE BY": makeBy,
           "PART NO.": livePartNo,
         });
@@ -211,7 +214,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
           Category: category,
           "Sub Category": subCategory,
           "VENDOR NAME": vendorName,
-          Paint: paint,
+          Brand: paint,
           "MAKE BY": makeBy,
         });
         onSaved(result.id);

@@ -139,10 +139,10 @@ export function RmSkuDetail() {
             <Field label="PART NO." value={row["PART NO."]} />
             <Field label="Category" value={row.Category} />
             <Field label="Sub Category" value={row["Sub Category"]} />
-            {/* Label shown as "Brand" for consistency with RmSkuForm.tsx's own field label —
-                underlying row key stays `Paint` (the RM SKU tab's own real column name is
-                unchanged, only the app-facing label changed). */}
-            <Field label="Brand" value={row.Paint} />
+            {/* Live column renamed "Paint" → "Brand" (confirmed live, 3 Sep 2026) — label was
+                already "Brand" (matching RmSkuForm.tsx's own field label); now the row key
+                matches the real live column too. */}
+            <Field label="Brand" value={row.Brand} />
             <Field label="MAKE BY" value={row["MAKE BY"]} />
             <Field label="VENDOR NAME" value={row["VENDOR NAME"]} />
           </Section>

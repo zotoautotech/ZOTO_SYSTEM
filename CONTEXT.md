@@ -1541,6 +1541,26 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Live rename: Raw Material SKU's own "Paint" column → "Brand" (3 Sep 2026)
+
+The user renamed the `Raw Material SKU` tab's own column directly in the live sheet — a
+DIFFERENT rename from the earlier `RM ref Paint`→`RM ref Brand` tab/`Brand Description` rename
+(that one was the taxonomy reference table; this one is the RM SKU row's own field that stores
+the picked Brand value). Updated every place that reads/writes this specific key:
+
+- `taxonomy.ts`'s `rm-sku` table: `requiredFields`/`fields` now say `"Brand"`, not `"Paint"`.
+- The POST handler's `generateRmPartCode()` call now reads `body.Brand` (was `body.Paint`) —
+  the function's own `paint` parameter name is left as-is (internal naming only; it still
+  looks up against the separately-named `RM ref Brand.Brand Description`, unaffected).
+- `RmSkuForm.tsx`: `editRow?.Brand` for the initial prefill, `editRow.Brand` in the
+  `editUnchanged` check, and both `createTaxonomyRow`/`updateTaxonomyRow` payloads now send
+  `Brand:` — the component's own internal `paint`/`setPaint` state names are left alone (same
+  "don't churn internal names for an external rename" reasoning as the backend).
+- `RmSkuDetail.tsx`: the Brand field now reads `row.Brand` instead of `row.Paint`.
+
+Verified with a full-repo grep across `Backend/src` for `"Paint"`/`.Paint` — no other route
+(`purchase.ts`, `partCodeRequest.ts`, `bom.ts`) touches this specific field.
+
 ## SEGMENT locked to "Car Accessories" — no dropdown, no "+ New" (2 Sep 2026, same day)
 
 Per explicit instruction: this app's entire FG product line is Car Accessories, so SEGMENT on
