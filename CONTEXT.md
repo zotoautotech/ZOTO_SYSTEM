@@ -1541,6 +1541,19 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: FINAL GOOD SKU Form rebuilt on RmSkuForm.tsx's own panel chrome (2 Sep 2026, same day)
+
+The first version of `FgSkuForm.tsx` (below) used the shared `FormModal.tsx` centered-dialog
+convention — reasonable on its own, but it sat right next to `RmSkuForm.tsx`'s custom
+right-docked panel in the same app and looked nothing like it. The user caught this
+immediately ("are you sure this look same") with a side-by-side screenshot. Rebuilt on the
+EXACT same chrome as `RmSkuForm.tsx`: right-docked panel (`min(48.18vw, 925px)` wide),
+64px header/footer bars, same literal-hex field styling (`#D1D5DB` borders, `#C0392B` focus/
+selected red) — not `FormModal.tsx`'s pattern. Same reasoning `RmSkuForm.tsx` already
+documents for its own deviation from `FormModal.tsx` applies here too: visual consistency
+between the app's own two SKU forms matters more than following the generic modal shape.
+Field logic/behavior is unchanged from the first version — only the outer chrome changed.
+
 ## FINAL GOOD SKU Form — the "+ New" create form the earlier scoping question deferred (2 Sep 2026, later)
 
 The earlier FG SKU Detail rebuild was explicitly scoped to the Detail page only (a direct
