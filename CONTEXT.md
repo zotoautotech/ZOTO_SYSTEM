@@ -1541,6 +1541,17 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## SEGMENT locked to "Car Accessories" — no dropdown, no "+ New" (2 Sep 2026, same day)
+
+Per explicit instruction: this app's entire FG product line is Car Accessories, so SEGMENT on
+`FgSkuForm.tsx` should never be an editable choice. Changed from a `SearchableSelect` (sourced
+from `fg-segment`) to a fixed `const FIXED_SEGMENT = "Car Accessories"`, rendered as a disabled
+`TextField` — same treatment as the already-disabled live-preview `PART NO.` field just above
+it. Removed the Segment "+ New" flow entirely (no reason to add a second segment that will
+never be selectable), the now-unused `fg-segment` query/options, and the `creatingSegment`
+state. `FgQuickCreateForm.tsx`'s `"segment"` kind is left defined (dead code, not deleted) in
+case a future SKU type genuinely needs more than one segment.
+
 ## Correction: FgQuickCreateForm.tsx also shows Against id, quoting the real formula (2 Sep 2026, same day)
 
 Even after the previous pass added TIMESTAMP/USEREMAIL/Unique ID/CODE/DUPLICACY, the user

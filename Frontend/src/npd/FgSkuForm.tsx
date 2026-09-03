@@ -24,19 +24,26 @@ interface Props {
  * truth and the full reasoning behind each piece (why Standard Part's contribution is best-
  * effort/likely blank, why "Paint" became "Brand", etc.).
  *
- * Segment/Category/Sub Category are real `SearchableSelect`s off the FG taxonomy tables,
- * **now each with their own "+ New" inline-create flow** (`FgQuickCreateForm.tsx`) — per the
- * user's explicit follow-up request, matching RM SKU's own Category/Sub Category/Paint/Vendor
- * pattern. Brand is the FG-side equivalent of RM SKU's own Brand field (`fg-paint` taxonomy
- * table, tab literally renamed `FG ref Brand` the same day) — no "+ New" flow for it yet
- * (not asked for this pass), a plain `SearchableSelect`. */
+ * Category/Sub Category are real `SearchableSelect`s off the FG taxonomy tables, **each with
+ * their own "+ New" inline-create flow** (`FgQuickCreateForm.tsx`) — per the user's explicit
+ * follow-up request, matching RM SKU's own Category/Sub Category/Paint/Vendor pattern. Brand
+ * is the FG-side equivalent of RM SKU's own Brand field (`fg-paint` taxonomy table, tab
+ * literally renamed `FG ref Brand` the same day) — no "+ New" flow for it yet (not asked for
+ * this pass), a plain `SearchableSelect`.
+ *
+ * **SEGMENT is fixed to "Car Accessories"** — per explicit instruction ("SEGMENT is fixed for
+ * every time so auto select, not one can edit this"), this app's product line is entirely
+ * Car Accessories, so the field is a disabled, pre-filled value rather than a dropdown a doer
+ * could accidentally change. No "+ New Segment" flow either, for the same reason — there's
+ * only ever meant to be this one segment. */
+const FIXED_SEGMENT = "Car Accessories";
+
 export function FgSkuForm({ onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
-  const [creatingSegment, setCreatingSegment] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingSubCategory, setCreatingSubCategory] = useState(false);
-  const [segment, setSegment] = useState("");
+  const [segment] = useState(FIXED_SEGMENT);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [brand, setBrand] = useState("");
@@ -54,10 +61,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const { data: segmentRows = [] } = useQuery({
-    queryKey: ["npd", "taxonomy", "rows", "fg-segment"],
-    queryFn: () => listTaxonomyRows("fg-segment"),
-  });
   const { data: categoryRows = [] } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "fg-category"],
     queryFn: () => listTaxonomyRows("fg-category"),
@@ -77,10 +80,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     queryFn: () => listTaxonomyRows("fg-sku"),
   });
 
-  const segmentOptions: SelectOption[] = segmentRows.map((r: TaxonomyRow) => ({
-    value: r.SEGMENT.trim(),
-    label: r.SEGMENT.trim(),
-  }));
   const categoryOptions: SelectOption[] = categoryRows.map((r: TaxonomyRow) => ({
     value: r.CATEGORY.trim(),
     label: r.CATEGORY.trim(),
@@ -228,16 +227,8 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
         <div style={{ padding: isMobile ? "24px var(--space)" : "32px 40px 40px", overflowY: "auto", flex: 1 }}>
           <div className="fg-sku-fields" style={{ width: "100%" }}>
             <TextField label="PART NO." required value={livePartNo} disabled placeholder="000" />
-            <SearchableSelect
-              label="SEGMENT"
-              required
-              value={segment}
-              onChange={setSegment}
-              options={segmentOptions}
-              placeholder="Select Segment…"
-              addNewLabel="New"
-              onAddNew={() => setCreatingSegment(true)}
-            />
+            {/* Fixed, not a dropdown — see this file's own module doc comment for why. */}
+            <TextField label="SEGMENT" required value={segment} disabled />
             <SearchableSelect
               label="Category"
               required
@@ -350,17 +341,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
         </div>
       </div>
 
-      {creatingSegment && (
-        <FgQuickCreateForm
-          kind="segment"
-          onClose={() => setCreatingSegment(false)}
-          onSaved={(v) => {
-            setCreatingSegment(false);
-            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-segment"] });
-            setSegment(v);
-          }}
-        />
-      )}
       {creatingCategory && (
         <FgQuickCreateForm
           kind="category"
