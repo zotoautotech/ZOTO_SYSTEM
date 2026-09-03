@@ -378,6 +378,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           kind="sub-category"
           segment={segment}
           category={category}
+          subCategoryRows={subCategoryRows}
           onClose={() => setCreatingSubCategory(false)}
           onSaved={(v) => {
             setCreatingSubCategory(false);

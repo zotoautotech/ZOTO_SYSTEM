@@ -594,6 +594,22 @@ taxonomyRouter.get("/rm-paint/preview", async (_req, res, next) => {
   }
 });
 
+// FG mirror of the RM previews above — `FG ref Category DD` is the one FG taxonomy table with
+// a real computed CODE (see taxonomy.ts's own `fg-category-dd` entry / npdPartCode.ts's
+// nextFgCategoryDdCode()). `FG ref Segment`/`FG ref Category` have no CODE/DUPLICACY columns
+// on the live sheet at all (confirmed live — just SEGMENT / Against id+CATEGORY respectively),
+// so there's nothing to preview for those two beyond the plain input itself; no preview
+// endpoint exists for them, matching `FgQuickCreateForm.tsx`'s own "segment"/"category" kinds
+// staying a single free-text field with no computed-value row.
+taxonomyRouter.get("/fg-category-dd/preview", async (_req, res, next) => {
+  try {
+    const code = await nextFgCategoryDdCode();
+    res.json({ code });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/:key", async (req, res, next) => {
   try {
     const table = findTable(req.params.key);

@@ -73,6 +73,13 @@ export async function previewRmPaintCode() {
   return res.data;
 }
 
+/** FG mirror of previewRmCategoryDdCode() — `FG ref Category DD` is the one FG taxonomy table
+ * with a real computed CODE (no Against id column exists there, unlike its RM sibling). */
+export async function previewFgCategoryDdCode() {
+  const res = await api.get<{ code: string }>("/npd/taxonomy/fg-category-dd/preview");
+  return res.data;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }

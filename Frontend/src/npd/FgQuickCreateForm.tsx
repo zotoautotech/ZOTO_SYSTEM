@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isAxiosError } from "axios";
+import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
-import { createTaxonomyRow } from "./lib/npdApi";
+import { useAuth } from "../lib/auth";
+import { createTaxonomyRow, previewFgCategoryDdCode, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
 
 type Kind = "segment" | "category" | "sub-category";
 
@@ -13,6 +15,9 @@ interface Props {
   category?: string;
   /** Required for kind "sub-category" — same idea, the parent's picked Segment. */
   segment?: string;
+  /** Only used for kind "sub-category" — the parent's already-loaded fg-category-dd rows,
+   * for the live DUPLICACY preview below (no extra network round trip). */
+  subCategoryRows?: TaxonomyRow[];
   onClose: () => void;
   onSaved: (value: string) => void;
 }
@@ -26,20 +31,53 @@ const CONFIG: Record<Kind, { title: string; tableKey: string; fieldKey: string; 
 /** One shared "+ New" nested panel for Segment/Category/Sub Category, opened from
  * `FgSkuForm.tsx`'s three matching `SearchableSelect`s — per the user's explicit request
  * ("add + New for Segment, Category, Sub Category too"), matching the same inline-create
- * pattern `RmSkuForm.tsx` already uses (`RmCategoryForm.tsx`/`RmSubCategoryForm.tsx`/
- * `RmPaintForm.tsx`), just collapsed into one parameterized component instead of three
- * near-identical files — all three cases are genuinely this simple (one free-text field plus,
- * for Sub Category, the parent's already-picked Segment/Category carried straight through),
- * unlike RM's own nested forms which each had real CODE/DUPLICACY previews to show.
- * `CODE`/`DUPLICACY`/`AGAINST ID` are all server-computed on save (see `taxonomy.ts`'s
- * `fg-category-dd` entry) — nothing to preview client-side here, so this form is just the one
- * input plus Save/Cancel, no live-preview fields the way RM's nested forms have. */
-export function FgQuickCreateForm({ kind, category, segment, onClose, onSaved }: Props) {
+ * pattern `RmSkuForm.tsx` already uses, collapsed into one parameterized component instead of
+ * three near-identical files.
+ *
+ * **Live-preview fields now match RM's own nested forms** (TIMESTAMP/USEREMAIL/Unique ID on
+ * all three, plus CODE/DUPLICACY for Sub Category) — the first version of this file skipped
+ * them entirely on the reasoning that everything was server-computed anyway, but the user
+ * pointed out directly that it didn't "look same" as `RmCategoryForm.tsx`. `FG ref Segment`/
+ * `FG ref Category` genuinely have no CODE/DUPLICACY columns on the live sheet at all
+ * (confirmed live — just `SEGMENT` / `Against id`+`CATEGORY` respectively), so those two kinds
+ * stop at TIMESTAMP/USEREMAIL/Unique ID; only `FG ref Category DD` (Sub Category) has a real
+ * CODE (`previewFgCategoryDdCode()`) to show, plus a client-computed DUPLICACY count (scoped
+ * to SEGMENT+Category+SUB CATEGORY, mirroring `countFgSubCategoryDuplicates()`'s own real
+ * server formula) from the parent's already-loaded `fg-category-dd` rows. */
+export function FgQuickCreateForm({ kind, category, segment, subCategoryRows = [], onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const cfg = CONFIG[kind];
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Format-matching preview only, not a predicted real value — see RmCategoryForm.tsx's own
+  // doc comment for why (the real live Unique ID values are plain random hex, not sequential).
+  const [previewUniqueId] = useState(previewPlainRandomId);
+
+  const { data: codePreview, isError: codePreviewFailed } = useQuery({
+    queryKey: ["npd", "taxonomy", "fg-category-dd", "preview"],
+    queryFn: previewFgCategoryDdCode,
+    enabled: kind === "sub-category",
+    retry: 1,
+  });
+
+  const duplicacy =
+    kind === "sub-category" && segment && category && value.trim()
+      ? subCategoryRows.filter(
+          (r) =>
+            (r.SEGMENT ?? "").trim() === segment.trim() &&
+            (r.Category ?? "").trim() === category.trim() &&
+            (r["SUB CATEGORY"] ?? "").trim() === value.trim()
+        ).length
+      : 0;
 
   function canSave() {
     if (!value.trim() || saving) return false;
@@ -114,6 +152,16 @@ export function FgQuickCreateForm({ kind, category, segment, onClose, onSaved }:
         </div>
 
         <div style={{ padding: "32px 24px", overflowY: "auto", flex: 1 }}>
+          <TextField label="TIMESTAMP" value={now.toLocaleString()} disabled />
+          <TextField label="USEREMAIL" value={user?.employeeId ?? ""} disabled />
+          <TextField label="Unique ID" value={previewUniqueId} disabled />
+          {kind === "sub-category" && (
+            <TextField
+              label="CODE"
+              value={codePreview ? codePreview.code : codePreviewFailed ? "—" : "Loading…"}
+              disabled
+            />
+          )}
           <TextField
             label={cfg.label}
             required
@@ -121,6 +169,7 @@ export function FgQuickCreateForm({ kind, category, segment, onClose, onSaved }:
             onChange={(e) => setValue(e.target.value)}
             placeholder={cfg.placeholder}
           />
+          {kind === "sub-category" && <TextField label="DUPLICACY" value={String(duplicacy)} disabled />}
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 

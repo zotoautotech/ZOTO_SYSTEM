@@ -1541,6 +1541,21 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: FgQuickCreateForm.tsx gets the same live-preview fields as RM's nested forms (2 Sep 2026, same day)
+
+The first version of `FgQuickCreateForm.tsx` (below) skipped every live-preview field on the
+reasoning that CODE/DUPLICACY/AGAINST ID are all server-computed anyway — the user pointed out
+directly, with a side-by-side screenshot against `RmCategoryForm.tsx`, that it didn't "look
+same." Added TIMESTAMP (ticking clock)/USEREMAIL/Unique ID (format-matching preview, same as
+every RM nested form) to all three kinds. `FG ref Segment`/`FG ref Category` genuinely have no
+CODE/DUPLICACY columns on the live sheet at all (confirmed live) — those two kinds stop there.
+Only `FG ref Category DD` (Sub Category) has a real CODE to preview — new
+`GET /npd/taxonomy/fg-category-dd/preview` (mirroring the existing `rm-category-dd/preview`
+pattern, pure read of `nextFgCategoryDdCode()`) plus a client-computed DUPLICACY count (scoped
+to SEGMENT+Category+SUB CATEGORY, mirroring `countFgSubCategoryDuplicates()`'s own real
+formula) from the parent `FgSkuForm.tsx`'s already-loaded `fg-category-dd` rows, passed down
+as a new `subCategoryRows` prop.
+
 ## FG SKU gets its real PART NO. formula + Brand field + Segment/Category/Sub Category "+ New" (2 Sep 2026, same day)
 
 The user pasted the real live App Formulas for `FINAL GOOD SKU.PART NO.`, `FG ref
