@@ -1541,6 +1541,35 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## FG SKU Detail rebuilt on the same real pattern as RM SKU Detail (2 Sep 2026, later)
+
+The user asked to do "the same" for FG SKU after seeing RM SKU Detail's rebuild, sharing
+AppSheet reference screenshots (Update All Vendor PDFs / MACHINING & OTHER CHARGES / Verify
+BOM Item icons, Drawing Videos + Fitment Details cards, a BOM Items table). Scoped via an
+explicit question first — Detail page only, not the "+ New" create form (which stays
+`allowCreate: false` on `taxonomy.ts`'s `fg-sku` table, a deliberate existing decision: new
+FG SKU rows only come from an approved New Part Code Request).
+
+`FgSkuDetail.tsx` rebuilt on the exact same pattern `RmSkuDetail.tsx` now uses (itself copied
+from `TripDetail.tsx`): `QuickAction` icons (Update All Vendor PDFs / MACHINING & OTHER
+CHARGES / Verify BOM Item — visual-only, no backing workflow yet), `Section`/`Field` cards,
+Edit + Previous/Next in the `useSetHeaderActions` header slot. **Edit is disabled/visual-only
+here** (unlike RM SKU's real Edit) — there's no `FgSkuForm.tsx` yet to open.
+
+**Field list stays exactly what the previous version of this file already had** — the live
+`FINAL GOOD SKU` tab only has ~20 real columns (see the "Verified directly against the
+workbook" section above), NOT the reference screenshot's `Old Part Name`/`Description`/
+`Paint` fields (those belong to the old 2-wheeler ADC schema that never made it to ZOTO's live
+sheet) — showing them would be fabricating fields that don't exist, so they were deliberately
+left out rather than copied from the screenshot.
+
+Two of the three new cards are honestly empty (Drawing Videos, Fitment Details — no upload
+feature or customer-fitment tracking table exists yet, same "flag it, don't fake it"
+convention as RM SKU Detail's Dimensions/Drawing & Photos cards). The third, **BOM Items, is
+genuinely real** — `listBomLines(fgId)`, the exact same `ASSEMBLE RM FG (BOM)` data
+`BomBuilder.tsx` already reads/writes, not a placeholder; its "Expand" navigates to the
+existing `/npd/bom/:fgId` route.
+
 ## Real bug caught via the new Edit flow: "Brand Description" column rename + trailing-space data (2 Sep 2026, later)
 
 Testing the just-shipped Edit flow surfaced a real bug: opening Edit on an existing RM SKU
