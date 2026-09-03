@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
 import { useIsMobile } from "../lib/responsive";
 import { useSearch } from "../lib/search";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+import { FgSkuForm } from "./FgSkuForm";
 
 /** FG SKU Catalog — same rebuild as RmSkuCatalog.tsx, matching the real legacy reference
  * screen (left Category filter with counts, main area = cards grouped by Sub Category header,
@@ -16,8 +17,10 @@ export function FgSkuCatalog() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { query } = useSearch();
+  const queryClient = useQueryClient();
   const [filterWidth, setFilterWidth] = useState(260);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "fg-sku"],
@@ -80,23 +83,46 @@ export function FgSkuCatalog() {
   );
 
   useSetHeaderActions(
-    <button
-      aria-label="Filter"
-      style={{
-        width: 38,
-        height: 38,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: "1px solid var(--color-border)",
-        borderRadius: 8,
-        background: "var(--color-bg)",
-      }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4 5h16M7 12h10M10 19h4" />
-      </svg>
-    </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {!isMobile && (
+        <button
+          aria-label="New"
+          onClick={() => setCreating(true)}
+          style={{
+            width: 38,
+            height: 38,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid var(--color-border)",
+            borderRadius: 8,
+            background: "var(--color-bg)",
+            color: "var(--color-primary)",
+            fontSize: 18,
+            fontWeight: 600,
+          }}
+        >
+          +
+        </button>
+      )}
+      <button
+        aria-label="Filter"
+        style={{
+          width: 38,
+          height: 38,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg)",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 5h16M7 12h10M10 19h4" />
+        </svg>
+      </button>
+    </div>
   );
 
   return (
@@ -140,6 +166,41 @@ export function FgSkuCatalog() {
           ))}
         </div>
       </div>
+
+      {isMobile && (
+        <button
+          aria-label="New"
+          onClick={() => setCreating(true)}
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            border: "none",
+            background: "var(--color-primary)",
+            color: "#fff",
+            fontSize: 26,
+            fontWeight: 600,
+            boxShadow: "var(--shadow-lg)",
+            zIndex: 5,
+          }}
+        >
+          +
+        </button>
+      )}
+
+      {creating && (
+        <FgSkuForm
+          onClose={() => setCreating(false)}
+          onSaved={(id) => {
+            setCreating(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-sku"] });
+            navigate(`/npd/fg-sku/${encodeURIComponent(id)}`);
+          }}
+        />
+      )}
     </div>
   );
 }

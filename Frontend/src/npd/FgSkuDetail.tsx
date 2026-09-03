@@ -6,12 +6,12 @@ import { useSetHeaderActions } from "../lib/headerActions";
 
 /** FG SKU detail — rebuilt on the same real pattern `RmSkuDetail.tsx` now uses (itself copied
  * from `TripDetail.tsx`, Sales CRR's own working detail page), per the user's own screenshot
- * of the AppSheet reference + "now create for Final Good SKU" follow-up. Scoped to the Detail
- * page only (confirmed explicitly) — the FG SKU "+ New" create form stays disabled
- * (`allowCreate: false` on taxonomy.ts's `fg-sku` table), a deliberate existing decision: new
- * FG SKU rows are meant to only come from an approved New Part Code Request, not a generic
- * form. Edit is visual-only here for the same reason — there's no dedicated `FgSkuForm.tsx`
- * yet to open (unlike `RmSkuDetail.tsx`'s real Edit, which opens `RmSkuForm.tsx`).
+ * of the AppSheet reference. This pass was explicitly scoped to the Detail page only (the
+ * "+ New" create form was a separate, later follow-up — see `FgSkuForm.tsx` and
+ * `FgSkuCatalog.tsx`'s own "+ New" wiring for that; `taxonomy.ts`'s `fg-sku` table now has
+ * `allowCreate` back on). **Edit here is still visual-only** — there's no edit-mode support in
+ * `FgSkuForm.tsx` yet (unlike `RmSkuDetail.tsx`'s real Edit, which opens `RmSkuForm.tsx` with
+ * an `editRow` prop) — a reasonable next follow-up once this create form is confirmed working.
  *
  * Field list unchanged from the previous version of this file — the live `FINAL GOOD SKU` tab
  * (`env.sheets.fg`, shared with Sales CRR's own goods search) only has ~20 real columns (see

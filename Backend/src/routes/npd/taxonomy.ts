@@ -292,12 +292,27 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
-  // FG & RM SKU catalogs (Sprint 2) — reuse this exact generic CRUD infra rather than a
-  // separate router, since editing is identical to every reference table above. Create is
-  // disabled (allowCreate: false): new SKU rows come only from an approved New Part Code
-  // Request (routes/npd/partCodeRequest.ts), matching the build prompt's §5.2 workflow.
-  // `FG ID`/`ID'S` (the id columns) and `TIMESTAMP`/`USEREMAIL` are deliberately excluded from
-  // `fields` — they're system-managed, never hand-edited.
+  // FG SKU catalog — reuses this exact generic CRUD infra, same as every reference table
+  // above. **Create was `allowCreate: false`** (new rows meant to only come from an approved
+  // New Part Code Request, routes/npd/partCodeRequest.ts, per the build prompt's §5.2
+  // workflow) — re-enabled on the user's direct instruction to build a real "FINAL GOOD SKU
+  // Form" now, matching the reference screenshot's own create flow (a plain doer-typed
+  // PART NO. field, not auto-computed the way RM SKU's is — confirmed off the reference's own
+  // screenshot: FG's PART NO. input has no disabled/greyed "Auto Compute" styling, unlike RM's,
+  // and no verified real App Formula for it exists the way RM's `generateRmPartCode()` does).
+  // `skipDuplicateCheck` stays true — many legitimately different FG SKUs can share a Category/
+  // Sub Category/Segment, only PART NO. itself needs to be unique and there's no formula to
+  // enforce that server-side yet (same caveat as RM SKU had before its formula was found).
+  // `FG ID` (the id column) and `TIMESTAMP`/`USEREMAIL` stay excluded from `fields` — still
+  // system-managed, never hand-edited.
+  // **`FG ID` is a plain sequential integer** (1, 2, 3 … 86, confirmed live — a literal cell
+  // value, not an ARRAYFORMULA the way `CUSTOMER MASTER.CUST ID`/`vendor-master.Vendor Id`
+  // are), NOT random hex like RM SKU's `ID'S`. The generic taxonomy POST handler defaults to
+  // `nextPlainRandomId` for every table — would have written a random hex string into a column
+  // whose every existing row is a bare number, caught before this ever shipped. Uses the same
+  // `idStrategy: "sequential"` escape hatch `vendor-master` uses, with an empty prefix and no
+  // zero-padding (`idSequencePad: 1`) so `nextSequentialId` just returns "27", "28", … matching
+  // the real existing rows exactly.
   {
     key: "fg-sku",
     label: "FG SKU Catalog",
@@ -305,7 +320,10 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "FINAL GOOD SKU",
     idColumn: "FG ID",
     idPrefix: "FG",
-    requiredFields: [],
+    idStrategy: "sequential",
+    idSequencePrefix: "",
+    idSequencePad: 1,
+    requiredFields: ["PART NO.", "SEGMENT", "CATEGORY", "SUB CATEGORY", "Name"],
     fields: [
       "PART NO.",
       "Manupulation Partcode",
@@ -326,7 +344,6 @@ const TABLES: TaxonomyTableDef[] = [
     ],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
-    allowCreate: false,
     skipDuplicateCheck: true,
     auditFields: ["Discount", "price", "Final Price"],
   },

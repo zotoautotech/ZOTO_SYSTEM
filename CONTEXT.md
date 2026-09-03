@@ -1541,6 +1541,43 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## FINAL GOOD SKU Form — the "+ New" create form the earlier scoping question deferred (2 Sep 2026, later)
+
+The earlier FG SKU Detail rebuild was explicitly scoped to the Detail page only (a direct
+question confirmed this) — the user then asked for the create form too. Built it:
+
+- **`taxonomy.ts`'s `fg-sku` table has `allowCreate` back on** (was `allowCreate: false` — new
+  rows were meant to only come from an approved New Part Code Request; the user's direct
+  instruction overrides that for now). `requiredFields` set to `["PART NO.", "SEGMENT",
+  "CATEGORY", "SUB CATEGORY", "Name"]`.
+- **Caught a real bug before it shipped**: `FG ID` (the id column) is a **plain sequential
+  integer** on the live sheet (`1, 2, 3 … 86`, confirmed live) — a literal cell value, not an
+  ARRAYFORMULA the way `CUSTOMER MASTER.CUST ID`/`vendor-master.Vendor Id` are, and NOT random
+  hex the way RM SKU's own `ID'S` is. The generic taxonomy POST handler defaults every table to
+  `nextPlainRandomId` — would have written a random hex string into a column whose every
+  existing row is a bare number. Fixed with the same `idStrategy: "sequential"` escape hatch
+  `vendor-master` uses, empty prefix + `idSequencePad: 1` (no zero-padding), so a new row gets
+  plain "87", "88", … matching the real existing rows exactly.
+- **`FgSkuForm.tsx`** — built on this app's own shared `FormModal.tsx` convention (unlike
+  `RmSkuForm.tsx`'s deliberate custom-panel exception, which pixel-matches a specific reference
+  panel — no such request existed here). **PART NO. is a plain required text field, not
+  auto-computed** — confirmed off the reference screenshot (no disabled/greyed "Auto Compute"
+  styling the way RM SKU's PART NO. has), and there's no verified real App Formula for FG's own
+  part-code scheme the way RM SKU's `generateRmPartCode()` exists. Segment/Category/Sub
+  Category are real `SearchableSelect`s off the FG taxonomy tables (`fg-segment`/`fg-category`/
+  `fg-category-dd`, all already built in Sprint 1), Sub Category filtered by the picked
+  Category. **No "+ New" inline-create flow for these three yet** (unlike RM SKU's Category/
+  Sub Category/Paint/Vendor, which each got one) — flagged as a follow-up, not silently
+  limited; a doer needing a brand-new Segment/Category/Sub Category has no in-form way to add
+  one yet.
+- `FgSkuCatalog.tsx` gained the same "+ New" header-action wiring `RmSkuCatalog.tsx` already
+  has (desktop `+` button in the header-actions slot, mobile FAB), opening `FgSkuForm.tsx` and
+  navigating to the new row's detail page on save.
+
+Edit on `FgSkuDetail.tsx` is still visual-only — `FgSkuForm.tsx` has no edit-mode/`editRow`
+support yet (unlike `RmSkuForm.tsx`'s), a reasonable next step once this create flow is
+confirmed working end-to-end.
+
 ## FG SKU Detail rebuilt on the same real pattern as RM SKU Detail (2 Sep 2026, later)
 
 The user asked to do "the same" for FG SKU after seeing RM SKU Detail's rebuild, sharing
