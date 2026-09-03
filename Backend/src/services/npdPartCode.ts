@@ -431,6 +431,7 @@ export async function generateRmPartCode(input: RmPartCodeInput): Promise<RmPart
 // this implementation keeps the doer's own real submitted values for those two fields and only
 // ever resolves the CODE lookups via each formula's real `ANY(SELECT(...))` fallback branch —
 // consistent with the RM fix, not a new decision.
+const FG_CATEGORY_TAB = "FG ref Category";
 const FG_CATEGORY_DD_TAB = "FG ref Category DD";
 const FG_BRAND_TAB = "FG ref Brand";
 const FG_SUB_SUB_PARTS_TAB = "FG Sub sub parts";
@@ -469,6 +470,29 @@ async function nextFgCode(tab: string, codeField: string): Promise<string> {
 /** `FG ref Category DD.CODE` — same real App Formula shape as its RM sibling. */
 export async function nextFgCategoryDdCode(): Promise<string> {
   return nextFgCode(FG_CATEGORY_DD_TAB, "CODE");
+}
+
+/** `FG ref Category.Against id` / `FG ref Category DD.AGAINST ID` — same dead-pointer shape as
+ * RM's own `nextAgainstId()` above (see that function's own doc comment for the full "why this
+ * is functionally dead but still shown" reasoning), just scoped to `FINAL GOOD SKU`/
+ * `env.sheets.fg` instead of `Raw Material SKU`/`env.sheets.npd`. Implemented — and shown as a
+ * live preview field in `FgQuickCreateForm.tsx` — on the user's own explicit instruction to
+ * match RM's nested forms, which display this same dead value for the same reason (matching
+ * the real legacy App Formula verbatim, even where it can't functionally resolve for a
+ * brand-new row). Returns the `FG ID` of whichever `FINAL GOOD SKU` row currently has the
+ * latest `TIMESTAMP` — a live, constantly-shifting pointer to "the most recently created FG SKU
+ * app-wide," not a real link to the row it's written on. */
+export async function nextFgAgainstId(): Promise<string> {
+  const rows = await readTable(env.sheets.fg, FG_SKU_TAB, { refresh: true });
+  const withIds = rows.filter((r) => (r["FG ID"] ?? "").trim());
+
+  let latest: (typeof rows)[number] | undefined;
+  for (const r of withIds) {
+    const ts = new Date(r.TIMESTAMP ?? "").getTime();
+    if (Number.isNaN(ts)) continue;
+    if (!latest || ts > new Date(latest.TIMESTAMP).getTime()) latest = r;
+  }
+  return (latest?.["FG ID"] ?? "").trim();
 }
 
 /** `FG ref Brand.Code` — same letter-increment shape as every sibling ref-table CODE column

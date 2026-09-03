@@ -1541,6 +1541,24 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: FgQuickCreateForm.tsx also shows Against id, quoting the real formula (2 Sep 2026, same day)
+
+Even after the previous pass added TIMESTAMP/USEREMAIL/Unique ID/CODE/DUPLICACY, the user
+pointed out `Against id` was still missing — quoting the exact real formula again
+(`any(SELECT(FINAL GOOD SKU[ID'S],[ID'S]=MAXROW("FINAL GOOD SKU","TIMESTAMP",[ID'S]<>""))`).
+This is the same dead-pointer shape RM's own `nextAgainstId()` already implements (a row can't
+be pointed at by an AGAINST ID before it exists — see that function's own doc comment) — never
+implemented for FG at all until now, since it had been judged lower-priority in the original
+PART NO. formula pass. Added `nextFgAgainstId()` (`npdPartCode.ts`, same shape as its RM
+sibling, scoped to `FINAL GOOD SKU`/`env.sheets.fg`), wired into both `fg-category`'s and
+`fg-category-dd`'s POST handlers as an always-computed field (`Against id`/`AGAINST ID`
+respectively — `fg-category` has no DUPLICACY column on the live sheet, confirmed live, so
+only `Against id` is computed there, unlike its RM sibling), and two live-preview endpoints
+(`GET /npd/taxonomy/fg-category/preview`, and `fg-category-dd/preview` now returns both `code`
+and `againstId`). `FgQuickCreateForm.tsx` shows `Against id` for both "category" and
+"sub-category" kinds now — "segment" still has nothing to show (`FG ref Segment` genuinely has
+no computed columns on the live sheet at all).
+
 ## Correction: FgQuickCreateForm.tsx gets the same live-preview fields as RM's nested forms (2 Sep 2026, same day)
 
 The first version of `FgQuickCreateForm.tsx` (below) skipped every live-preview field on the

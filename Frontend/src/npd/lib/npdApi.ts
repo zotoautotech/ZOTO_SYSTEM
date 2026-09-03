@@ -73,10 +73,17 @@ export async function previewRmPaintCode() {
   return res.data;
 }
 
-/** FG mirror of previewRmCategoryDdCode() — `FG ref Category DD` is the one FG taxonomy table
- * with a real computed CODE (no Against id column exists there, unlike its RM sibling). */
+/** FG mirror of previewRmCategoryCode() — `FG ref Category` has the same dead-pointer Against
+ * id as its RM sibling, no CODE column. */
+export async function previewFgCategoryAgainstId() {
+  const res = await api.get<{ againstId: string }>("/npd/taxonomy/fg-category/preview");
+  return res.data;
+}
+
+/** FG mirror of previewRmCategoryDdCode() — `FG ref Category DD` has both a real computed CODE
+ * and the same dead-pointer Against id. */
 export async function previewFgCategoryDdCode() {
-  const res = await api.get<{ code: string }>("/npd/taxonomy/fg-category-dd/preview");
+  const res = await api.get<{ code: string; againstId: string }>("/npd/taxonomy/fg-category-dd/preview");
   return res.data;
 }
 

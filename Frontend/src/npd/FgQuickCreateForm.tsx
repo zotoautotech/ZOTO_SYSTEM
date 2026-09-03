@@ -4,7 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import { createTaxonomyRow, previewFgCategoryDdCode, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
+import {
+  createTaxonomyRow,
+  previewFgCategoryAgainstId,
+  previewFgCategoryDdCode,
+  previewPlainRandomId,
+  type TaxonomyRow,
+} from "./lib/npdApi";
 
 type Kind = "segment" | "category" | "sub-category";
 
@@ -35,15 +41,18 @@ const CONFIG: Record<Kind, { title: string; tableKey: string; fieldKey: string; 
  * three near-identical files.
  *
  * **Live-preview fields now match RM's own nested forms** (TIMESTAMP/USEREMAIL/Unique ID on
- * all three, plus CODE/DUPLICACY for Sub Category) — the first version of this file skipped
- * them entirely on the reasoning that everything was server-computed anyway, but the user
- * pointed out directly that it didn't "look same" as `RmCategoryForm.tsx`. `FG ref Segment`/
- * `FG ref Category` genuinely have no CODE/DUPLICACY columns on the live sheet at all
- * (confirmed live — just `SEGMENT` / `Against id`+`CATEGORY` respectively), so those two kinds
- * stop at TIMESTAMP/USEREMAIL/Unique ID; only `FG ref Category DD` (Sub Category) has a real
- * CODE (`previewFgCategoryDdCode()`) to show, plus a client-computed DUPLICACY count (scoped
- * to SEGMENT+Category+SUB CATEGORY, mirroring `countFgSubCategoryDuplicates()`'s own real
- * server formula) from the parent's already-loaded `fg-category-dd` rows. */
+ * all three, plus Against id for Category/Sub Category and CODE/DUPLICACY for Sub Category) —
+ * the first version of this file skipped them entirely on the reasoning that everything was
+ * server-computed anyway, then a second pass added TIMESTAMP/USEREMAIL/Unique ID but still
+ * left out `Against id` (the user asked for it specifically, quoting the real formula:
+ * `any(SELECT(FINAL GOOD SKU[ID'S],[ID'S]=MAXROW(...)))` — same dead-pointer shape RM's own
+ * nested forms already display, see `nextFgAgainstId()`'s doc comment for the full "why show
+ * a functionally-dead value" reasoning). `FG ref Segment` genuinely has no computed columns on
+ * the live sheet at all (confirmed live — just `SEGMENT`), so it's the one kind that stops at
+ * TIMESTAMP/USEREMAIL/Unique ID; `FG ref Category`/`FG ref Category DD` both show `Against id`,
+ * and Sub Category additionally shows a real computed CODE plus a client-computed DUPLICACY
+ * count (scoped to SEGMENT+Category+SUB CATEGORY, mirroring `countFgSubCategoryDuplicates()`'s
+ * own real server formula) from the parent's already-loaded `fg-category-dd` rows. */
 export function FgQuickCreateForm({ kind, category, segment, subCategoryRows = [], onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -62,7 +71,13 @@ export function FgQuickCreateForm({ kind, category, segment, subCategoryRows = [
   // doc comment for why (the real live Unique ID values are plain random hex, not sequential).
   const [previewUniqueId] = useState(previewPlainRandomId);
 
-  const { data: codePreview, isError: codePreviewFailed } = useQuery({
+  const { data: categoryPreview, isError: categoryPreviewFailed } = useQuery({
+    queryKey: ["npd", "taxonomy", "fg-category", "preview"],
+    queryFn: previewFgCategoryAgainstId,
+    enabled: kind === "category",
+    retry: 1,
+  });
+  const { data: subCategoryPreview, isError: subCategoryPreviewFailed } = useQuery({
     queryKey: ["npd", "taxonomy", "fg-category-dd", "preview"],
     queryFn: previewFgCategoryDdCode,
     enabled: kind === "sub-category",
@@ -155,12 +170,26 @@ export function FgQuickCreateForm({ kind, category, segment, subCategoryRows = [
           <TextField label="TIMESTAMP" value={now.toLocaleString()} disabled />
           <TextField label="USEREMAIL" value={user?.employeeId ?? ""} disabled />
           <TextField label="Unique ID" value={previewUniqueId} disabled />
-          {kind === "sub-category" && (
+          {kind === "category" && (
             <TextField
-              label="CODE"
-              value={codePreview ? codePreview.code : codePreviewFailed ? "—" : "Loading…"}
+              label="Against id"
+              value={categoryPreview ? categoryPreview.againstId || "—" : categoryPreviewFailed ? "—" : "Loading…"}
               disabled
             />
+          )}
+          {kind === "sub-category" && (
+            <>
+              <TextField
+                label="Against id"
+                value={subCategoryPreview ? subCategoryPreview.againstId || "—" : subCategoryPreviewFailed ? "—" : "Loading…"}
+                disabled
+              />
+              <TextField
+                label="CODE"
+                value={subCategoryPreview ? subCategoryPreview.code : subCategoryPreviewFailed ? "—" : "Loading…"}
+                disabled
+              />
+            </>
           )}
           <TextField
             label={cfg.label}

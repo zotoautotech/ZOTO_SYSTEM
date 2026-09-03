@@ -15,6 +15,7 @@ import {
   countSubCategoryDuplicates,
   nextFgCategoryDdCode,
   nextFgBrandCode,
+  nextFgAgainstId,
   countFgSubCategoryDuplicates,
   generateFgPartCode,
 } from "../../services/npdPartCode.js";
@@ -245,6 +246,9 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
+  // `Against id` is the same dead-pointer formula as RM ref Category's own — always computed,
+  // shown as a live preview in FgQuickCreateForm.tsx on the user's explicit instruction to
+  // match RM's nested forms (see nextFgAgainstId()'s own doc comment).
   {
     key: "fg-category",
     label: "FG Category",
@@ -254,6 +258,7 @@ const TABLES: TaxonomyTableDef[] = [
     idPrefix: "FGCAT",
     requiredFields: ["CATEGORY"],
     fields: ["Against id", "CATEGORY"],
+    computedFields: ["Against id"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -273,7 +278,7 @@ const TABLES: TaxonomyTableDef[] = [
     idPrefix: "FGSUB",
     requiredFields: ["SEGMENT", "Category", "SUB CATEGORY"],
     fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "SEGMENT", "KEY", "DUPLICACY"],
-    computedFields: ["CODE", "DUPLICACY"],
+    computedFields: ["CODE", "DUPLICACY", "AGAINST ID"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -594,17 +599,25 @@ taxonomyRouter.get("/rm-paint/preview", async (_req, res, next) => {
   }
 });
 
-// FG mirror of the RM previews above — `FG ref Category DD` is the one FG taxonomy table with
-// a real computed CODE (see taxonomy.ts's own `fg-category-dd` entry / npdPartCode.ts's
-// nextFgCategoryDdCode()). `FG ref Segment`/`FG ref Category` have no CODE/DUPLICACY columns
-// on the live sheet at all (confirmed live — just SEGMENT / Against id+CATEGORY respectively),
-// so there's nothing to preview for those two beyond the plain input itself; no preview
-// endpoint exists for them, matching `FgQuickCreateForm.tsx`'s own "segment"/"category" kinds
-// staying a single free-text field with no computed-value row.
+// FG mirrors of the RM previews above. `FG ref Segment` has no computed columns at all on the
+// live sheet (confirmed live — just SEGMENT), so it gets no preview endpoint — matching
+// `FgQuickCreateForm.tsx`'s "segment" kind staying a single free-text field. `FG ref
+// Category`/`FG ref Category DD` both DO have the same dead-pointer `Against id` shown as a
+// live preview (per the user's explicit instruction to match RM's own nested forms — see
+// nextFgAgainstId()'s doc comment); `FG ref Category DD` additionally has a real computed CODE.
+taxonomyRouter.get("/fg-category/preview", async (_req, res, next) => {
+  try {
+    const againstId = await nextFgAgainstId();
+    res.json({ againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/fg-category-dd/preview", async (_req, res, next) => {
   try {
-    const code = await nextFgCategoryDdCode();
-    res.json({ code });
+    const [code, againstId] = await Promise.all([nextFgCategoryDdCode(), nextFgAgainstId()]);
+    res.json({ code, againstId });
   } catch (err) {
     next(err);
   }
@@ -700,6 +713,11 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
       body["Against id"] = await nextAgainstId();
       body.DUPLICACY = await countCategoryDuplicates((body.CATEGORY as string) ?? "");
     }
+    // FG mirror — fg-category has no DUPLICACY column on the live sheet (confirmed live), so
+    // only Against id is computed here, unlike its RM sibling above.
+    if (table.key === "fg-category") {
+      body["Against id"] = await nextFgAgainstId();
+    }
     if (table.key === "rm-category-dd" && !body.CODE) {
       body.CODE = await nextSubCategoryCode();
     }
@@ -712,6 +730,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // `DUPLICACY` are always computed.
     if (table.key === "fg-category-dd") {
       if (!body.CODE) body.CODE = await nextFgCategoryDdCode();
+      body["AGAINST ID"] = await nextFgAgainstId();
       body.DUPLICACY = await countFgSubCategoryDuplicates(
         (body.SEGMENT as string) ?? "",
         (body.Category as string) ?? "",
