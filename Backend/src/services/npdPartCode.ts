@@ -404,3 +404,189 @@ export async function generateRmPartCode(input: RmPartCodeInput): Promise<RmPart
   const partCode = `${prefix}${countStr}${paintCode}${designByDigit}`;
   return { partCode, categoryCode, subCategoryCode, count: countStr, paintCode, designByDigit };
 }
+
+// =============================================================================================
+// FG SKU real App Formulas — the user pulled these directly off the live AppSheet columns
+// (2 Sep 2026), the same way the RM formulas above were originally found. All on `env.sheets.fg`
+// (a DIFFERENT spreadsheet from RM's `env.sheets.npd`), all tabs confirmed by dumping real live
+// headers first (this app's standing discipline) rather than assumed off the pasted formula
+// text alone — `FG ref Paint` had ALSO been renamed to `FG ref Brand` (`Paint Description` →
+// `Brand Description`) by the time this was implemented, same rename pattern RM's own
+// `RM ref Paint` → `RM ref Brand` went through earlier the same day.
+//
+// **`FINAL GOOD SKU` has no `Paint` column at all** (confirmed live) — the formula's own
+// `[_THISROW].[Paint]` term is dead on this specific live sheet the same way several of RM's
+// own AGAINST-ID branches are (see generateRmPartCode()'s own finding #1) — writing to a
+// nonexistent column would have `appendRow` silently drop it, so per the user's own explicit
+// "Paint change to brand" instruction, this is implemented as a NEW additive `Brand` column
+// on `FINAL GOOD SKU` (not `Paint`) instead of trying to force the dead literal name through.
+//
+// **Every `IF(NOT(ISBLANK(LOOKUP(...AGAINST ID...))),...)` branch in the pasted formula is the
+// same dead pointer already found and fixed once this session for RM ref Category DD's own
+// `Category` field** (see the module doc comment above, and generateRmPartCode()'s finding #1)
+// — it can only resolve for a row that already has some OTHER row's `AGAINST ID` pointing back
+// at it, which is impossible for a brand-new row being created. Rather than overwrite
+// `FG ref Category DD`'s own `Category`/`SEGMENT` fields with this dead pointer (the exact bug
+// already caught and reverted for RM, see "Correction: RM ref Category DD.Category..." above),
+// this implementation keeps the doer's own real submitted values for those two fields and only
+// ever resolves the CODE lookups via each formula's real `ANY(SELECT(...))` fallback branch —
+// consistent with the RM fix, not a new decision.
+const FG_CATEGORY_DD_TAB = "FG ref Category DD";
+const FG_BRAND_TAB = "FG ref Brand";
+const FG_SUB_SUB_PARTS_TAB = "FG Sub sub parts";
+const FG_SKU_TAB = "FINAL GOOD SKU";
+const FG_BRAND_DESCRIPTION_FIELD = "Brand Description";
+
+/** Same shape as the RM-scoped `nextCode()` above, just reading `env.sheets.fg` (a different
+ * spreadsheet) and its own `Alphabet` tab instead of `env.sheets.npd`'s. */
+async function nextFgCode(tab: string, codeField: string): Promise<string> {
+  const rows = await readTable(env.sheets.fg, tab, { refresh: true });
+  const withRows = rows.filter((r) => (r["Unique ID"] ?? "").trim());
+
+  let latest: (typeof rows)[number] | undefined;
+  for (const r of withRows) {
+    const ts = new Date(r.TIMESTAMP ?? "").getTime();
+    if (Number.isNaN(ts)) continue;
+    if (!latest || ts > new Date(latest.TIMESTAMP).getTime()) latest = r;
+  }
+
+  const alphabet = await readTable(env.sheets.fg, ALPHABET_TAB);
+  const prevCode = (latest?.[codeField] ?? "").trim();
+
+  if (!prevCode) {
+    const first = alphabet.find((r) => (r.Letter ?? "").trim());
+    if (!first) throw new Error("FG Alphabet tab is empty — cannot generate a starting CODE");
+    return first.Letter.trim();
+  }
+
+  const match = alphabet.find((r) => (r.Letter ?? "").trim() === prevCode);
+  if (!match || !(match["Letter Increment"] ?? "").trim()) {
+    throw new Error(`No next letter found after CODE "${prevCode}" in the FG Alphabet tab — add more rows`);
+  }
+  return match["Letter Increment"].trim();
+}
+
+/** `FG ref Category DD.CODE` — same real App Formula shape as its RM sibling. */
+export async function nextFgCategoryDdCode(): Promise<string> {
+  return nextFgCode(FG_CATEGORY_DD_TAB, "CODE");
+}
+
+/** `FG ref Brand.Code` — same letter-increment shape as every sibling ref-table CODE column
+ * (RM's own `RM ref Category`/`RM ref Category DD`/`RM ref Brand`, all confirmed via a real
+ * decoded formula). The user's own pasted formula for this one specific column
+ * (`MAX(SELECT(FG ref Paint[_RowNumber],ISNOTBLANK([Unique ID])))`) computes a row NUMBER, not
+ * a letter — inconsistent with every sibling table's own observed single-uppercase-letter CODE
+ * values and with what `fgBrandCodeFor()` below actually needs to look up against. Kept on the
+ * same proven letter-increment shape as every sibling table instead, for consistency — flag to
+ * the user if `FG ref Brand`'s real Code values turn out not to follow that pattern. */
+export async function nextFgBrandCode(): Promise<string> {
+  return nextFgCode(FG_BRAND_TAB, "Code");
+}
+
+/** `FG ref Category DD.DUPLICACY` — same shape as RM's own `countSubCategoryDuplicates()`,
+ * scoped to SEGMENT+Category+SUB CATEGORY together (this tab's own required-fields triple). */
+export async function countFgSubCategoryDuplicates(segment: string, category: string, subCategory: string): Promise<string> {
+  const rows = await readTable(env.sheets.fg, FG_CATEGORY_DD_TAB, { refresh: true });
+  const count = rows.filter(
+    (r) =>
+      (r.SEGMENT ?? "").trim().toLowerCase() === segment.trim().toLowerCase() &&
+      (r.Category ?? "").trim().toLowerCase() === category.trim().toLowerCase() &&
+      (r["SUB CATEGORY"] ?? "").trim().toLowerCase() === subCategory.trim().toLowerCase()
+  ).length;
+  return String(count);
+}
+
+/** Part A of the FG PART NO. formula — the combined Category+Sub-Category CODE, matched by
+ * SEGMENT+Category+SUB CATEGORY together (this table's real ANY(SELECT(...)) fallback branch;
+ * the AGAINST-ID first branch is the dead pointer, see this section's own header comment). */
+async function fgCategoryDdCodeFor(segment: string, category: string, subCategory: string): Promise<string> {
+  const rows = await readTable(env.sheets.fg, FG_CATEGORY_DD_TAB, { refresh: true });
+  const real = rows.find(
+    (r) =>
+      (r.SEGMENT ?? "").trim().toLowerCase() === segment.trim().toLowerCase() &&
+      (r.Category ?? "").trim().toLowerCase() === category.trim().toLowerCase() &&
+      (r["SUB CATEGORY"] ?? "").trim().toLowerCase() === subCategory.trim().toLowerCase()
+  );
+  if (!real || !(real.CODE ?? "").trim()) {
+    throw new RmPartCodeLookupError(
+      "MISSING_FG_SUBCATEGORY_CODE",
+      `No CODE found on "FG ref Category DD" for SEGMENT="${segment}" / Category="${category}" / SUB CATEGORY="${subCategory}" — add it via Taxonomy admin first.`
+    );
+  }
+  return real.CODE.trim();
+}
+
+/** Part D of the FG PART NO. formula — the Brand CODE (renamed from "Paint" the same day this
+ * was implemented, see this section's own header comment). Optional — a blank/unmatched Brand
+ * resolves to an empty string rather than throwing, since `FINAL GOOD SKU` has no required
+ * Brand field on the live sheet (this app's own additive `Brand` column is optional). */
+async function fgBrandCodeFor(brand: string): Promise<string> {
+  if (!brand.trim()) return "";
+  const rows = await readTable(env.sheets.fg, FG_BRAND_TAB, { refresh: true });
+  const real = rows.find((r) => (r[FG_BRAND_DESCRIPTION_FIELD] ?? "").trim().toLowerCase() === brand.trim().toLowerCase());
+  return (real?.Code ?? "").trim();
+}
+
+/** Part C of the FG PART NO. formula — the `FG Sub sub parts` CODE, matched by SEGMENT+
+ * Category+SUB CATEGORY+STANDARD together. Optional/best-effort: `FINAL GOOD SKU`'s own
+ * `STANDARD PART` field isn't wired as a ref into this table yet (kept as the simple Yes/No
+ * toggle it already was — the user's own follow-up only asked for +New on Segment/Category/
+ * Sub Category, not a Standard Part rework), so this resolves blank whenever there's no real
+ * match — matching the formula's own graceful `ANY(SELECT(...))`-returns-blank behavior rather
+ * than throwing, since a Yes/No value was never going to match a real `FG Sub sub parts.STANDARD`
+ * row anyway. */
+async function fgSubSubPartsCodeFor(segment: string, category: string, subCategory: string, standardPart: string): Promise<string> {
+  if (!standardPart.trim()) return "";
+  const rows = await readTable(env.sheets.fg, FG_SUB_SUB_PARTS_TAB, { refresh: true });
+  const real = rows.find(
+    (r) =>
+      (r.SEGMENT ?? "").trim().toLowerCase() === segment.trim().toLowerCase() &&
+      (r.Category ?? "").trim().toLowerCase() === category.trim().toLowerCase() &&
+      (r["SUB CATEGORY"] ?? "").trim().toLowerCase() === subCategory.trim().toLowerCase() &&
+      (r.STANDARD ?? "").trim().toLowerCase() === standardPart.trim().toLowerCase()
+  );
+  return (real?.CODE ?? "").trim();
+}
+
+export interface FgPartCodeInput {
+  segment: string;
+  category: string;
+  subCategory: string;
+  standardPart?: string;
+  brand?: string;
+}
+
+export interface FgPartCodeResult {
+  partCode: string;
+  categoryDdCode: string;
+  count: string;
+  subSubPartsCode: string;
+  brandCode: string;
+}
+
+/** FG PART NO. — `Category+Sub-Category CODE & 3-digit running count & FG Sub sub parts CODE &
+ * Brand CODE`, matching the real App Formula's four concatenated parts (the formula's own
+ * Design-By-style 5th segment doesn't exist for FG — confirmed off the pasted formula, it only
+ * has four `&`-joined parts, unlike RM's five). The running count is scoped by SEGMENT+
+ * CATEGORY+SUB CATEGORY (the formula's own match keys, minus Standard Part/Brand — those two
+ * are optional/best-effort per this file's own comments above, so scoping the count by them
+ * too would make the count itself unreliable whenever either is blank). */
+export async function generateFgPartCode(input: FgPartCodeInput): Promise<FgPartCodeResult> {
+  const [categoryDdCode, subSubPartsCode, brandCode] = await Promise.all([
+    fgCategoryDdCodeFor(input.segment, input.category, input.subCategory),
+    fgSubSubPartsCodeFor(input.segment, input.category, input.subCategory, input.standardPart ?? ""),
+    fgBrandCodeFor(input.brand ?? ""),
+  ]);
+
+  const skuRows = await readTable(env.sheets.fg, FG_SKU_TAB, { refresh: true });
+  const count = skuRows.filter(
+    (r) =>
+      (r.SEGMENT ?? "").trim().toLowerCase() === input.segment.trim().toLowerCase() &&
+      (r.CATEGORY ?? "").trim().toLowerCase() === input.category.trim().toLowerCase() &&
+      (r["SUB CATEGORY"] ?? "").trim().toLowerCase() === input.subCategory.trim().toLowerCase()
+  ).length;
+  const countStr = String(count).padStart(3, "0");
+
+  const partCode = `${categoryDdCode}${countStr}${subSubPartsCode}${brandCode}`;
+  return { partCode, categoryDdCode, count: countStr, subSubPartsCode, brandCode };
+}

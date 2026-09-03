@@ -1541,6 +1541,62 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## FG SKU gets its real PART NO. formula + Brand field + Segment/Category/Sub Category "+ New" (2 Sep 2026, same day)
+
+The user pasted the real live App Formulas for `FINAL GOOD SKU.PART NO.`, `FG ref
+Category.Against id`, `FG ref Category DD.AGAINST ID/CODE/Category/SEGMENT/KEY/DUPLICACY`,
+`FG ref Brand.Code/Duplicacy` (confirming the tab rename `FG ref Paint` → `FG ref Brand`,
+`Paint Description` → `Brand Description` — same pattern as RM's own identical rename earlier
+the same day), and `FG Sub sub parts.AGAINST ID/SEGMENT/Category/SUB CATEGORY/KEY/CODE/
+DUPLICACY` — directly superseding this file's own earlier "no verified formula exists for FG"
+statement, which was written before these were available.
+
+**Verified live before implementing anything** (this app's standing discipline): dumped
+`FINAL GOOD SKU`'s real headers again and confirmed **there is no `Paint` column on it at
+all** — the pasted formula's `[_THISROW].[Paint]` term has nothing to write to on this live
+sheet. Per the user's own explicit "Paint change to brand" instruction, implemented as a NEW
+additive `Brand` column instead of trying to force the literal dead name through — same
+"Paint→Brand" rename RM SKU already went through, applied consistently here too.
+
+**`generateFgPartCode()`** (`npdPartCode.ts`) implements the formula's four real
+`&`-concatenated parts: (A) the combined Category+Sub-Category CODE off `FG ref Category DD`
+(matched by SEGMENT+Category+SUB CATEGORY together — the formula's own dead AGAINST-ID branch
+is skipped the same way RM's own dead branches are, see below), (B) a 3-digit running count
+scoped by SEGMENT+CATEGORY+SUB CATEGORY, (C) `FG Sub sub parts`' own CODE (best-effort/
+optional — `FINAL GOOD SKU`'s `STANDARD PART` field is still the plain Yes/No toggle it
+already was, not wired as a real ref into `FG Sub sub parts` this pass, so this term usually
+resolves blank rather than throwing), (D) the Brand CODE (optional, same graceful-blank
+treatment). `FG ref Brand.Code`'s own pasted formula (`MAX(SELECT(...[_RowNumber]...))`,
+which computes a row NUMBER) was NOT implemented literally — kept on the same proven
+letter-increment shape every sibling ref-table CODE column already uses (consistent with
+`nextCode()`'s own pattern), since a row-number code would be inconsistent with what
+`fgBrandCodeFor()` needs to look up against and with every other tab's own observed
+single-letter CODE values.
+
+**Every `IF(NOT(ISBLANK(LOOKUP(...AGAINST ID...))),...)` branch across all these formulas is
+the same dead pointer already found and reverted once this session** for RM ref Category DD's
+own `Category` field (a row can't be pointed at by an AGAINST ID before it exists) — rather
+than repeat that exact bug, `FG ref Category DD`'s `SEGMENT`/`Category` stay CLIENT-SUBMITTED
+(now both required fields on that taxonomy table), never overwritten by the dead LOOKUP.
+`CODE` (`nextFgCategoryDdCode()`) and `DUPLICACY` (`countFgSubCategoryDuplicates()`, scoped to
+SEGMENT+Category+SUB CATEGORY) are real, always computed. `FG ref Category`'s own `Against
+id` and `FG Sub sub parts`' full auto-compute chain were NOT implemented this pass (same dead-
+pointer class, genuinely lower priority — nothing else reads `FG ref Category.Against id`, and
+`FG Sub sub parts`' own CODE lookup already degrades gracefully to blank when unmatched) —
+flagged as a follow-up, not silently skipped.
+
+**`FgSkuForm.tsx`**: PART NO. is now a disabled live-preview field (client-side mirror of the
+server formula, same pattern RM SKU's own PART NO. preview uses — reads already-loaded
+dropdown data, no extra network round trip). Added a `Brand` `SearchableSelect` (off `fg-paint`,
+now pointing at the real `FG ref Brand` tab). **Segment/Category/Sub Category each get a real
+"+ New" inline-create flow** — per the user's explicit follow-up request, mirroring RM SKU's
+own Category/Sub Category/Paint/Vendor pattern — via one new shared `FgQuickCreateForm.tsx`
+(parameterized by `kind`, collapsing what would otherwise be three near-identical files into
+one, since all three cases are genuinely just "one free-text field" with no CODE/DUPLICACY
+live preview to show — those are all server-computed on save now). `taxonomy.ts`'s `fg-sku`
+table: `PART NO.` moved to `computedFields`, dropped from `requiredFields`; `Brand` added to
+`fields`.
+
 ## Correction: FINAL GOOD SKU Form rebuilt on RmSkuForm.tsx's own panel chrome (2 Sep 2026, same day)
 
 The first version of `FgSkuForm.tsx` (below) used the shared `FormModal.tsx` centered-dialog

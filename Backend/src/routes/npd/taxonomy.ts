@@ -13,6 +13,10 @@ import {
   RmPartCodeLookupError,
   countCategoryDuplicates,
   countSubCategoryDuplicates,
+  nextFgCategoryDdCode,
+  nextFgBrandCode,
+  countFgSubCategoryDuplicates,
+  generateFgPartCode,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -253,6 +257,13 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
+  // `CODE` is now auto-generated (`nextFgCategoryDdCode()`, same letter-increment shape as
+  // every sibling ref-table CODE column) and `DUPLICACY` is a live count scoped to SEGMENT+
+  // Category+SUB CATEGORY (`countFgSubCategoryDuplicates()`) — both real App Formulas the user
+  // pasted directly. `SEGMENT`/`Category` stay CLIENT-SUBMITTED, never overwritten by the
+  // formula's own dead AGAINST-ID-based LOOKUP branches — same fix already proven for RM ref
+  // Category DD's own `Category` field earlier the same day (see npdPartCode.ts's own header
+  // comment on this FG section for why).
   {
     key: "fg-category-dd",
     label: "FG Sub Category",
@@ -260,8 +271,9 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "FG ref Category DD",
     idColumn: "Unique ID",
     idPrefix: "FGSUB",
-    requiredFields: ["Category", "SUB CATEGORY"],
-    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "SEGMENT", "KEY"],
+    requiredFields: ["SEGMENT", "Category", "SUB CATEGORY"],
+    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "SEGMENT", "KEY", "DUPLICACY"],
+    computedFields: ["CODE", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -280,15 +292,21 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "Timestamp",
     // No USEREMAIL column on this tab — see the interface's own doc comment above.
   },
+  // Live tab renamed "FG ref Paint" → "FG ref Brand" (confirmed live, same day as RM's own
+  // identical rename) — column "Paint Description" → "Brand Description" too. `Code` is now
+  // auto-generated (`nextFgBrandCode()`) — see that function's own doc comment for why it's on
+  // the same letter-increment shape as every sibling ref-table CODE column rather than the
+  // pasted MAX(_RowNumber) formula.
   {
     key: "fg-paint",
-    label: "FG Paint",
+    label: "FG Brand",
     spreadsheetId: env.sheets.fg,
-    tab: "FG ref Paint",
+    tab: "FG ref Brand",
     idColumn: "Unique ID",
     idPrefix: "FGPAINT",
-    requiredFields: ["Code", "Paint Description"],
-    fields: ["Code", "Paint Description"],
+    requiredFields: ["Brand Description"],
+    fields: ["Code", "Brand Description"],
+    computedFields: ["Code"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
@@ -296,13 +314,18 @@ const TABLES: TaxonomyTableDef[] = [
   // above. **Create was `allowCreate: false`** (new rows meant to only come from an approved
   // New Part Code Request, routes/npd/partCodeRequest.ts, per the build prompt's §5.2
   // workflow) — re-enabled on the user's direct instruction to build a real "FINAL GOOD SKU
-  // Form" now, matching the reference screenshot's own create flow (a plain doer-typed
-  // PART NO. field, not auto-computed the way RM SKU's is — confirmed off the reference's own
-  // screenshot: FG's PART NO. input has no disabled/greyed "Auto Compute" styling, unlike RM's,
-  // and no verified real App Formula for it exists the way RM's `generateRmPartCode()` does).
+  // Form".
+  // **`PART NO.` is now server-computed via the real App Formula** (`generateFgPartCode()` —
+  // the user pasted it directly) — a correction from this table's own earlier state (a plain
+  // doer-typed field), added once the real formula was actually provided.
+  // **`Brand`** is a NEW additive column on `FINAL GOOD SKU` (not `Paint` — the formula's own
+  // `[_THISROW].[Paint]` term has no real column to write to on this live sheet, and the
+  // "Paint"→"Brand" rename applies here too per the user's own explicit instruction — see
+  // npdPartCode.ts's own header comment on the FG section for the full reasoning).
   // `skipDuplicateCheck` stays true — many legitimately different FG SKUs can share a Category/
-  // Sub Category/Segment, only PART NO. itself needs to be unique and there's no formula to
-  // enforce that server-side yet (same caveat as RM SKU had before its formula was found).
+  // Sub Category/Segment; only PART NO. itself is meant to be unique, and that's computed now,
+  // not doer-typed, so there's nothing meaningful left to dup-check here (matches RM SKU's own
+  // reasoning for the same flag).
   // `FG ID` (the id column) and `TIMESTAMP`/`USEREMAIL` stay excluded from `fields` — still
   // system-managed, never hand-edited.
   // **`FG ID` is a plain sequential integer** (1, 2, 3 … 86, confirmed live — a literal cell
@@ -323,7 +346,7 @@ const TABLES: TaxonomyTableDef[] = [
     idStrategy: "sequential",
     idSequencePrefix: "",
     idSequencePad: 1,
-    requiredFields: ["PART NO.", "SEGMENT", "CATEGORY", "SUB CATEGORY", "Name"],
+    requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY", "Name"],
     fields: [
       "PART NO.",
       "Manupulation Partcode",
@@ -332,6 +355,7 @@ const TABLES: TaxonomyTableDef[] = [
       "SUB CATEGORY",
       "Name",
       "STANDARD PART",
+      "Brand",
       "MIN STOCK",
       "MAX STOCK",
       "OPENING STOCK",
@@ -342,6 +366,7 @@ const TABLES: TaxonomyTableDef[] = [
       "DUPLICACY",
       "Final Price",
     ],
+    computedFields: ["PART NO."],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
     skipDuplicateCheck: true,
@@ -665,6 +690,21 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     if (table.key === "rm-paint" && !body.Code) {
       body.Code = await nextPaintCode();
     }
+    // FG mirrors of the two lines above — same shape, different spreadsheet/tabs. See
+    // npdPartCode.ts's own header comment on the FG section for why `fg-category-dd` keeps
+    // the client-submitted `SEGMENT`/`Category` (no dead-pointer overwrite) while `CODE` and
+    // `DUPLICACY` are always computed.
+    if (table.key === "fg-category-dd") {
+      if (!body.CODE) body.CODE = await nextFgCategoryDdCode();
+      body.DUPLICACY = await countFgSubCategoryDuplicates(
+        (body.SEGMENT as string) ?? "",
+        (body.Category as string) ?? "",
+        (body["SUB CATEGORY"] as string) ?? ""
+      );
+    }
+    if (table.key === "fg-paint" && !body.Code) {
+      body.Code = await nextFgBrandCode();
+    }
     // `AGAINST ID` on rm-category-dd is a real AppSheet App Formula column in the legacy
     // sheet — always computed, unconditionally overriding anything the client sent, matching
     // that. See nextAgainstId()'s own doc comment for why it's known to be functionally
@@ -702,6 +742,20 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
         subCategory: (body["Sub Category"] as string) ?? "",
         paint: (body.Paint as string) ?? "",
         makeBy: (body["MAKE BY"] as string) ?? "",
+      });
+      body["PART NO."] = result.partCode;
+    }
+    // FG SKU's own PART NO. — see services/npdPartCode.ts's generateFgPartCode() doc comment.
+    // Server-computed, never client-supplied. `standardPart`/`brand` are both optional/
+    // best-effort per that function's own comments (neither is wired as a real ref field on
+    // this form yet), so pass through whatever the client sent (possibly blank).
+    if (table.key === "fg-sku") {
+      const result = await generateFgPartCode({
+        segment: (body.SEGMENT as string) ?? "",
+        category: (body.CATEGORY as string) ?? "",
+        subCategory: (body["SUB CATEGORY"] as string) ?? "",
+        standardPart: (body["STANDARD PART"] as string) ?? "",
+        brand: (body.Brand as string) ?? "",
       });
       body["PART NO."] = result.partCode;
     }
