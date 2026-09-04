@@ -63,8 +63,10 @@ const CONFIG: Record<Kind, { title: string; tableKey: string; fieldKey: string; 
  *   exists on `FG ref Brand`, confirmed live; see `countFgBrandDuplicates()`'s own doc
  *   comment), preview-only.
  * - `standard-part`: adds `Against id` (dead pointer) + a real computed CODE (an Alphabet
- *   `SR NO.` lookup against the doer's own typed value — see `nextFgStandardPartCode()`'s own
- *   doc comment for why this usually resolves blank in practice) + a real computed KEY
+ *   `SR NO.` lookup against the doer's own typed value — `SR NO.` holds real manufacturing-
+ *   stage names, `CASTED`/`MACHINED`/`FINISHED`, confirmed live, so this resolves for real
+ *   when STANDARD is typed as one of those; see `nextFgStandardPartCode()`'s own doc comment)
+ *   + a real computed KEY
  *   (`fgStandardPartKey()`, plain SEGMENT+Category+SUB CATEGORY+STANDARD concatenation) +
  *   client-computed DUPLICACY (scoped to that KEY) — also never written to the sheet (no
  *   DUPLICACY column on `FG Sub sub parts` either). */

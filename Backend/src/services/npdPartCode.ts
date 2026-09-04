@@ -650,11 +650,17 @@ export async function countFgBrandDuplicates(brandDescription: string): Promise<
  * `IF(ISBLANK([STANDARD]),"",LOOKUP([_THISROW].[STANDARD],"Alphabet","SR NO.","Letter"))`.
  * Matches the doer-typed `STANDARD` text against the shared `Alphabet` tab's own `SR NO.`
  * column (not `Letter` — this is NOT the same letter-increment shape every other ref-table
- * CODE column uses) and returns that row's `Letter`. Implemented literally; `SR NO.` holding
- * plain sequential numbers while `STANDARD` holds a doer-typed name means this will resolve
- * blank for essentially every real value — same "implement even where it's very unlikely to
- * resolve, don't fabricate a different scheme" treatment as RM/FG's own dead AGAINST-ID
- * branches elsewhere in this file. Never throws — blank is a valid, expected outcome here. */
+ * CODE column uses) and returns that row's `Letter`.
+ *
+ * **Correction**: an earlier pass here assumed `SR NO.` held plain sequential numbers (like a
+ * row index) and concluded this would resolve blank for "essentially every real value" — that
+ * assumption was never checked against the live sheet. It was wrong: dumped live and `SR NO.`
+ * actually holds real manufacturing-stage NAMES (`CASTED`, `MACHINED`, `FINISHED`) — the exact
+ * same shape as `STANDARD` itself (a doer-typed stage name), so this formula is genuinely
+ * meaningful and resolves for real whenever the doer types one of those stage names (matched
+ * case-insensitively). Still returns blank (never throws) for any `STANDARD` value that isn't
+ * one of the Alphabet tab's current stage names — that's the formula's own intended behavior
+ * for an unrecognized stage, not a bug. */
 export async function nextFgStandardPartCode(standard: string): Promise<string> {
   if (!standard.trim()) return "";
   const alphabet = await readTable(env.sheets.fg, ALPHABET_TAB);

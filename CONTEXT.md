@@ -1541,6 +1541,22 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: FG Sub sub parts' CODE doc comment had an unverified assumption (3 Sep 2026, same day)
+
+The user asked "why CODE not show" on the Standard Part "+ New" form — turned out to be
+correct, expected behavior (CODE only resolves once `STANDARD` is typed AND matches a real
+`Alphabet.SR NO.` value), not a bug: `nextFgStandardPartCode()`'s actual matching logic was
+already right. What WAS wrong was this file's own doc comment on that function — it claimed
+`SR NO.` "holds plain sequential numbers" and would therefore "resolve blank for essentially
+every real value," an assumption that had never actually been checked against the live sheet.
+Dumped `Alphabet` directly to confirm: `SR NO.` genuinely holds real manufacturing-stage names
+(`CASTED`, `MACHINED`, `FINISHED`), the same shape `STANDARD` itself is meant to hold — so the
+formula is real and resolves whenever a doer types one of those exact stage names (matched
+case-insensitively, already handled). Doc comments corrected in both `npdPartCode.ts` and
+`FgQuickCreateForm.tsx`; no functional code changed. Same lesson as the `FG ref Brand.Code`
+correction just above — verify an assumption against the real live sheet before writing it
+into a comment as fact, even when nothing is visibly broken.
+
 ## Correction: FG ref Brand's CODE is a plain number, not a letter (3 Sep 2026, same day)
 
 Caught live — the user reported "CODE is not showing" (a real `—` in the "+ New" Brand
