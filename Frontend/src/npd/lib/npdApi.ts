@@ -104,6 +104,15 @@ export async function previewFgStandardPart(standard: string) {
   return res.data;
 }
 
+/** The real valid `STANDARD` values (`Alphabet.SR NO.`'s own entries — `CASTED`/`MACHINED`/
+ * `FINISHED`) — for `FgQuickCreateForm.tsx`'s Standard Part dropdown, so a doer can only pick
+ * a value that's guaranteed to resolve a real CODE, per the user's own explicit request after
+ * typing a name that didn't match anything. */
+export async function listFgStandardOptions() {
+  const res = await api.get<{ options: string[] }>("/npd/taxonomy/fg-sub-sub-parts/standard-options");
+  return res.data.options;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }

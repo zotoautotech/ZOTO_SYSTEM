@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
+import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
 import {
@@ -10,6 +11,7 @@ import {
   previewFgCategoryDdCode,
   previewFgBrandCode,
   previewFgStandardPart,
+  listFgStandardOptions,
   previewPlainRandomId,
   type TaxonomyRow,
 } from "./lib/npdApi";
@@ -62,11 +64,13 @@ const CONFIG: Record<Kind, { title: string; tableKey: string; fieldKey: string; 
  *   (scoped to Brand Description) — DUPLICACY is never written to the sheet (no such column
  *   exists on `FG ref Brand`, confirmed live; see `countFgBrandDuplicates()`'s own doc
  *   comment), preview-only.
- * - `standard-part`: adds `Against id` (dead pointer) + a real computed CODE (an Alphabet
- *   `SR NO.` lookup against the doer's own typed value — `SR NO.` holds real manufacturing-
- *   stage names, `CASTED`/`MACHINED`/`FINISHED`, confirmed live, so this resolves for real
- *   when STANDARD is typed as one of those; see `nextFgStandardPartCode()`'s own doc comment)
- *   + a real computed KEY
+ * - `standard-part`: **the STANDARD field itself is a `SearchableSelect`, not free text** —
+ *   the real valid values are `Alphabet.SR NO.`'s own entries (`CASTED`/`MACHINED`/
+ *   `FINISHED`), fetched via `listFgStandardOptions()`. Was a plain `TextField` at first; the
+ *   user typed an unrecognized value ("a") and had no way to tell why `CODE` stayed blank, so
+ *   this now only offers values guaranteed to resolve a real CODE. Also adds `Against id`
+ *   (dead pointer) + a real computed CODE (the Alphabet `SR NO.` lookup against the picked
+ *   value — see `nextFgStandardPartCode()`'s own doc comment) + a real computed KEY
  *   (`fgStandardPartKey()`, plain SEGMENT+Category+SUB CATEGORY+STANDARD concatenation) +
  *   client-computed DUPLICACY (scoped to that KEY) — also never written to the sheet (no
  *   DUPLICACY column on `FG Sub sub parts` either). */
@@ -124,6 +128,14 @@ export function FgQuickCreateForm({
     queryFn: () => previewFgStandardPart(value),
     enabled: kind === "standard-part",
     retry: 1,
+  });
+  // Real valid STANDARD values, for a dropdown instead of free text — a doer typing an
+  // unrecognized name (e.g. "a") had no way to tell why CODE never resolved; picking from
+  // this list guarantees it will.
+  const { data: standardOptions = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "fg-sub-sub-parts", "standard-options"],
+    queryFn: listFgStandardOptions,
+    enabled: kind === "standard-part",
   });
 
   const subCategoryDuplicacy =
@@ -273,13 +285,27 @@ export function FgQuickCreateForm({
               />
             </>
           )}
-          <TextField
-            label={cfg.label}
-            required
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={cfg.placeholder}
-          />
+          {kind === "standard-part" ? (
+            // A dropdown of the real valid values, not free text — see the standardOptions
+            // query's own comment for why (a mistyped/unrecognized name left CODE silently
+            // blank with no indication why).
+            <SearchableSelect
+              label={cfg.label}
+              required
+              value={value}
+              onChange={setValue}
+              options={standardOptions.map((s): SelectOption => ({ value: s, label: s }))}
+              placeholder="Select Standard…"
+            />
+          ) : (
+            <TextField
+              label={cfg.label}
+              required
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={cfg.placeholder}
+            />
+          )}
           {kind === "standard-part" && (
             <TextField
               label="CODE"

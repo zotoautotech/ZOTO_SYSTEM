@@ -22,6 +22,7 @@ import {
   nextFgStandardPartCode,
   fgStandardPartKey,
   countFgStandardPartDuplicates,
+  listFgStandardStages,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -663,6 +664,18 @@ taxonomyRouter.get("/fg-sub-sub-parts/preview", async (req, res, next) => {
     const standard = typeof req.query.standard === "string" ? req.query.standard : "";
     const [code, againstId] = await Promise.all([nextFgStandardPartCode(standard), nextFgAgainstId()]);
     res.json({ code, againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The real valid STANDARD values (Alphabet's own SR NO. entries) — lets FgQuickCreateForm.tsx
+// offer a dropdown instead of free text, so a doer can't type something that will never
+// resolve a CODE (see listFgStandardStages()'s own doc comment for the confusion this fixes).
+taxonomyRouter.get("/fg-sub-sub-parts/standard-options", async (_req, res, next) => {
+  try {
+    const options = await listFgStandardStages();
+    res.json({ options });
   } catch (err) {
     next(err);
   }

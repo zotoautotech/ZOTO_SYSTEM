@@ -1541,6 +1541,17 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Standard Part's own STANDARD field is now a dropdown, not free text (3 Sep 2026, same day)
+
+Direct follow-up to the correction above — the user asked to "give me this in dropdown" after
+typing an unrecognized STANDARD value ("a") with no indication why `CODE` stayed blank. New
+`listFgStandardStages()` (`npdPartCode.ts`) returns every non-blank `Alphabet.SR NO.` value —
+the real, guaranteed-to-resolve set (`CASTED`/`MACHINED`/`FINISHED`) — via a new `GET
+/npd/taxonomy/fg-sub-sub-parts/standard-options` endpoint. `FgQuickCreateForm.tsx`'s
+`"standard-part"` kind now renders STANDARD as a `SearchableSelect` sourced from that list
+instead of a plain `TextField` — a doer can no longer type something that silently never
+resolves a CODE.
+
 ## Correction: FG Sub sub parts' CODE doc comment had an unverified assumption (3 Sep 2026, same day)
 
 The user asked "why CODE not show" on the Standard Part "+ New" form — turned out to be

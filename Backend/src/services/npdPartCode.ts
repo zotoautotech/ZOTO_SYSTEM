@@ -668,6 +668,17 @@ export async function nextFgStandardPartCode(standard: string): Promise<string> 
   return (match?.Letter ?? "").trim();
 }
 
+/** The real, valid `STANDARD` values — every non-blank `Alphabet.SR NO.` entry (`CASTED`,
+ * `MACHINED`, `FINISHED`, …) — so `FgQuickCreateForm.tsx`'s Standard Part "+ New" form can
+ * offer a dropdown of values that are actually guaranteed to resolve a real `CODE`, instead of
+ * a free-text field where any typo or unrecognized name silently leaves `CODE` blank (the
+ * exact confusion that prompted this — a doer typed "a" and couldn't tell why CODE never
+ * filled in). */
+export async function listFgStandardStages(): Promise<string[]> {
+  const alphabet = await readTable(env.sheets.fg, ALPHABET_TAB);
+  return alphabet.map((r) => (r["SR NO."] ?? "").trim()).filter((v) => v.length > 0);
+}
+
 /** `FG Sub sub parts.KEY` — the user's own pasted formula: `[SEGMENT]&[Category]&
  * [SUB CATEGORY]&[STANDARD]`, plain concatenation (same style as every other KEY column in
  * this codebase — no separator characters). */
