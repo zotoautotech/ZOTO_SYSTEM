@@ -139,13 +139,18 @@ export function FgQuickCreateForm({
       ? brandRows.filter((r) => (r["Brand Description"] ?? "").trim() === value.trim()).length
       : 0;
 
+  // Shows progressively as soon as Segment/Category/Sub Category are known — same "grows as
+  // fields are picked" behavior RM SKU's own PART NO. preview has — not gated on STANDARD
+  // having been typed yet (that was the bug: KEY/CODE looked frozen at "—" even after typing,
+  // because this used to require `value.trim()` before showing anything at all).
   const standardPartKeyPreview =
-    kind === "standard-part" && segment && category && subCategory && value.trim()
+    kind === "standard-part" && segment && category && subCategory
       ? `${segment.trim()}${category.trim()}${subCategory.trim()}${value.trim()}`
       : "";
-  const standardPartDuplicacy = standardPartKeyPreview
-    ? standardPartRows.filter((r) => (r.KEY ?? "").trim() === standardPartKeyPreview).length
-    : 0;
+  const standardPartDuplicacy =
+    standardPartKeyPreview && value.trim()
+      ? standardPartRows.filter((r) => (r.KEY ?? "").trim() === standardPartKeyPreview).length
+      : 0;
 
   function canSave() {
     if (!value.trim() || saving) return false;

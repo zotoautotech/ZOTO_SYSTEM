@@ -1541,6 +1541,17 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: Standard Part's KEY/CODE preview was frozen at "—" (3 Sep 2026, same day)
+
+The previous pass's `standardPartKeyPreview` required `value.trim()` (the doer's typed
+STANDARD text) before showing ANYTHING — so KEY stayed at "—" even after typing, since the
+gate itself was on the wrong condition (verified live: `Against id` correctly showed a real
+value like "87", but KEY/CODE looked frozen). Fixed: KEY now shows progressively as soon as
+Segment/Category/Sub Category are known (same "grows as fields are picked" behavior RM SKU's
+own PART NO. preview already has), concatenating in STANDARD as it's typed rather than staying
+blank until the whole thing is filled in. Verified live via the same temp-route harness used
+elsewhere this session: typing into STANDARD now visibly extends the KEY preview in real time.
+
 ## FG SKU Form: Brand moved up, Standard Part becomes a real ref table + Brand DUPLICACY (3 Sep 2026)
 
 The user gave four more real App Formulas directly, all implemented:
