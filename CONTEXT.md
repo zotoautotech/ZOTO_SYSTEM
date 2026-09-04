@@ -1541,6 +1541,27 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Correction: FG ref Brand's CODE is a plain number, not a letter (3 Sep 2026, same day)
+
+Caught live — the user reported "CODE is not showing" (a real `—` in the "+ New" Brand
+form's live preview, confirmed via screenshot). Root cause: an earlier pass here had DISMISSED
+the user's own pasted formula for this column (`MAX(SELECT(FG ref Paint[_RowNumber],
+ISNOTBLANK([Unique ID])))`) as "inconsistent with every sibling ref-table's letter-increment
+CODE" and implemented the letter scheme instead. That assumption was wrong — the real live
+`FG ref Brand` rows (shown directly in an earlier screenshot in this same conversation) hold
+plain incrementing numbers in `Code` (`1, 2, 3, 4, 5, 6, 7`), not letters. Looking a numeric
+value up against the Alphabet tab's `Letter` column can never match, so `nextFgBrandCode()`
+was silently throwing on every single call — which is exactly what showed up as `—` in the
+preview.
+
+**Real fix**: `nextFgBrandCode()` no longer calls the shared `nextFgCode()` letter-lookup
+helper — it now reads every existing `Code` value on `FG ref Brand`, finds the highest number,
+and returns that plus one (a plain max+1), matching the real observed data and the spirit of
+the user's own `MAX(...)`-based formula. The lesson already written into this file once for
+RM's own dead-pointer fields applies here too: an assumption that a new column "should" follow
+an existing pattern is not the same as verifying it against the real live data — the pasted
+formula was right, the earlier dismissal of it wasn't.
+
 ## Brand and Standard Part are now required on FINAL GOOD SKU (3 Sep 2026, same day)
 
 Both fields were optional (matching an earlier, more cautious pass) — per explicit follow-up,

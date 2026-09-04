@@ -495,16 +495,28 @@ export async function nextFgAgainstId(): Promise<string> {
   return (latest?.["FG ID"] ?? "").trim();
 }
 
-/** `FG ref Brand.Code` — same letter-increment shape as every sibling ref-table CODE column
- * (RM's own `RM ref Category`/`RM ref Category DD`/`RM ref Brand`, all confirmed via a real
- * decoded formula). The user's own pasted formula for this one specific column
- * (`MAX(SELECT(FG ref Paint[_RowNumber],ISNOTBLANK([Unique ID])))`) computes a row NUMBER, not
- * a letter — inconsistent with every sibling table's own observed single-uppercase-letter CODE
- * values and with what `fgBrandCodeFor()` below actually needs to look up against. Kept on the
- * same proven letter-increment shape as every sibling table instead, for consistency — flag to
- * the user if `FG ref Brand`'s real Code values turn out not to follow that pattern. */
+/** `FG ref Brand.Code` — **correction**: an earlier pass here assumed this followed the same
+ * letter-increment shape as every sibling ref-table CODE column (RM's own `RM ref Category`/
+ * `RM ref Category DD`/`RM ref Brand`) and dismissed the user's own pasted formula
+ * (`MAX(SELECT(FG ref Paint[_RowNumber],ISNOTBLANK([Unique ID])))`) as inconsistent with that
+ * pattern. That assumption was wrong — the real live `FG ref Brand` rows (confirmed live) hold
+ * plain incrementing NUMBERS in `Code` (`1, 2, 3, 4, 5, 6, 7`), not letters. The old
+ * letter-increment implementation was looking a numeric `Code` value up against the Alphabet
+ * tab's own `Letter` column, which can never match — silently throwing on every call and
+ * showing "—" in `FgQuickCreateForm.tsx`'s live preview (caught live, this is what surfaced
+ * the wrong assumption). Fixed to match the real data: the next Code is simply one more than
+ * the highest existing numeric `Code` on the tab (not `nextFgCode()`'s Alphabet-letter lookup;
+ * a plain max+1, matching every existing row's own observed pattern and the spirit of the
+ * user's own pasted `MAX(...)`-based formula, even though `_RowNumber` itself isn't a stable
+ * value this backend can read the way a real column can). */
 export async function nextFgBrandCode(): Promise<string> {
-  return nextFgCode(FG_BRAND_TAB, "Code");
+  const rows = await readTable(env.sheets.fg, FG_BRAND_TAB, { refresh: true });
+  let max = 0;
+  for (const r of rows) {
+    const n = Number((r.Code ?? "").trim());
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return String(max + 1);
 }
 
 /** `FG ref Category DD.DUPLICACY` — same shape as RM's own `countSubCategoryDuplicates()`,
