@@ -552,6 +552,85 @@ const TABLES: TaxonomyTableDef[] = [
     useremailField: "Useremail",
     skipDuplicateCheck: true,
   },
+  // "Drawing FG Form" — one attachment record per FG SKU's drawings/videos, live on FG_SHEET_ID
+  // ("Drawing FG" tab, confirmed live headers directly from the AppSheet reference screenshot
+  // + a live Sheets header dump: TIMESTAMP / AGAINST ID / Unique ID / USEREMAIL / SEGMENT /
+  // CATEGORY / SUB CATEGORY / STANDARD / PAINT / 2D Drawing / 2D Top View / 2D Bottom View /
+  // 2D Front View / 3D Isometric View / Rear Photo / Rear Video / 3D Video /
+  // Animation Process / CAE). `AGAINST ID` is the same dead-pointer formula as every other
+  // AGAINST ID in this file (see nextFgAgainstId()'s own doc comment) — always computed.
+  // The 9 attachment columns are plain text (Drive fileId or URL) for now, matching the "flag
+  // it, don't fake it" convention — real upload-picker wiring (uploads.ts's private-Drive-file
+  // flow) is a follow-up, no such generic FileField component exists anywhere in NPD yet.
+  {
+    key: "drawing-fg",
+    label: "Drawing FG",
+    spreadsheetId: env.sheets.fg,
+    tab: "Drawing FG",
+    idColumn: "Unique ID",
+    idPrefix: "DRAWFG",
+    requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY"],
+    fields: [
+      "AGAINST ID",
+      "SEGMENT",
+      "CATEGORY",
+      "SUB CATEGORY",
+      "STANDARD",
+      "PAINT",
+      "2D Drawing",
+      "2D Top View",
+      "2D Bottom View",
+      "2D Front View",
+      "3D Isometric View",
+      "Rear Photo",
+      "Rear Video",
+      "3D Video",
+      "Animation Process / CAE",
+    ],
+    computedFields: ["AGAINST ID"],
+    timestampField: "TIMESTAMP",
+    useremailField: "USEREMAIL",
+    skipDuplicateCheck: true,
+  },
+  // "Assemble RM FG Form" — one RM-to-FG BOM-style line, live on FG_SHEET_ID ("ASSEMBLE RM FG"
+  // tab, confirmed live headers: TIMESTAMP / USEREMAIL / Unique id / FG ID / FG CODE /
+  // FG CATEGORY / FG SUB CATEGORY / FG PAINT / FG STANDARD / Category / Sub Category / RM ID /
+  // RM CODE / DUPLICATE / No. Of Qty Use / Units / Levels / Part Specs.). This is a DIFFERENT,
+  // real live tab from bom.ts's own "ASSEMBLE RM FG (BOM)" (note the "(BOM)" suffix) — the two
+  // are not the same sheet/tab, don't conflate them. FG ID/RM ID are the only two fields a
+  // doer actually picks; every FG-*/RM CODE snapshot column is server-computed from those two
+  // (see the POST handler's `assemble-rm-fg` special case below), matching every other
+  // snapshot-column table in this app (tripMap.ts's own denormalization convention).
+  {
+    key: "assemble-rm-fg",
+    label: "Assemble RM FG",
+    spreadsheetId: env.sheets.fg,
+    tab: "ASSEMBLE RM FG",
+    idColumn: "Unique id",
+    idPrefix: "ARMFG",
+    requiredFields: ["FG ID", "RM ID", "Part Specs."],
+    fields: [
+      "FG ID",
+      "FG CODE",
+      "FG CATEGORY",
+      "FG SUB CATEGORY",
+      "FG PAINT",
+      "FG STANDARD",
+      "Category",
+      "Sub Category",
+      "RM ID",
+      "RM CODE",
+      "DUPLICATE",
+      "No. Of Qty Use",
+      "Units",
+      "Levels",
+      "Part Specs.",
+    ],
+    computedFields: ["FG CODE", "FG CATEGORY", "FG SUB CATEGORY", "FG PAINT", "FG STANDARD", "RM CODE", "DUPLICATE"],
+    timestampField: "TIMESTAMP",
+    useremailField: "USEREMAIL",
+    skipDuplicateCheck: true,
+  },
 ];
 
 /** Exported so partCodeRequest.ts/customer.ts can append an approved request's row into the
@@ -676,6 +755,46 @@ taxonomyRouter.get("/fg-sub-sub-parts/standard-options", async (_req, res, next)
   try {
     const options = await listFgStandardStages();
     res.json({ options });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// "Drawing FG" — AGAINST ID only (the same dead pointer as every other AGAINST ID preview
+// above).
+taxonomyRouter.get("/drawing-fg/preview", async (_req, res, next) => {
+  try {
+    const againstId = await nextFgAgainstId();
+    res.json({ againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// "Assemble RM FG" — the FG-*/RM CODE snapshot columns a doer would see live-fill in as soon
+// as they pick FG ID/RM ID, plus DUPLICATE (a live count of existing rows already pairing
+// this exact FG ID + RM ID, matching every other DUPLICACY-style column in this file).
+taxonomyRouter.get("/assemble-rm-fg/preview", async (req, res, next) => {
+  try {
+    const fgId = typeof req.query.fgId === "string" ? req.query.fgId : "";
+    const rmId = typeof req.query.rmId === "string" ? req.query.rmId : "";
+    const [fgRows, rmRows, existingRows] = await Promise.all([
+      readTable(env.sheets.fg, "FINAL GOOD SKU"),
+      readTable(env.sheets.npd, "Raw Material SKU"),
+      readTable(env.sheets.fg, "ASSEMBLE RM FG"),
+    ]);
+    const fg = fgRows.find((r) => r["FG ID"] === fgId);
+    const rm = rmRows.find((r) => r["ID'S"] === rmId);
+    const duplicate = fgId && rmId ? existingRows.filter((r) => r["FG ID"] === fgId && r["RM ID"] === rmId).length : 0;
+    res.json({
+      fgCode: fg?.["PART NO."] ?? "",
+      fgCategory: fg?.CATEGORY ?? "",
+      fgSubCategory: fg?.["SUB CATEGORY"] ?? "",
+      fgPaint: fg?.Brand ?? "",
+      fgStandard: fg?.["STANDARD PART"] ?? "",
+      rmCode: rm?.["PART NO."] ?? "",
+      duplicate,
+    });
   } catch (err) {
     next(err);
   }
@@ -850,6 +969,34 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
         makeBy: (body["MAKE BY"] as string) ?? "",
       });
       body["PART NO."] = result.partCode;
+    }
+    // "Drawing FG" — AGAINST ID is the same dead pointer as every other one in this file.
+    if (table.key === "drawing-fg") {
+      body["AGAINST ID"] = await nextFgAgainstId();
+    }
+    // "Assemble RM FG" — every FG-*/RM CODE column is a snapshot off the picked FG ID/RM ID,
+    // always server-computed (never client-supplied), same denormalization convention as
+    // tripMap.ts's ORDER_SNAPSHOT_MAP elsewhere in this codebase. DUPLICATE is a live count of
+    // existing rows already pairing this exact FG ID + RM ID.
+    if (table.key === "assemble-rm-fg") {
+      const [fgRows, rmRows, existingRows] = await Promise.all([
+        readTable(env.sheets.fg, "FINAL GOOD SKU"),
+        readTable(env.sheets.npd, "Raw Material SKU"),
+        readTable(env.sheets.fg, "ASSEMBLE RM FG", { refresh: true }),
+      ]);
+      const fg = fgRows.find((r) => r["FG ID"] === body["FG ID"]);
+      const rm = rmRows.find((r) => r["ID'S"] === body["RM ID"]);
+      if (!fg) return res.status(404).json({ error: { code: "FG_NOT_FOUND", message: "FG SKU not found" } });
+      if (!rm) return res.status(404).json({ error: { code: "RM_NOT_FOUND", message: "RM SKU not found" } });
+      body["FG CODE"] = fg["PART NO."] ?? "";
+      body["FG CATEGORY"] = fg.CATEGORY ?? "";
+      body["FG SUB CATEGORY"] = fg["SUB CATEGORY"] ?? "";
+      body["FG PAINT"] = fg.Brand ?? "";
+      body["FG STANDARD"] = fg["STANDARD PART"] ?? "";
+      body["RM CODE"] = rm["PART NO."] ?? "";
+      body.DUPLICATE = String(
+        existingRows.filter((r) => r["FG ID"] === body["FG ID"] && r["RM ID"] === body["RM ID"]).length
+      );
     }
     // FG SKU's own PART NO. — see services/npdPartCode.ts's generateFgPartCode() doc comment.
     // Server-computed, never client-supplied. `standardPart`/`brand` are both optional/

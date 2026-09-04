@@ -113,6 +113,28 @@ export async function listFgStandardOptions() {
   return res.data.options;
 }
 
+/** "Drawing FG" — AGAINST ID only (same dead-pointer preview shape as every other AGAINST ID
+ * in this app). */
+export async function previewDrawingFgAgainstId() {
+  const res = await api.get<{ againstId: string }>("/npd/taxonomy/drawing-fg/preview");
+  return res.data;
+}
+
+/** "Assemble RM FG" — the FG- and RM-CODE snapshot columns + DUPLICATE, live-computed off the
+ * picked FG ID/RM ID (both optional — pass whatever's been picked so far). */
+export async function previewAssembleRmFg(fgId: string, rmId: string) {
+  const res = await api.get<{
+    fgCode: string;
+    fgCategory: string;
+    fgSubCategory: string;
+    fgPaint: string;
+    fgStandard: string;
+    rmCode: string;
+    duplicate: number;
+  }>("/npd/taxonomy/assemble-rm-fg/preview", { params: { fgId, rmId } });
+  return res.data;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }

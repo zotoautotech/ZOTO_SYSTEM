@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listTaxonomyRows, listBomLines } from "./lib/npdApi";
 import { QuickAction } from "../components/FloatingActionButton";
 import { useSetHeaderActions } from "../lib/headerActions";
+import { DrawingFgForm } from "./DrawingFgForm";
+import { AssembleRmFgForm } from "./AssembleRmFgForm";
 
 /** FG SKU detail — rebuilt on the same real pattern `RmSkuDetail.tsx` now uses (itself copied
  * from `TripDetail.tsx`, Sales CRR's own working detail page), per the user's own screenshot
@@ -28,6 +31,9 @@ import { useSetHeaderActions } from "../lib/headerActions";
 export function FgSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showDrawingForm, setShowDrawingForm] = useState(false);
+  const [showAssembleForm, setShowAssembleForm] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "fg-sku"],
@@ -97,9 +103,9 @@ export function FgSkuDetail() {
   if (!row) return <p className="text-muted">FG SKU not found.</p>;
 
   const actions = [
-    { label: "Update All Vendor PDFs", icon: <RefreshIconPaths /> },
-    { label: "MACHINING & OTHER CHARGES", icon: <RupeeIconPaths /> },
-    { label: "Verify BOM Item", icon: <CheckIconPaths /> },
+    { label: "Give Drawing FG Form", icon: <RefreshIconPaths />, onClick: () => setShowDrawingForm(true) },
+    { label: "Give Assemble RM FG Form", icon: <RupeeIconPaths />, onClick: () => setShowAssembleForm(true) },
+    { label: "Verify BOM Item", icon: <CheckIconPaths />, onClick: () => {} },
   ];
 
   return (
@@ -112,7 +118,7 @@ export function FgSkuDetail() {
           </span>
           <div style={{ display: "flex", gap: 16, marginTop: 18, flexWrap: "wrap" }}>
             {actions.map((a, i) => (
-              <QuickAction key={a.label} label={a.label} onClick={() => {}} stackIndex={i}>
+              <QuickAction key={a.label} label={a.label} onClick={a.onClick} stackIndex={i}>
                 {a.icon}
               </QuickAction>
             ))}
@@ -165,6 +171,27 @@ export function FgSkuDetail() {
           />
         </div>
       </div>
+
+      {showDrawingForm && (
+        <DrawingFgForm
+          fgRow={row}
+          onClose={() => setShowDrawingForm(false)}
+          onSaved={() => {
+            setShowDrawingForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "drawing-fg"] });
+          }}
+        />
+      )}
+      {showAssembleForm && (
+        <AssembleRmFgForm
+          fgRow={row}
+          onClose={() => setShowAssembleForm(false)}
+          onSaved={() => {
+            setShowAssembleForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"] });
+          }}
+        />
+      )}
     </div>
   );
 }

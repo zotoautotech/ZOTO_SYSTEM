@@ -2018,6 +2018,44 @@ default unless asked for) — so the actual "does the sheet still cleanly regene
 after an app-created row" behavior is unverified beyond code review. Worth a real create once
 deployed, watching column B in the live sheet directly.
 
+## Drawing FG Form + Assemble RM FG Form (4 Sep 2026)
+
+Two new standalone create forms, matching two real live tabs on `FG_SHEET_ID` the user
+screenshotted directly from the AppSheet reference and confirmed against a live Sheets header
+dump — both use the same generic `taxonomy.ts`/`createTaxonomyRow` infra every other NPD
+reference form does, no bespoke route needed:
+
+- **`drawing-fg`** → live tab `Drawing FG`: `TIMESTAMP`/`AGAINST ID`/`Unique ID`/`USEREMAIL`/
+  `SEGMENT`/`CATEGORY`/`SUB CATEGORY`/`STANDARD`/`PAINT` + 9 attachment columns (`2D Drawing`/
+  `2D Top View`/`2D Bottom View`/`2D Front View`/`3D Isometric View`/`Rear Photo`/`Rear Video`/
+  `3D Video`/`Animation Process / CAE`). `AGAINST ID` is the same dead-pointer formula as every
+  other one in this app. `Frontend/src/npd/DrawingFgForm.tsx` takes the parent FG SKU row as a
+  prop and reads SEGMENT/CATEGORY/SUB CATEGORY/STANDARD/PAINT straight off it (disabled,
+  matching the reference's own greyed pre-filled look) — the doer only fills in the 9
+  attachment fields. **Those 9 fields are plain text (Drive fileId or URL) for now** — no
+  generic upload-picker component exists anywhere in NPD yet; real wiring to `uploads.ts`'s
+  private-Drive-file flow is a follow-up, flagged rather than faked.
+- **`assemble-rm-fg`** → live tab `ASSEMBLE RM FG` (note: **not** the same tab as
+  `bom.ts`'s own `ASSEMBLE RM FG (BOM)` — different tab, don't conflate them): `TIMESTAMP`/
+  `USEREMAIL`/`Unique id`/`FG ID`/`FG CODE`/`FG CATEGORY`/`FG SUB CATEGORY`/`FG PAINT`/
+  `FG STANDARD`/`Category`/`Sub Category`/`RM ID`/`RM CODE`/`DUPLICATE`/`No. Of Qty Use`/
+  `Units`/`Levels`/`Part Specs.`. FG ID is fixed from the parent FG SKU; every `FG *`/`RM CODE`
+  column is a server-computed snapshot off the picked FG ID/RM ID (never client-supplied),
+  same denormalization convention as `tripMap.ts`'s `ORDER_SNAPSHOT_MAP`. `DUPLICATE` is a live
+  count of existing rows already pairing that exact FG ID + RM ID. `Category`/`Sub Category`
+  here are the **RM side's own** taxonomy (`RM ref Category`/`RM ref Category DD`), used only
+  to narrow the RM ID picker, same "narrow the search first" pattern `RmSkuForm.tsx` uses.
+  `Frontend/src/npd/AssembleRmFgForm.tsx` live-previews the FG-/RM-CODE snapshot + DUPLICATE via
+  a new `GET /npd/taxonomy/assemble-rm-fg/preview?fgId=&rmId=` endpoint as the doer picks RM ID.
+
+Both forms are opened from `FgSkuDetail.tsx`'s quick-action rail ("Give Drawing FG Form" /
+"Give Assemble RM FG Form", replacing two previously-inert placeholder buttons there) — same
+right-docked panel chrome as `FgSkuForm.tsx`/`FgQuickCreateForm.tsx`. Backend: two new
+`TABLES` entries in `taxonomy.ts` + two new `/preview` GET endpoints + two new POST
+special-cases (mirroring `fg-sub-sub-parts`'s own shape). Typechecked clean both sides; not
+yet verified against the live sheet (per the user's own stated token-budget preference, no
+live create-and-verify round trip run this pass — worth doing once deployed).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
