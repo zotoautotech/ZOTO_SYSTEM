@@ -552,13 +552,13 @@ async function fgBrandCodeFor(brand: string): Promise<string> {
 }
 
 /** Part C of the FG PART NO. formula — the `FG Sub sub parts` CODE, matched by SEGMENT+
- * Category+SUB CATEGORY+STANDARD together. Optional/best-effort: `FINAL GOOD SKU`'s own
- * `STANDARD PART` field isn't wired as a ref into this table yet (kept as the simple Yes/No
- * toggle it already was — the user's own follow-up only asked for +New on Segment/Category/
- * Sub Category, not a Standard Part rework), so this resolves blank whenever there's no real
- * match — matching the formula's own graceful `ANY(SELECT(...))`-returns-blank behavior rather
- * than throwing, since a Yes/No value was never going to match a real `FG Sub sub parts.STANDARD`
- * row anyway. */
+ * Category+SUB CATEGORY+STANDARD together. `FINAL GOOD SKU`'s own `STANDARD PART` field is now
+ * a real ref into this table (`FgSkuForm.tsx`'s Standard Part `SearchableSelect`, sourced from
+ * `fg-standard-part`'s own rows — see that taxonomy entry below), so this resolves for real
+ * whenever a doer picks a genuine Standard Part value, not just best-effort/usually-blank the
+ * way it was when this field was a plain Yes/No toggle. Still resolves blank rather than
+ * throwing when nothing matches (e.g. no Standard Part picked at all), matching the formula's
+ * own graceful `ANY(SELECT(...))` behavior. */
 async function fgSubSubPartsCodeFor(segment: string, category: string, subCategory: string, standardPart: string): Promise<string> {
   if (!standardPart.trim()) return "";
   const rows = await readTable(env.sheets.fg, FG_SUB_SUB_PARTS_TAB, { refresh: true });
@@ -613,4 +613,59 @@ export async function generateFgPartCode(input: FgPartCodeInput): Promise<FgPart
 
   const partCode = `${categoryDdCode}${countStr}${subSubPartsCode}${brandCode}`;
   return { partCode, categoryDdCode, count: countStr, subSubPartsCode, brandCode };
+}
+
+// =============================================================================================
+// Second FG pass — Brand DUPLICACY + Standard Part becoming a real ref table (2 Sep/3 Sep 2026,
+// user pasted these formulas directly, same standard as everything above).
+
+/** `FG ref Brand.Duplicacy` — the user's own pasted formula:
+ * `COUNT(SELECT(FG ref Brand[Unique ID],[_THISROW].[Brand Description]=[Brand Description]))`.
+ * **Not written to the sheet** — confirmed live, `FG ref Brand` has no `Duplicacy` column at
+ * all (just TIMESTAMP/USEREMAIL/Unique ID/Code/Brand Description) — so this is computed for
+ * the live-preview value in `FgQuickCreateForm.tsx`'s "brand" kind only, client-side, from
+ * already-loaded rows (mirroring `countFgSubCategoryDuplicates()`'s own live-count shape)
+ * rather than a server round trip that would try to write into a column that doesn't exist. */
+export async function countFgBrandDuplicates(brandDescription: string): Promise<string> {
+  const trimmed = brandDescription.trim().toLowerCase();
+  if (!trimmed) return "0";
+  const rows = await readTable(env.sheets.fg, FG_BRAND_TAB, { refresh: true });
+  const count = rows.filter((r) => (r[FG_BRAND_DESCRIPTION_FIELD] ?? "").trim().toLowerCase() === trimmed).length;
+  return String(count);
+}
+
+/** `FG Sub sub parts.CODE` — the user's own pasted formula:
+ * `IF(ISBLANK([STANDARD]),"",LOOKUP([_THISROW].[STANDARD],"Alphabet","SR NO.","Letter"))`.
+ * Matches the doer-typed `STANDARD` text against the shared `Alphabet` tab's own `SR NO.`
+ * column (not `Letter` — this is NOT the same letter-increment shape every other ref-table
+ * CODE column uses) and returns that row's `Letter`. Implemented literally; `SR NO.` holding
+ * plain sequential numbers while `STANDARD` holds a doer-typed name means this will resolve
+ * blank for essentially every real value — same "implement even where it's very unlikely to
+ * resolve, don't fabricate a different scheme" treatment as RM/FG's own dead AGAINST-ID
+ * branches elsewhere in this file. Never throws — blank is a valid, expected outcome here. */
+export async function nextFgStandardPartCode(standard: string): Promise<string> {
+  if (!standard.trim()) return "";
+  const alphabet = await readTable(env.sheets.fg, ALPHABET_TAB);
+  const match = alphabet.find((r) => (r["SR NO."] ?? "").trim().toLowerCase() === standard.trim().toLowerCase());
+  return (match?.Letter ?? "").trim();
+}
+
+/** `FG Sub sub parts.KEY` — the user's own pasted formula: `[SEGMENT]&[Category]&
+ * [SUB CATEGORY]&[STANDARD]`, plain concatenation (same style as every other KEY column in
+ * this codebase — no separator characters). */
+export function fgStandardPartKey(segment: string, category: string, subCategory: string, standard: string): string {
+  return `${segment.trim()}${category.trim()}${subCategory.trim()}${standard.trim()}`;
+}
+
+/** `FG Sub sub parts.DUPLICACY` — the user's own pasted formula:
+ * `COUNT(SELECT(FG SUB SUB PARTS[KEY],[_THISROW].[KEY]=[KEY]))`. **Not written to the sheet**
+ * — confirmed live, this tab has no `DUPLICACY` column at all (just Timestamp/Unique ID/
+ * AGAINST ID/SEGMENT/Category/SUB CATEGORY/STANDARD/KEY/CODE) — computed for the live-preview
+ * value only, same reasoning as `countFgBrandDuplicates()` above. */
+export async function countFgStandardPartDuplicates(key: string): Promise<string> {
+  const trimmed = key.trim();
+  if (!trimmed) return "0";
+  const rows = await readTable(env.sheets.fg, FG_SUB_SUB_PARTS_TAB, { refresh: true });
+  const count = rows.filter((r) => (r.KEY ?? "").trim() === trimmed).length;
+  return String(count);
 }

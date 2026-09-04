@@ -18,6 +18,10 @@ import {
   nextFgAgainstId,
   countFgSubCategoryDuplicates,
   generateFgPartCode,
+  countFgBrandDuplicates,
+  nextFgStandardPartCode,
+  fgStandardPartKey,
+  countFgStandardPartDuplicates,
 } from "../../services/npdPartCode.js";
 
 /**
@@ -282,18 +286,25 @@ const TABLES: TaxonomyTableDef[] = [
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
   },
+  // NOTE: live header is "Timestamp" (Title Case) here, unlike every sibling FG ref tab above
+  // which uses "TIMESTAMP" — confirmed by dumping real headers, don't "fix" this to match the
+  // others. No USEREMAIL/DUPLICACY columns exist on the live sheet at all (confirmed live).
+  // This is FINAL GOOD SKU's own "Standard Part" ref table — `AGAINST ID` (dead pointer, same
+  // shape as every other AGAINST ID in this file) and `KEY`/`CODE` are now real computed App
+  // Formulas the user pasted directly (see npdPartCode.ts's own doc comments for each) —
+  // `SEGMENT`/`Category`/`SUB CATEGORY`/`STANDARD` stay client-submitted (all four now
+  // required), same "keep the doer's real value, don't overwrite with the dead pointer"
+  // decision already made for `fg-category-dd`.
   {
-    // NOTE: live header is "Timestamp" (Title Case) here, unlike every sibling FG ref tab
-    // above which uses "TIMESTAMP" — confirmed by dumping real headers, don't "fix" this to
-    // match the others.
     key: "fg-sub-sub-parts",
     label: "FG Sub Sub Parts",
     spreadsheetId: env.sheets.fg,
     tab: "FG Sub sub parts",
     idColumn: "Unique ID",
     idPrefix: "FGSSP",
-    requiredFields: ["SEGMENT", "Category", "SUB CATEGORY"],
+    requiredFields: ["SEGMENT", "Category", "SUB CATEGORY", "STANDARD"],
     fields: ["AGAINST ID", "SEGMENT", "Category", "SUB CATEGORY", "STANDARD", "KEY", "CODE"],
+    computedFields: ["AGAINST ID", "KEY", "CODE"],
     timestampField: "Timestamp",
     // No USEREMAIL column on this tab — see the interface's own doc comment above.
   },
@@ -629,6 +640,34 @@ taxonomyRouter.get("/fg-category-dd/preview", async (_req, res, next) => {
   }
 });
 
+// `FG ref Brand` — CODE only (letter-increment, same as nextFgBrandCode()'s own doc comment
+// on why the pasted MAX(_RowNumber) formula isn't implemented literally). DUPLICACY is
+// computed client-side in FgQuickCreateForm.tsx from already-loaded rows (no live column to
+// preview a server round trip for — see countFgBrandDuplicates()'s own doc comment).
+taxonomyRouter.get("/fg-paint/preview", async (_req, res, next) => {
+  try {
+    const code = await nextFgBrandCode();
+    res.json({ code });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// `FG Sub sub parts` ("Standard Part") — AGAINST ID (dead pointer, same as every other) plus
+// CODE, which genuinely depends on the doer's own not-yet-saved `standard` text (the Alphabet
+// SR NO. lookup — see nextFgStandardPartCode()'s own doc comment), so this is the one preview
+// endpoint in this file that takes a query param rather than computing purely from existing
+// sheet data.
+taxonomyRouter.get("/fg-sub-sub-parts/preview", async (req, res, next) => {
+  try {
+    const standard = typeof req.query.standard === "string" ? req.query.standard : "";
+    const [code, againstId] = await Promise.all([nextFgStandardPartCode(standard), nextFgAgainstId()]);
+    res.json({ code, againstId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 taxonomyRouter.get("/:key", async (req, res, next) => {
   try {
     const table = findTable(req.params.key);
@@ -745,6 +784,19 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     }
     if (table.key === "fg-paint" && !body.Code) {
       body.Code = await nextFgBrandCode();
+    }
+    // FG Sub sub parts ("Standard Part") — AGAINST ID is the same dead pointer as every other
+    // AGAINST ID in this file; KEY/CODE are real computed formulas the user pasted directly
+    // (see npdPartCode.ts's own doc comments on fgStandardPartKey()/nextFgStandardPartCode()).
+    if (table.key === "fg-sub-sub-parts") {
+      body["AGAINST ID"] = await nextFgAgainstId();
+      body.KEY = fgStandardPartKey(
+        (body.SEGMENT as string) ?? "",
+        (body.Category as string) ?? "",
+        (body["SUB CATEGORY"] as string) ?? "",
+        (body.STANDARD as string) ?? ""
+      );
+      if (!body.CODE) body.CODE = await nextFgStandardPartCode((body.STANDARD as string) ?? "");
     }
     // `AGAINST ID` on rm-category-dd is a real AppSheet App Formula column in the legacy
     // sheet — always computed, unconditionally overriding anything the client sent, matching

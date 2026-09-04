@@ -21,15 +21,20 @@ interface Props {
  * before the real formula was available). Live-previewed client-side the same way RM SKU's
  * own PART NO. is, using data already loaded for the dropdowns below — see
  * `services/npdPartCode.ts`'s `generateFgPartCode()` for the actual server-side source of
- * truth and the full reasoning behind each piece (why Standard Part's contribution is best-
- * effort/likely blank, why "Paint" became "Brand", etc.).
+ * truth.
  *
- * Category/Sub Category are real `SearchableSelect`s off the FG taxonomy tables, **each with
- * their own "+ New" inline-create flow** (`FgQuickCreateForm.tsx`) — per the user's explicit
- * follow-up request, matching RM SKU's own Category/Sub Category/Paint/Vendor pattern. Brand
- * is the FG-side equivalent of RM SKU's own Brand field (`fg-paint` taxonomy table, tab
- * literally renamed `FG ref Brand` the same day) — no "+ New" flow for it yet (not asked for
- * this pass), a plain `SearchableSelect`.
+ * Category/Sub Category/Brand/Standard Part are all real `SearchableSelect`s off the FG
+ * taxonomy tables, **each with their own "+ New" inline-create flow**
+ * (`FgQuickCreateForm.tsx`) — per the user's explicit follow-up requests, matching RM SKU's
+ * own Category/Sub Category/Paint/Vendor pattern. **Standard Part is now a real ref into
+ * `FG Sub sub parts`** (was a plain Yes/No toggle in an earlier pass) — matching the
+ * reference's own field type (confirmed off the field-config screenshot: type Ref, source
+ * table `FG Sub sub parts`), filtered by SEGMENT+Category+SUB CATEGORY, greyed/inert until
+ * Sub Category is picked. This also means `generateFgPartCode()`'s own `FG Sub sub parts`
+ * CODE component now resolves for real whenever a genuine Standard Part is picked, instead of
+ * the earlier pass's near-always-blank Yes/No guess. **Field order matches the reference**:
+ * Category → Sub Category → Brand → Standard Part → Name → Unit (Brand/Standard Part moved up
+ * from the bottom in an earlier pass, per explicit instruction).
  *
  * **SEGMENT is fixed to "Car Accessories"** — per explicit instruction ("SEGMENT is fixed for
  * every time so auto select, not one can edit this"), this app's product line is entirely
@@ -43,12 +48,14 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const queryClient = useQueryClient();
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingSubCategory, setCreatingSubCategory] = useState(false);
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [creatingStandardPart, setCreatingStandardPart] = useState(false);
   const [segment] = useState(FIXED_SEGMENT);
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [brand, setBrand] = useState("");
+  const [standardPart, setStandardPart] = useState("");
   const [name, setName] = useState("");
-  const [standardPart, setStandardPart] = useState<"Yes" | "No" | null>(null);
   const [unit, setUnit] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -73,6 +80,10 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     queryKey: ["npd", "taxonomy", "rows", "fg-paint"],
     queryFn: () => listTaxonomyRows("fg-paint"),
   });
+  const { data: standardPartRows = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "fg-sub-sub-parts"],
+    queryFn: () => listTaxonomyRows("fg-sub-sub-parts"),
+  });
   // Needed only to compute PART NO.'s live preview below (the running per-SEGMENT+CATEGORY+
   // SUB CATEGORY count) — same table FgSkuCatalog.tsx already reads.
   const { data: fgSkuRows = [] } = useQuery({
@@ -91,12 +102,32 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     value: (r["Brand Description"] ?? "").trim(),
     label: (r["Brand Description"] ?? "").trim(),
   }));
+  // Filtered by SEGMENT+Category+SUB CATEGORY match, same shape as Sub Category's own filter —
+  // Standard Part is now a real ref into FG Sub sub parts (was a plain Yes/No toggle), matching
+  // the reference's own field type (confirmed off the field-config screenshot: type Ref,
+  // source table FG Sub sub parts).
+  const standardPartOptions: SelectOption[] = standardPartRows
+    .filter(
+      (r: TaxonomyRow) =>
+        !subCategory ||
+        ((r.SEGMENT ?? "").trim() === segment.trim() &&
+          (r.Category ?? "").trim() === category.trim() &&
+          (r["SUB CATEGORY"] ?? "").trim() === subCategory.trim())
+    )
+    .map((r: TaxonomyRow) => ({ value: (r.STANDARD ?? "").trim(), label: (r.STANDARD ?? "").trim() }));
 
   // PART NO. live preview — client-side mirror of generateFgPartCode()'s real formula, using
   // data already loaded for the dropdowns above (same "live preview from already-loaded data"
-  // approach RmSkuForm.tsx's own PART NO. preview uses). Standard Part's own contribution is
-  // omitted here (see generateFgPartCode()'s own comment on why it's best-effort/usually
-  // blank — this form's Standard Part is a plain Yes/No, not a ref into FG Sub sub parts).
+  // approach RmSkuForm.tsx's own PART NO. preview uses). Standard Part's own contribution now
+  // resolves for real (it's a genuine ref match, not a Yes/No guess) whenever a value is picked.
+  const standardPartCode =
+    standardPartRows.find(
+      (r: TaxonomyRow) =>
+        (r.SEGMENT ?? "").trim() === segment.trim() &&
+        (r.Category ?? "").trim() === category.trim() &&
+        (r["SUB CATEGORY"] ?? "").trim() === subCategory.trim() &&
+        (r.STANDARD ?? "").trim() === standardPart.trim()
+    )?.CODE ?? "";
   const categoryDdCode =
     subCategoryRows.find(
       (r: TaxonomyRow) =>
@@ -116,7 +147,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           ).length
         ).padStart(3, "0")
       : "";
-  const livePartNo = categoryDdCode + count + brandCode;
+  const livePartNo = categoryDdCode + count + standardPartCode + brandCode;
 
   function canSave() {
     return !!segment && !!category && !!subCategory && !!name.trim() && !saving;
@@ -254,40 +285,34 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
                 onAddNew={category && segment ? () => setCreatingSubCategory(true) : undefined}
               />
             </div>
-            <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
-            <div>
-              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 11, color: "#1A1A1A" }}>
-                Standard Part
-              </label>
-              <div style={{ display: "flex", gap: 2, width: "100%", height: 48 }}>
-                {(["Yes", "No"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setStandardPart(option)}
-                    style={{
-                      flex: 1,
-                      borderRadius: 6,
-                      border: "none",
-                      cursor: "pointer",
-                      background: standardPart === option ? "#C0392B" : "#F3F4F6",
-                      color: standardPart === option ? "#fff" : "#374151",
-                      fontWeight: standardPart === option ? 700 : 500,
-                      fontSize: 14,
-                    }}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Brand right after Sub Category, matching the reference's own field order (per
+                the user's explicit "after Sub Category show Brand instead of paint, then show
+                standard Part" instruction) — was previously placed near the bottom. */}
             <SearchableSelect
               label="Brand"
               value={brand}
               onChange={setBrand}
               options={brandOptions}
               placeholder="Select Brand…"
+              addNewLabel="New"
+              onAddNew={() => setCreatingBrand(true)}
             />
+            {/* Standard Part is now a real ref SearchableSelect into FG Sub sub parts (was a
+                plain Yes/No toggle) — matching the reference's own field type. Greyed/inert
+                until Sub Category is picked, same pattern as Sub Category's own dependency on
+                Category above. */}
+            <div style={{ opacity: subCategory ? 1 : 0.6, pointerEvents: subCategory ? "auto" : "none" }}>
+              <SearchableSelect
+                label="Standard Part"
+                value={standardPart}
+                onChange={setStandardPart}
+                options={standardPartOptions}
+                placeholder={subCategory ? "Select Standard Part…" : "Pick a Sub Category first"}
+                addNewLabel={subCategory ? "New" : undefined}
+                onAddNew={subCategory ? () => setCreatingStandardPart(true) : undefined}
+              />
+            </div>
+            <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
             <TextField label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. SET" />
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
           </div>
@@ -364,6 +389,33 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
             setCreatingSubCategory(false);
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-category-dd"] });
             setSubCategory(v);
+          }}
+        />
+      )}
+      {creatingBrand && (
+        <FgQuickCreateForm
+          kind="brand"
+          brandRows={brandRows}
+          onClose={() => setCreatingBrand(false)}
+          onSaved={(v) => {
+            setCreatingBrand(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-paint"] });
+            setBrand(v);
+          }}
+        />
+      )}
+      {creatingStandardPart && (
+        <FgQuickCreateForm
+          kind="standard-part"
+          segment={segment}
+          category={category}
+          subCategory={subCategory}
+          standardPartRows={standardPartRows}
+          onClose={() => setCreatingStandardPart(false)}
+          onSaved={(v) => {
+            setCreatingStandardPart(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-sub-sub-parts"] });
+            setStandardPart(v);
           }}
         />
       )}

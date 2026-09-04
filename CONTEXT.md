@@ -1541,6 +1541,51 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## FG SKU Form: Brand moved up, Standard Part becomes a real ref table + Brand DUPLICACY (3 Sep 2026)
+
+The user gave four more real App Formulas directly, all implemented:
+
+- **`FG ref Brand.Duplicacy`** — `COUNT(SELECT(FG ref Brand[Unique ID],[_THISROW].[Brand
+  Description]=[Brand Description]))`. Not written to the sheet (`FG ref Brand` genuinely has
+  no `Duplicacy` column, confirmed live) — computed client-side only, for the "+ New" panel's
+  live preview (new `countFgBrandDuplicates()`, same shape as every other client-preview
+  DUPLICACY in this app).
+- **`FG Sub sub parts.CODE`** — `IF(ISBLANK([STANDARD]),"",LOOKUP([_THISROW].[STANDARD],
+  "Alphabet","SR NO.","Letter"))`. Matches the doer-typed `STANDARD` text against `Alphabet`'s
+  own `SR NO.` column (NOT the letter-increment shape every other ref-table CODE uses) —
+  implemented literally (`nextFgStandardPartCode()`) even though it will resolve blank for
+  essentially every real value (SR NO. holds sequential numbers, STANDARD holds a doer-typed
+  name) — same "implement even where it's very unlikely to resolve" discipline as every dead
+  AGAINST-ID branch elsewhere in this app.
+- **`FG Sub sub parts.KEY`** — `[SEGMENT]&[Category]&[SUB CATEGORY]&[STANDARD]`, plain
+  concatenation (`fgStandardPartKey()`) — a real, always-computable value (unlike CODE above).
+- **`FG Sub sub parts.DUPLICACY`** — same client-preview-only treatment as Brand's (no live
+  column exists), scoped to the KEY above.
+
+**`FG Sub sub parts` already had a taxonomy entry from Sprint 1** (`fg-sub-sub-parts`) that had
+never been wired into any form — added `STANDARD` to its `requiredFields`, `AGAINST ID`/`KEY`/
+`CODE` to `computedFields`, and a POST-handler block computing all three (`AGAINST ID` via the
+same dead-pointer `nextFgAgainstId()` every other AGAINST ID in this app uses; `SEGMENT`/
+`Category`/`SUB CATEGORY`/`STANDARD` stay client-submitted, not overwritten by the dead
+pointer — same decision already made for `fg-category-dd`). New preview endpoint `GET
+/npd/taxonomy/fg-sub-sub-parts/preview?standard=...` — the one preview in this app that takes
+a query param, since CODE genuinely depends on the not-yet-saved row's own typed `STANDARD`
+value, not just existing sheet data.
+
+**`FgSkuForm.tsx`**: **Standard Part is now a real `SearchableSelect` ref into `fg-sub-sub-
+parts`** (was a plain Yes/No toggle) — filtered by SEGMENT+Category+SUB CATEGORY, greyed/inert
+until Sub Category is picked (same pattern Sub Category itself uses for Category), with its
+own "+ New" flow. This also means `generateFgPartCode()`'s `FG Sub sub parts` CODE component
+now resolves for real whenever a genuine value is picked, instead of the earlier pass's
+near-always-blank Yes/No guess. **Field order changed**: Brand and Standard Part moved to
+right after Sub Category (matching the reference screenshot's own order — Sub Category → Brand
+→ Standard Part), ahead of Name/Unit; both previously sat near the bottom of the form. Brand
+also gained its own "+ New" flow (was a plain `SearchableSelect` with no create option).
+
+`FgQuickCreateForm.tsx` grew two more kinds (`"brand"`, `"standard-part"`) — collapsing what
+would otherwise be two more near-identical nested-form files into the same shared, `kind`-
+parameterized component every other FG "+ New" flow already uses.
+
 ## Live rename: Raw Material SKU's own "Paint" column → "Brand" (3 Sep 2026)
 
 The user renamed the `Raw Material SKU` tab's own column directly in the live sheet — a

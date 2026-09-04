@@ -87,6 +87,23 @@ export async function previewFgCategoryDdCode() {
   return res.data;
 }
 
+/** `FG ref Brand` — CODE only, DUPLICACY is computed client-side (see this codebase's own
+ * countFgBrandDuplicates() doc comment for why — no live column to preview a round trip for). */
+export async function previewFgBrandCode() {
+  const res = await api.get<{ code: string }>("/npd/taxonomy/fg-paint/preview");
+  return res.data;
+}
+
+/** `FG Sub sub parts` ("Standard Part") — the one preview that takes a query param, since its
+ * CODE genuinely depends on the doer's own not-yet-saved `standard` text (an Alphabet SR NO.
+ * lookup, not a letter-increment sequence). */
+export async function previewFgStandardPart(standard: string) {
+  const res = await api.get<{ code: string; againstId: string }>("/npd/taxonomy/fg-sub-sub-parts/preview", {
+    params: { standard },
+  });
+  return res.data;
+}
+
 export async function updateTaxonomyRow(key: string, id: string, body: TaxonomyRow) {
   await api.put(`/npd/taxonomy/${encodeURIComponent(key)}/${encodeURIComponent(id)}`, body);
 }
