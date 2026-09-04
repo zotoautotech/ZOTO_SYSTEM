@@ -1541,6 +1541,14 @@ same reason as the first pass at this file (see the entry below) — `useQuery`'
 harness renders "not found" instead of real data. Reviewed the JSX/layout logic directly
 instead; a real visual comparison against the reference still needs a genuine login session.
 
+## Brand and Standard Part are now required on FINAL GOOD SKU (3 Sep 2026, same day)
+
+Both fields were optional (matching an earlier, more cautious pass) — per explicit follow-up,
+now required: `taxonomy.ts`'s `fg-sku` `requiredFields` gained `"Brand"`/`"STANDARD PART"`,
+`FgSkuForm.tsx`'s `canSave()` now checks both, both `SearchableSelect`s show the red `*`, and
+the create payload sends them unconditionally (was a conditional spread before — safe now
+since `canSave()` guarantees both are non-empty by the time Save is actually clickable).
+
 ## Correction: Standard Part's KEY/CODE preview was frozen at "—" (3 Sep 2026, same day)
 
 The previous pass's `standardPartKeyPreview` required `value.trim()` (the doer's typed

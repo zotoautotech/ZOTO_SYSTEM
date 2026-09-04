@@ -362,7 +362,7 @@ const TABLES: TaxonomyTableDef[] = [
     idStrategy: "sequential",
     idSequencePrefix: "",
     idSequencePad: 1,
-    requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY", "Name"],
+    requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY", "Name", "Brand", "STANDARD PART"],
     fields: [
       "PART NO.",
       "Manupulation Partcode",

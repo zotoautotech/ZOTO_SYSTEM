@@ -149,8 +149,10 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
       : "";
   const livePartNo = categoryDdCode + count + standardPartCode + brandCode;
 
+  // Brand/Standard Part are now required — matches taxonomy.ts's fg-sku requiredFields
+  // (per explicit follow-up request), not just optional extras like Unit.
   function canSave() {
-    return !!segment && !!category && !!subCategory && !!name.trim() && !saving;
+    return !!segment && !!category && !!subCategory && !!brand && !!standardPart && !!name.trim() && !saving;
   }
 
   async function handleSave() {
@@ -163,8 +165,8 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
         CATEGORY: category,
         "SUB CATEGORY": subCategory,
         Name: name.trim(),
-        ...(standardPart ? { "STANDARD PART": standardPart } : {}),
-        ...(brand ? { Brand: brand } : {}),
+        "STANDARD PART": standardPart,
+        Brand: brand,
         ...(unit.trim() ? { UNIT: unit.trim() } : {}),
       });
       onSaved(result.id);
@@ -290,6 +292,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
                 standard Part" instruction) — was previously placed near the bottom. */}
             <SearchableSelect
               label="Brand"
+              required
               value={brand}
               onChange={setBrand}
               options={brandOptions}
@@ -304,6 +307,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
             <div style={{ opacity: subCategory ? 1 : 0.6, pointerEvents: subCategory ? "auto" : "none" }}>
               <SearchableSelect
                 label="Standard Part"
+                required
                 value={standardPart}
                 onChange={setStandardPart}
                 options={standardPartOptions}
