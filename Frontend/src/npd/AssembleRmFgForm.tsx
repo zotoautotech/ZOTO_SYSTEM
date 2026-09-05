@@ -15,10 +15,18 @@ import {
 } from "./lib/npdApi";
 
 interface Props {
-  /** The FG SKU this BOM line belongs to — FG ID is fixed, FG CODE/CATEGORY/SUB CATEGORY/
-   * PAINT/STANDARD are server-computed snapshots (see taxonomy.ts's assemble-rm-fg POST
-   * handler), shown here as a live preview off the same helper. */
+  /** The FG SKU this BOM line belongs to. Two shapes: a REAL already-saved row (has a real
+   * `FG ID`) — FG CODE/CATEGORY/SUB CATEGORY/BRAND/STANDARD are then shown as a live
+   * server-computed preview (see taxonomy.ts's assemble-rm-fg POST handler); or a VIRTUAL
+   * not-yet-saved row (`FG ID` blank — `FgSkuForm.tsx` passes one built straight from its own
+   * in-progress field values while the doer is still filling in the parent form) — those same
+   * fields are then shown directly from `fgRow` itself instead of a server preview, since
+   * there's no real FG ID yet to look one up by. */
   fgRow: TaxonomyRow;
+  /** Present only when `fgRow` may be virtual — actually saves the parent FG SKU (idempotent,
+   * see `FgSkuForm.tsx`'s `doSave()`) and returns the real row. Called from THIS form's own
+   * Save button, the instant the doer takes an explicit save action here — never before. */
+  ensureFgSaved?: () => Promise<TaxonomyRow>;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -45,7 +53,7 @@ const LEVEL_OPTIONS: SelectOption[] = [
  * `Category`/`Sub Category` here are the RM side's own taxonomy (RM ref Category/Category DD),
  * used to narrow the RM ID picker — same "narrow the search first" pattern
  * `RmSkuForm.tsx`/`FgSkuForm.tsx` already use for their own Category → Sub Category chains. */
-export function AssembleRmFgForm({ fgRow, onClose, onSaved }: Props) {
+export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const [category, setCategory] = useState("");
@@ -99,15 +107,21 @@ export function AssembleRmFgForm({ fgRow, onClose, onSaved }: Props) {
     )
     .map((r) => ({ value: r["ID'S"], label: `${r["PART NO."] || r["ID'S"]}` }));
 
+  const hasRealFgId = !!fgRow["FG ID"];
+
+  // The backend endpoint tolerates a blank fgId (just skips the FG lookup half) — so RM
+  // CODE/DUPLICATE still resolve for real here even with a virtual (not-yet-saved) parent;
+  // only the FG-side fields (shown straight off `fgRow` itself instead when virtual, see this
+  // file's own Props doc comment) depend on `hasRealFgId`.
   const { data: preview, isError: previewFailed } = useQuery({
     queryKey: ["npd", "taxonomy", "assemble-rm-fg", "preview", fgRow["FG ID"], rmId],
     queryFn: () => previewAssembleRmFg(fgRow["FG ID"] ?? "", rmId),
-    enabled: !!fgRow["FG ID"],
+    enabled: !!rmId,
     retry: 1,
   });
 
   function canSave() {
-    return !!fgRow["FG ID"] && !!rmId && !!partSpecs.trim() && !saving;
+    return !!rmId && !!partSpecs.trim() && !saving;
   }
 
   async function handleSave() {
@@ -115,8 +129,12 @@ export function AssembleRmFgForm({ fgRow, onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
+      // Resolve the real FG ID now, at THIS explicit Save click — if the parent FG SKU is
+      // still virtual (unsaved), `ensureFgSaved()` saves it for real right here (idempotent
+      // if it's already been saved by some other path). Never fires before this point.
+      const resolvedFgRow = hasRealFgId ? fgRow : ensureFgSaved ? await ensureFgSaved() : fgRow;
       await createTaxonomyRow("assemble-rm-fg", {
-        "FG ID": fgRow["FG ID"] ?? "",
+        "FG ID": resolvedFgRow["FG ID"] ?? "",
         Category: category,
         "Sub Category": subCategory,
         "RM ID": rmId,
@@ -184,12 +202,48 @@ export function AssembleRmFgForm({ fgRow, onClose, onSaved }: Props) {
           <TextField label="USEREMAIL" value={user?.employeeId ?? ""} disabled />
           <TextField label="TIMESTAMP" value={now.toLocaleString()} disabled />
           <TextField label="Unique id" value={previewUniqueId} disabled />
-          <TextField label="FG ID" value={fgRow["FG ID"] ?? ""} disabled />
-          <TextField label="FG CODE" value={preview ? preview.fgCode || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="FG CATEGORY" value={preview ? preview.fgCategory || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="FG SUB CATEGORY" value={preview ? preview.fgSubCategory || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="FG BRAND" value={preview ? preview.fgBrand || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="FG STANDARD" value={preview ? preview.fgStandard || "—" : previewFailed ? "—" : "Loading…"} disabled />
+          <TextField label="FG ID" value={hasRealFgId ? fgRow["FG ID"] ?? "" : "Not saved yet"} disabled />
+          <TextField
+            label="FG CODE"
+            value={hasRealFgId ? (preview ? preview.fgCode || "—" : previewFailed ? "—" : "Loading…") : fgRow["PART NO."] || "—"}
+            disabled
+          />
+          <TextField
+            label="FG CATEGORY"
+            value={hasRealFgId ? (preview ? preview.fgCategory || "—" : previewFailed ? "—" : "Loading…") : fgRow.CATEGORY || "—"}
+            disabled
+          />
+          <TextField
+            label="FG SUB CATEGORY"
+            value={
+              hasRealFgId
+                ? preview
+                  ? preview.fgSubCategory || "—"
+                  : previewFailed
+                    ? "—"
+                    : "Loading…"
+                : fgRow["SUB CATEGORY"] || "—"
+            }
+            disabled
+          />
+          <TextField
+            label="FG BRAND"
+            value={hasRealFgId ? (preview ? preview.fgBrand || "—" : previewFailed ? "—" : "Loading…") : fgRow.Brand || "—"}
+            disabled
+          />
+          <TextField
+            label="FG STANDARD"
+            value={
+              hasRealFgId
+                ? preview
+                  ? preview.fgStandard || "—"
+                  : previewFailed
+                    ? "—"
+                    : "Loading…"
+                : fgRow["STANDARD PART"] || "—"
+            }
+            disabled
+          />
 
           <SearchableSelect
             label="Category"

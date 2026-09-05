@@ -2170,6 +2170,33 @@ section; only BOM ITEMS remains (still gated the same way: disabled until an exp
 click sets `createdRow`, then opens `AssembleRmFgForm`). `DrawingFgForm` itself is untouched
 (still reachable — just not from this form's own nested flow).
 
+## BOM ITEMS "New" is now a virtual preview, not gated behind a prior Save (5 Sep 2026)
+
+Second correction to the same flow in one day, per explicit follow-up instruction. The
+previous fix (disable New until the parent FG SKU is really saved, with a "Click Save first"
+hint) was itself rejected — the user wants clicking New to show the full Assemble RM FG Form
+immediately, pre-filled with whatever's already been typed into the FG SKU Form (a "virtual"
+preview), with the actual FG SKU save still deferred to an explicit Save click — just now
+that click lives one level down, on the Assemble RM FG Form's own Save button, not the FG SKU
+Form's.
+
+`FgSkuForm.tsx`: `doSave()` is the one function that actually writes the FG SKU row
+(idempotent — a second call just returns the already-saved row). `handleAddBom()` opens
+`AssembleRmFgForm` the moment `canSave()` is true, passing a `virtualFgRow` (SEGMENT/
+CATEGORY/SUB CATEGORY/Name/STANDARD PART/Brand/PART NO. from current field state, `"FG
+ID": ""`) when the SKU hasn't been saved yet, or the real `createdRow` once it has, plus
+`ensureFgSaved={doSave}`.
+
+`AssembleRmFgForm.tsx`: new optional `ensureFgSaved` prop. `hasRealFgId = !!fgRow["FG ID"]`
+gates whether FG CODE/CATEGORY/SUB CATEGORY/BRAND/STANDARD read from the live server preview
+(real parent) or straight off `fgRow`'s own fields (virtual parent) — RM CODE/DUPLICATE still
+resolve for real either way, since the preview endpoint tolerates a blank `fgId` (just skips
+the FG-half of its lookup). `handleSave()` resolves the real FG ID by calling
+`ensureFgSaved()` at the moment of ITS OWN explicit Save click (before building the
+`assemble-rm-fg` payload) if the parent is still virtual — this is still "only an explicit
+Save click ever writes anything," just one level deeper than before. **Do not move this save
+back up to the New button** — that's the exact behavior corrected twice already this session.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
