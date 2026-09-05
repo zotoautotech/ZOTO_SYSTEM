@@ -2238,6 +2238,31 @@ follow-up: remove the field from the form entirely** — the doer doesn't want t
 all, just have it silently carried through. `quantity` is still computed and still included
 in both the create/update payloads (unchanged), there's just no visible field for it anymore.
 
+## Assemble RM FG Form: bulk RM checkbox list + quantity-labeled dropdowns (5 Sep 2026)
+
+Per explicit instruction, confirmed against the legacy "Copy of ADC/PRODUCT MASTER-FG"
+spreadsheet's own live `ASSEMBLE RM FG` tab (one FG CODE genuinely has 6+ RM rows — BUSH,
+STUDS, BEARING, DRUM RING, PACKAGING POLY, PACKAGING BOX, …) — a doer builds a BOM by adding
+many RM lines, not one at a time.
+
+`AssembleRmFgForm.tsx` changes:
+- **Category/Sub Category dropdowns now show "NAME - QTY UNIT"** (e.g. "CONTROLLER SET - 1
+  SET"), matching `RmSkuForm.tsx`'s own `withQuantity()` pattern (duplicated here rather than
+  extracted to a shared helper — small enough, no shared module for it yet).
+- **RM ID is now a bulk checkbox list**, not a single `SearchableSelect` — replaces
+  `rmId`/`qty` state with `selectedQty: Record<string, string>` (an RM ID present as a key IS
+  the "ticked" flag; its value is that line's own "No. Of Qty Use"). Filtered by
+  Category/Sub Category same as before. Each ticked row shows its own qty input inline.
+- **Save creates one `assemble-rm-fg` row per ticked RM**, sequentially (not `Promise.all` —
+  matches `CreateTripModal.tsx`'s own bulk-attach pattern, avoiding several `nextPlainRandomId`
+  calls racing off the same stale tab snapshot), all sharing the same FG ID/Category/Sub
+  Category/Units/Levels/Part Specs — only "No. Of Qty Use" differs per line.
+- **RM CODE/DUPLICATE preview fields removed** — those made sense for a single RM pick; with
+  several ticked at once there's no one RM to preview against. The FG-side preview (FG CODE/
+  CATEGORY/SUB CATEGORY/BRAND/STANDARD) is unaffected — same endpoint, called with a blank
+  `rmId` now (the backend tolerates that, per an earlier fix — see the "virtual preview" note
+  above).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

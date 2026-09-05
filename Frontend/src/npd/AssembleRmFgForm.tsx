@@ -52,14 +52,28 @@ const LEVEL_OPTIONS: SelectOption[] = [
  *
  * `Category`/`Sub Category` here are the RM side's own taxonomy (RM ref Category/Category DD),
  * used to narrow the RM ID picker — same "narrow the search first" pattern
- * `RmSkuForm.tsx`/`FgSkuForm.tsx` already use for their own Category → Sub Category chains. */
+ * `RmSkuForm.tsx`/`FgSkuForm.tsx` already use for their own Category → Sub Category chains.
+ * Their own dropdown labels show quantity+unit (e.g. "CONTROLLER SET - 1 SET"), matching
+ * `RmSkuForm.tsx`'s own `withQuantity()` pattern, per explicit instruction.
+ *
+ * **RM ID is now a bulk checkbox list, not a single picker** — the real reference sheet has
+ * many RM rows sharing one FG CODE (confirmed against the legacy "Copy of ADC/PRODUCT
+ * MASTER-FG" spreadsheet's own `ASSEMBLE RM FG` tab: one FG CODE like `BI003C2` has 6+ RM
+ * rows — BUSH, STUDS, BEARING, DRUM RING, PACKAGING POLY, PACKAGING BOX, …), so a doer
+ * building a BOM needs to add many RM lines at once, not repeat this whole form one RM at a
+ * time. Ticking several RM checkboxes and clicking Save once creates one row per ticked RM
+ * (`selectedQty` holds each one's own "No. Of Qty Use") — same "queue several picks, then one
+ * Save creates every row" bulk pattern `CreateTripModal.tsx`'s own "Select Sale Orders"
+ * checkbox table already uses elsewhere in this app (see CLAUDE.md's Transport section). */
 export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
-  const [rmId, setRmId] = useState("");
-  const [qty, setQty] = useState("");
+  // One qty string per ticked RM ID — presence as a key IS the "selected" flag (an RM ID with
+  // no key isn't ticked), so unticking just deletes its key rather than tracking a separate
+  // boolean set alongside it.
+  const [selectedQty, setSelectedQty] = useState<Record<string, string>>({});
   const [units, setUnits] = useState<"PCS" | "KG" | "SET" | "">("");
   const [level, setLevel] = useState<"L1" | "L2" | "L3" | "L4" | "">("");
   const [partSpecs, setPartSpecs] = useState("");
@@ -95,33 +109,52 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
     queryFn: () => listTaxonomyRows("rm-sku"),
   });
 
-  const categoryOptions: SelectOption[] = rmCategoryRows.map((r) => ({ value: r.CATEGORY.trim(), label: r.CATEGORY.trim() }));
+  // Label suffixed with "- <QUANTITY> <UNIT>" when the ref row has both (e.g.
+  // "CONTROLLER SET - 1 SET") — matches RmSkuForm.tsx's own `withQuantity()`, per explicit
+  // instruction. `value` stays the bare trimmed name either way.
+  function withQuantity(name: string, r: TaxonomyRow): string {
+    const qty = (r.QUANTITY ?? "").trim();
+    const unit = (r.UNIT ?? "").trim();
+    return qty ? `${name} - ${qty}${unit ? ` ${unit}` : ""}` : name;
+  }
+  const categoryOptions: SelectOption[] = rmCategoryRows.map((r) => ({
+    value: r.CATEGORY.trim(),
+    label: withQuantity(r.CATEGORY.trim(), r),
+  }));
   const subCategoryOptions: SelectOption[] = rmSubCategoryRows
     .filter((r) => !category || (r.Category ?? "").trim() === category.trim())
-    .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: r["SUB CATEGORY"].trim() }));
-  const rmIdOptions: SelectOption[] = rmSkuRows
-    .filter(
-      (r) =>
-        (!category || (r.Category ?? "").trim() === category.trim()) &&
-        (!subCategory || (r["Sub Category"] ?? "").trim() === subCategory.trim())
-    )
-    .map((r) => ({ value: r["ID'S"], label: `${r["PART NO."] || r["ID'S"]}` }));
+    .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: withQuantity(r["SUB CATEGORY"].trim(), r) }));
+  const rmIdRows = rmSkuRows.filter(
+    (r) =>
+      (!category || (r.Category ?? "").trim() === category.trim()) &&
+      (!subCategory || (r["Sub Category"] ?? "").trim() === subCategory.trim())
+  );
 
   const hasRealFgId = !!fgRow["FG ID"];
+  const selectedIds = Object.keys(selectedQty);
 
-  // The backend endpoint tolerates a blank fgId (just skips the FG lookup half) — so RM
-  // CODE/DUPLICATE still resolve for real here even with a virtual (not-yet-saved) parent;
-  // only the FG-side fields (shown straight off `fgRow` itself instead when virtual, see this
-  // file's own Props doc comment) depend on `hasRealFgId`.
+  // FG-side snapshot fields only (FG CODE/CATEGORY/SUB CATEGORY/BRAND/STANDARD) — no single
+  // RM ID to pass anymore (bulk checkbox list below replaces the old one-at-a-time picker),
+  // so this is always called with a blank rmId; the backend endpoint tolerates that (just
+  // skips the RM-half of its lookup, which this form no longer needs displayed per-line).
   const { data: preview, isError: previewFailed } = useQuery({
-    queryKey: ["npd", "taxonomy", "assemble-rm-fg", "preview", fgRow["FG ID"], rmId],
-    queryFn: () => previewAssembleRmFg(fgRow["FG ID"] ?? "", rmId),
-    enabled: !!rmId,
+    queryKey: ["npd", "taxonomy", "assemble-rm-fg", "preview", fgRow["FG ID"]],
+    queryFn: () => previewAssembleRmFg(fgRow["FG ID"] ?? "", ""),
+    enabled: hasRealFgId,
     retry: 1,
   });
 
+  function toggleRm(id: string) {
+    setSelectedQty((prev) => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = "";
+      return next;
+    });
+  }
+
   function canSave() {
-    return !!rmId && !!partSpecs.trim() && !saving;
+    return selectedIds.length > 0 && selectedIds.every((id) => selectedQty[id].trim()) && !!partSpecs.trim() && !saving;
   }
 
   async function handleSave() {
@@ -133,16 +166,22 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
       // still virtual (unsaved), `ensureFgSaved()` saves it for real right here (idempotent
       // if it's already been saved by some other path). Never fires before this point.
       const resolvedFgRow = hasRealFgId ? fgRow : ensureFgSaved ? await ensureFgSaved() : fgRow;
-      await createTaxonomyRow("assemble-rm-fg", {
-        "FG ID": resolvedFgRow["FG ID"] ?? "",
-        Category: category,
-        "Sub Category": subCategory,
-        "RM ID": rmId,
-        "No. Of Qty Use": qty.trim(),
-        Units: units,
-        Levels: level,
-        "Part Specs.": partSpecs.trim(),
-      });
+      // One row per ticked RM — sequential (not Promise.all), matching CreateTripModal.tsx's
+      // own bulk-attach pattern, so each row's random Unique ID is minted against an
+      // up-to-date read of the tab rather than several requests racing off the same stale
+      // snapshot.
+      for (const id of selectedIds) {
+        await createTaxonomyRow("assemble-rm-fg", {
+          "FG ID": resolvedFgRow["FG ID"] ?? "",
+          Category: category,
+          "Sub Category": subCategory,
+          "RM ID": id,
+          "No. Of Qty Use": selectedQty[id].trim(),
+          Units: units,
+          Levels: level,
+          "Part Specs.": partSpecs.trim(),
+        });
+      }
       onSaved();
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
@@ -251,7 +290,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             onChange={(v) => {
               setCategory(v);
               setSubCategory("");
-              setRmId("");
             }}
             options={categoryOptions}
             placeholder="Select Category…"
@@ -260,32 +298,75 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             <SearchableSelect
               label="Sub Category"
               value={subCategory}
-              onChange={(v) => {
-                setSubCategory(v);
-                setRmId("");
-              }}
+              onChange={setSubCategory}
               options={subCategoryOptions}
               placeholder={category ? "Select Sub Category…" : "Pick a Category first"}
             />
           </div>
-          <SearchableSelect
-            label="RM ID"
-            required
-            value={rmId}
-            onChange={setRmId}
-            options={rmIdOptions}
-            placeholder="Select RM…"
-          />
-          <TextField label="RM CODE" value={preview ? preview.rmCode || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="DUPLICATE" value={preview ? String(preview.duplicate) : previewFailed ? "—" : "Loading…"} disabled />
 
-          <TextField
-            label="No. Of Qty Use"
-            type="number"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            placeholder="0.0000"
-          />
+          {/* Bulk checkbox list, replacing the old one-RM-at-a-time picker — see this file's
+              own module doc comment for why. Each ticked row gets its own "No. Of Qty Use"
+              input inline; Save creates one row per ticked RM. */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+              RM ID<span style={{ color: "#DC2626" }}> *</span>
+            </label>
+            <div
+              style={{
+                border: "1px solid #D1D5DB",
+                borderRadius: 6,
+                maxHeight: 260,
+                overflowY: "auto",
+              }}
+            >
+              {rmIdRows.length === 0 && (
+                <p style={{ margin: 0, padding: 16, fontSize: 13, color: "#6B7280" }}>
+                  {category ? "No RM SKUs match this Category/Sub Category." : "Pick a Category to narrow the list, or scroll to browse everything."}
+                </p>
+              )}
+              {rmIdRows.map((r) => {
+                const id = r["ID'S"];
+                const checked = id in selectedQty;
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 14px",
+                      borderBottom: "1px solid #F3F4F6",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleRm(id)}
+                      style={{ width: 16, height: 16, flexShrink: 0 }}
+                    />
+                    <span style={{ flex: 1, fontSize: 14, color: "#1A1A1A" }}>{r["PART NO."] || id}</span>
+                    {checked && (
+                      <input
+                        type="number"
+                        value={selectedQty[id]}
+                        onChange={(e) => setSelectedQty((prev) => ({ ...prev, [id]: e.target.value }))}
+                        placeholder="Qty"
+                        style={{
+                          width: 90,
+                          height: 32,
+                          borderRadius: 6,
+                          border: "1px solid #D1D5DB",
+                          padding: "4px 8px",
+                          fontSize: 13,
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <ToggleGroup label="Units" value={units} onChange={setUnits} options={UNIT_OPTIONS as { value: "PCS" | "KG" | "SET"; label: string }[]} />
           <ToggleGroup label="Levels" value={level} onChange={setLevel} options={LEVEL_OPTIONS as { value: "L1" | "L2" | "L3" | "L4"; label: string }[]} />
           <TextField
