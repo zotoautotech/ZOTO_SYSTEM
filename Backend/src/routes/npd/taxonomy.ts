@@ -345,24 +345,21 @@ const TABLES: TaxonomyTableDef[] = [
   // reasoning for the same flag).
   // `FG ID` (the id column) and `TIMESTAMP`/`USEREMAIL` stay excluded from `fields` — still
   // system-managed, never hand-edited.
-  // **`FG ID` is a plain sequential integer** (1, 2, 3 … 86, confirmed live — a literal cell
-  // value, not an ARRAYFORMULA the way `CUSTOMER MASTER.CUST ID`/`vendor-master.Vendor Id`
-  // are), NOT random hex like RM SKU's `ID'S`. The generic taxonomy POST handler defaults to
-  // `nextPlainRandomId` for every table — would have written a random hex string into a column
-  // whose every existing row is a bare number, caught before this ever shipped. Uses the same
-  // `idStrategy: "sequential"` escape hatch `vendor-master` uses, with an empty prefix and no
-  // zero-padding (`idSequencePad: 1`) so `nextSequentialId` just returns "27", "28", … matching
-  // the real existing rows exactly.
+  // **`FG ID` is now random hex** (e.g. `d1e6530f`, matching the reference "Copy of ADC/
+  // PRODUCT MASTER-FG" spreadsheet's own `ID'S` column and RM SKU's own `ID'S` scheme) — per
+  // explicit instruction ("THIS IS FINAL IDS SHOW LIKE -d1e6530f THIS CHANGE"). An earlier
+  // pass here used `idStrategy: "sequential"` (plain "27", "28", …) to match this live sheet's
+  // OWN pre-existing FG ID values (1, 2, 3 … 88, confirmed live) — that earlier convention is
+  // now deliberately overridden for every NEW row going forward; existing sequential-integer
+  // rows are left as-is, not renumbered. Uses the default `idStrategy: "random"`
+  // (`nextPlainRandomId`) like every other table in this file, so no explicit override needed.
   {
     key: "fg-sku",
     label: "FG SKU Catalog",
     spreadsheetId: env.sheets.fg,
-    tab: "FINAL GOOD SKU",
+    tab: "Copy of FINAL GOOD SKU",
     idColumn: "FG ID",
     idPrefix: "FG",
-    idStrategy: "sequential",
-    idSequencePrefix: "",
-    idSequencePad: 1,
     requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY", "Name", "Brand", "STANDARD PART"],
     fields: [
       "PART NO.",
@@ -779,7 +776,7 @@ taxonomyRouter.get("/assemble-rm-fg/preview", async (req, res, next) => {
     const fgId = typeof req.query.fgId === "string" ? req.query.fgId : "";
     const rmId = typeof req.query.rmId === "string" ? req.query.rmId : "";
     const [fgRows, rmRows, existingRows] = await Promise.all([
-      readTable(env.sheets.fg, "FINAL GOOD SKU"),
+      readTable(env.sheets.fg, "Copy of FINAL GOOD SKU"),
       readTable(env.sheets.npd, "Raw Material SKU"),
       readTable(env.sheets.fg, "ASSEMBLE RM FG"),
     ]);
@@ -980,7 +977,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // existing rows already pairing this exact FG ID + RM ID.
     if (table.key === "assemble-rm-fg") {
       const [fgRows, rmRows, existingRows] = await Promise.all([
-        readTable(env.sheets.fg, "FINAL GOOD SKU"),
+        readTable(env.sheets.fg, "Copy of FINAL GOOD SKU"),
         readTable(env.sheets.npd, "Raw Material SKU"),
         readTable(env.sheets.fg, "ASSEMBLE RM FG", { refresh: true }),
       ]);

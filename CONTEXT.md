@@ -2148,6 +2148,14 @@ resolve for real going forward. **If FG BRAND ever looks blank again, dump `FINA
 live headers directly before assuming the code is wrong** — this exact column has now
 disappeared from the live sheet once already with zero warning.
 
+## FG ID changed to random hex (5 Sep 2026)
+
+Per explicit instruction ("THIS IS FINAL IDS SHOW LIKE -d1e6530f THIS CHANGE") — `fg-sku`'s
+`FG ID` now uses the default `nextPlainRandomId` (8-char hex, e.g. `d1e6530f`), same as RM
+SKU's own `ID'S` and the reference "Copy of ADC/PRODUCT MASTER-FG" sheet. Removed the earlier
+`idStrategy: "sequential"` override. Existing sequential-integer FG ID rows (1–88) are left
+as-is; only new rows get the hex format.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
