@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
-import { isAxiosError } from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
-import {
-  createTaxonomyRow,
-  listTaxonomyRows,
-  previewAssembleRmFg,
-  previewPlainRandomId,
-  type TaxonomyRow,
-} from "./lib/npdApi";
+import { listTaxonomyRows, previewAssembleRmFg, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
+
+/** One ticked RM line, queued locally — nothing is written to the backend until the PARENT
+ * `FgSkuForm.tsx`'s own Save button is clicked (see that file's own doc comment on
+ * `bomQueue`). Carries its own Category/Sub Category snapshot since Sub Category can be
+ * multi-ticked (several RMs in one queue can genuinely belong to different Sub Categories). */
+export interface QueuedBomLine {
+  rmId: string;
+  partNo: string;
+  category: string;
+  subCategory: string;
+  qty: string;
+}
 
 interface Props {
   /** The FG SKU this BOM line belongs to. Two shapes: a REAL already-saved row (has a real
@@ -22,12 +27,10 @@ interface Props {
    * fields are then shown directly from `fgRow` itself instead of a server preview, since
    * there's no real FG ID yet to look one up by. */
   fgRow: TaxonomyRow;
-  /** Present only when `fgRow` may be virtual — actually saves the parent FG SKU (idempotent,
-   * see `FgSkuForm.tsx`'s `doSave()`) and returns the real row. Called from THIS form's own
-   * Save button, the instant the doer takes an explicit save action here — never before. */
-  ensureFgSaved?: () => Promise<TaxonomyRow>;
   onClose: () => void;
-  onSaved: () => void;
+  /** Adds the ticked RM lines to the PARENT's local queue — this form never itself writes to
+   * the backend any more (see `QueuedBomLine`'s own doc comment). Called once, on Save. */
+  onQueue: (lines: QueuedBomLine[]) => void;
 }
 
 /** "ASSEMBLE RM FG Form" — matching the AppSheet reference screenshot field-for-field
@@ -56,8 +59,17 @@ interface Props {
  * time. Ticking several RM checkboxes and clicking Save once creates one row per ticked RM
  * (`selectedQty` holds each one's own "No. Of Qty Use") — same "queue several picks, then one
  * Save creates every row" bulk pattern `CreateTripModal.tsx`'s own "Select Sale Orders"
- * checkbox table already uses elsewhere in this app (see CLAUDE.md's Transport section). */
-export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Props) {
+ * checkbox table already uses elsewhere in this app (see CLAUDE.md's Transport section).
+ *
+ * **Save here is purely local — no backend write happens in this file at all.** An earlier
+ * version called `createTaxonomyRow` straight from this form's own Save button; per explicit,
+ * emphatic follow-up instruction ("PERMANET SAVE ONLY WHEN I CLICK FINAL GOOD SKU Form SAVE
+ * BUTTON"), Save now just packages the ticked RM lines into `QueuedBomLine[]` and hands them
+ * to the parent via `onQueue` — the parent (`FgSkuForm.tsx`) is the only place that ever
+ * writes `assemble-rm-fg` rows, and only when ITS OWN Save button is clicked. Matches the
+ * reference AppSheet form's own behavior: its BOM ITEMS table (with a "New" link below it)
+ * shows queued rows immediately but nothing is truly saved until the parent form's Save. */
+export function AssembleRmFgForm({ fgRow, onClose, onQueue }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   // Category stays a single SearchableSelect (an earlier pass made it a bulk checkbox box —
@@ -75,8 +87,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   // dropdowns above it — a doer picking many RMs at once shouldn't have to scroll/hunt through
   // every match, per explicit "make this easier" follow-up.
   const [rmSearch, setRmSearch] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -223,41 +233,27 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   }
 
   function canSave() {
-    return selectedIds.length > 0 && selectedIds.every((id) => selectedQty[id].trim()) && !saving;
+    return selectedIds.length > 0 && selectedIds.every((id) => selectedQty[id].trim());
   }
 
-  async function handleSave() {
+  /** No backend call — see this file's own module doc comment. Just packages the ticked RM
+   * lines and hands them to the parent's queue, then closes. Each line carries its own real
+   * Category/Sub Category (off its `rm-sku` row), not a single shared filter value — several
+   * ticked RMs can genuinely belong to different Sub Categories at once. */
+  function handleSave() {
     if (!canSave()) return;
-    setSaving(true);
-    setError("");
-    try {
-      // Resolve the real FG ID now, at THIS explicit Save click — if the parent FG SKU is
-      // still virtual (unsaved), `ensureFgSaved()` saves it for real right here (idempotent
-      // if it's already been saved by some other path). Never fires before this point.
-      const resolvedFgRow = hasRealFgId ? fgRow : ensureFgSaved ? await ensureFgSaved() : fgRow;
-      // One row per ticked RM — sequential (not Promise.all), matching CreateTripModal.tsx's
-      // own bulk-attach pattern, so each row's random Unique ID is minted against an
-      // up-to-date read of the tab rather than several requests racing off the same stale
-      // snapshot.
-      for (const id of selectedIds) {
-        // Category/Sub Category can now differ per ticked RM (multiple Categories can be
-        // ticked at once) — use each RM's own real Category/Sub Category off its row, not a
-        // single shared filter value that no longer means "the" category for every line.
-        const rmRow = rmSkuRows.find((r) => r["ID'S"] === id);
-        await createTaxonomyRow("assemble-rm-fg", {
-          "FG ID": resolvedFgRow["FG ID"] ?? "",
-          Category: rmRow?.Category ?? "",
-          "Sub Category": rmRow?.["Sub Category"] ?? "",
-          "RM ID": id,
-          "No. Of Qty Use": selectedQty[id].trim(),
-        });
-      }
-      onSaved();
-    } catch (err) {
-      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
-      setError(detail ?? "Could not save — please try again.");
-      setSaving(false);
-    }
+    const lines: QueuedBomLine[] = selectedIds.map((id) => {
+      const rmRow = rmSkuRows.find((r) => r["ID'S"] === id);
+      return {
+        rmId: id,
+        partNo: rmRow?.["PART NO."] || id,
+        category: rmRow?.Category ?? "",
+        subCategory: rmRow?.["Sub Category"] ?? "",
+        qty: selectedQty[id].trim(),
+      };
+    });
+    onQueue(lines);
+    onClose();
   }
 
   return (
@@ -510,7 +506,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             </div>
           </div>
 
-          {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 
         <div
@@ -527,7 +522,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
         >
           <button
             onClick={onClose}
-            disabled={saving}
             style={{
               padding: "8px 20px",
               borderRadius: 6,
@@ -541,6 +535,9 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
           >
             Cancel
           </button>
+          {/* Labeled "Add to BOM", not "Save" — nothing is written to the backend by clicking
+              this; it only queues these lines on the parent form, see this file's own module
+              doc comment. */}
           <button
             onClick={handleSave}
             disabled={!canSave()}
@@ -556,7 +553,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
               opacity: canSave() ? 1 : 0.6,
             }}
           >
-            {saving ? "Saving…" : "Save"}
+            Add to BOM
           </button>
         </div>
       </div>

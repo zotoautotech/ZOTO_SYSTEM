@@ -2320,6 +2320,46 @@ Real bug caught live — `AssembleRmFgForm.tsx` stopped showing/sending Part Spe
 with "Part Specs.: Required" no matter what. Dropped `"Part Specs."` from `requiredFields` —
 still in `fields` (still writable/still a live column), just no longer enforced.
 
+## BOM ITEMS is now a true local queue — nothing saves until FINAL GOOD SKU Form's own Save (5 Sep 2026)
+
+Third and (per the user's own words) final correction to this flow in one session — explicit,
+emphatic instruction: "PERMANET SAVE ONLY WHEN I CLICK FINAL GOOD SKU Form SAVE BUTTON...
+MAKE STRONG BIG BIG FINAL COMMAND." Every earlier version of this flow wrote *something* to
+the backend before the doer ever clicked the outer form's own Save:
+1. First pass: BOM ITEMS' "New" auto-saved the FG SKU on first click.
+2. Second pass: fixed that, but Assemble RM FG Form's own "Save" button still wrote the BOM
+   rows itself (after resolving/creating the FG SKU if needed) — still a save before the
+   outer form's Save.
+
+**Now genuinely nothing is written until `FgSkuForm.tsx`'s own Save button runs**:
+- `AssembleRmFgForm.tsx` no longer calls `createTaxonomyRow` at all — its `handleSave()` is
+  100% local, packaging ticked RM lines into `QueuedBomLine[]` (rmId/partNo/category/
+  subCategory/qty) and handing them to the parent via a new `onQueue` prop, then closing. Its
+  own Save button is labeled "Add to BOM", not "Save", since nothing is actually saved by
+  clicking it. `ensureFgSaved`/`onSaved` props removed entirely.
+- `FgSkuForm.tsx` holds `bomQueue: QueuedBomLine[]` in local state — `handleAddBom()` just
+  opens the form; `onQueue` appends returned lines to `bomQueue`. The BOM ITEMS section now
+  renders the queued lines as a small removable list (Part No. — Qty, with a Remove link),
+  matching the reference AppSheet form's own BOM ITEMS table + "New" link below it.
+- `handleSave()` is the one atomic action: creates the FG SKU row, then loops `bomQueue`
+  creating one `assemble-rm-fg` row per line against the resulting real FG ID (sequential, not
+  `Promise.all`, same random-ID-race reasoning as `AssembleRmFgForm`'s own bulk save used to
+  have), then calls `onSaved(fgId)`. If this fails partway, whatever FG SKU/BOM rows already
+  landed stay — no rollback attempted (matches this app's existing convention elsewhere of not
+  building transactional rollback over the Sheets API).
+- **`FgSkuDetail.tsx`'s own "BOM Items" card is a DIFFERENT, legitimate case** — it opens
+  `AssembleRmFgForm` against an already-real, already-saved FG SKU (no outer form to defer to
+  at all), so ITS `onQueue` callback does write immediately (loops `createTaxonomyRow` itself)
+  — this is correct and intentional, not a regression back to the old auto-save bug. Only
+  `FgSkuForm.tsx`'s own nested BOM flow needed the local-queue treatment.
+- **Description field added to FINAL GOOD SKU Form** (live column, right after Name/before
+  BOM ITEMS) — plain optional doer-typed text, added in the same pass per a mid-turn request.
+
+**Do not reintroduce any write inside `AssembleRmFgForm.tsx` itself, or on BOM ITEMS' "New"
+click** — this has now been corrected three times; the only acceptable write points are
+`FgSkuForm.tsx`'s own `handleSave()` and `FgSkuDetail.tsx`'s own already-saved-context
+`onQueue`.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

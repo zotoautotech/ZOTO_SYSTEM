@@ -378,6 +378,7 @@ const TABLES: TaxonomyTableDef[] = [
       "Name",
       "STANDARD PART",
       "Brand",
+      "Description",
       "MIN STOCK",
       "MAX STOCK",
       "OPENING STOCK",

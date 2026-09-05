@@ -6,7 +6,7 @@ import { SearchableSelect, type SelectOption } from "../components/form/Searchab
 import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 import { FgQuickCreateForm } from "./FgQuickCreateForm";
-import { AssembleRmFgForm } from "./AssembleRmFgForm";
+import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
 
 interface Props {
   onClose: () => void;
@@ -57,11 +57,18 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const [brand, setBrand] = useState("");
   const [standardPart, setStandardPart] = useState("");
   const [name, setName] = useState("");
+  // Live column confirmed directly ("Description", column L on FINAL GOOD SKU) — plain
+  // optional doer-typed text, added per explicit instruction.
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Set only by an explicit Save click (see handleSave()'s own doc comment) — never auto-saved
-  // by the BOM ITEMS "New" button below, which stays disabled until this is set.
-  const [createdRow, setCreatedRow] = useState<TaxonomyRow | null>(null);
+  // Local-only queue of BOM lines — nothing about this SKU or its BOM is written to the
+  // backend until the doer clicks THIS form's own Save button (see handleSave()'s own doc
+  // comment: an earlier version wrote the FG SKU early the moment a BOM line was queued,
+  // which was corrected per explicit, emphatic follow-up — "PERMANET SAVE ONLY WHEN I CLICK
+  // FINAL GOOD SKU Form SAVE BUTTON"). Matches the reference AppSheet form's own BOM ITEMS
+  // table (rows shown immediately, nothing truly saved until the parent form's own Save).
+  const [bomQueue, setBomQueue] = useState<QueuedBomLine[]>([]);
   const [showBomForm, setShowBomForm] = useState(false);
 
   useEffect(() => {
@@ -159,61 +166,57 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     return !!segment && !!category && !!subCategory && !!brand && !!standardPart && !!name.trim() && !saving;
   }
 
-  /** The one place that actually writes the FG SKU row to the live sheet. Called from the
-   * form's own Save button, and — since clicking BOM ITEMS' "New" no longer silently saves
-   * anything itself (see that fix's own history below) — also called from inside the
-   * Assemble RM FG Form's OWN Save button via `ensureFgSaved` below, the moment the doer
-   * takes an explicit save action there. Idempotent: a second call just returns the row
-   * already saved, never double-creates. */
-  async function doSave(): Promise<TaxonomyRow> {
-    if (createdRow) return createdRow;
-    const body = {
-      SEGMENT: segment,
-      CATEGORY: category,
-      "SUB CATEGORY": subCategory,
-      Name: name.trim(),
-      "STANDARD PART": standardPart,
-      Brand: brand,
-    };
-    const result = await createTaxonomyRow("fg-sku", body);
-    const row: TaxonomyRow = { ...body, "FG ID": result.id, "PART NO.": livePartNo };
-    setCreatedRow(row);
-    return row;
-  }
-
-  /** An earlier version of this file had the DRAWINGS OR VIDEO/BOM ITEMS "New" buttons
-   * silently trigger `doSave()` on first click (an attempt to work around the reference
-   * AppSheet's own "add a child row against an unsaved parent" trick, which this stateless
-   * REST backend has no equivalent for) — that meant clicking New wrote a real row to the
-   * customer's production sheet before they'd ever pressed any Save button, with zero
-   * confirmation. Corrected per explicit instruction, then corrected again per a SECOND
-   * explicit instruction: New should show the Assemble RM FG Form immediately (a "virtual"
-   * preview, pre-filled from this form's own in-progress field values, not yet written
-   * anywhere) — the actual FG SKU save only happens when the doer clicks Assemble RM FG
-   * Form's OWN Save button (an explicit save action, just one level down), via
-   * `ensureFgSaved` passed as a prop below. */
+  /** THE ONLY place this form writes anything to the backend — one atomic action on Save:
+   * create the FG SKU row, then create one `assemble-rm-fg` row per locally-queued BOM line
+   * against the resulting real FG ID, then close. Two earlier versions of this file each
+   * wrote something (the FG SKU, or the BOM lines) BEFORE this button was ever clicked — both
+   * corrected per explicit, emphatic follow-up ("PERMANET SAVE ONLY WHEN I CLICK FINAL GOOD
+   * SKU Form SAVE BUTTON... MAKE STRONG BIG BIG FINAL COMMAND"). BOM ITEMS' "New" button
+   * (`handleAddBom`) only ever queues locally via `AssembleRmFgForm`'s own `onQueue` — never
+   * touches the network — so nothing is written anywhere until this one function runs. */
   async function handleSave() {
-    if (!canSave() || createdRow) return;
+    if (!canSave()) return;
     setSaving(true);
     setError("");
     try {
-      await doSave();
+      const body = {
+        SEGMENT: segment,
+        CATEGORY: category,
+        "SUB CATEGORY": subCategory,
+        Name: name.trim(),
+        "STANDARD PART": standardPart,
+        Brand: brand,
+        ...(description.trim() ? { Description: description.trim() } : {}),
+      };
+      const result = await createTaxonomyRow("fg-sku", body);
+      // Sequential (not Promise.all) — matches AssembleRmFgForm's own bulk-save reasoning:
+      // each line's random Unique ID is minted against an up-to-date read of the tab rather
+      // than several requests racing off the same stale snapshot.
+      for (const line of bomQueue) {
+        await createTaxonomyRow("assemble-rm-fg", {
+          "FG ID": result.id,
+          Category: line.category,
+          "Sub Category": line.subCategory,
+          "RM ID": line.rmId,
+          "No. Of Qty Use": line.qty,
+        });
+      }
+      onSaved(result.id);
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ?? "Could not save — please try again.");
-    } finally {
       setSaving(false);
     }
   }
 
   function handleAddBom() {
-    if (canSave() || createdRow) setShowBomForm(true);
+    if (canSave()) setShowBomForm(true);
   }
 
-  // The virtual (not-yet-saved) FG row shown inside Assemble RM FG Form before this form's
-  // own Save has been clicked — carries every field the doer has already picked so the BOM
-  // form's FG CATEGORY/SUB CATEGORY/BRAND/STANDARD/PART NO. fields show real values instead
-  // of "Loading…", with a blank "FG ID" signaling "not saved yet" to that form.
+  // The virtual (not-yet-saved, and — with this form's local-queue-only BOM flow — NEVER
+  // saved from inside the BOM form itself) FG row shown inside Assemble RM FG Form, so its
+  // FG CATEGORY/SUB CATEGORY/BRAND/STANDARD/PART NO. fields show real values instead of
+  // "Loading…" while the doer is still picking RM lines to queue.
   const virtualFgRow: TaxonomyRow = {
     SEGMENT: segment,
     CATEGORY: category,
@@ -365,14 +368,50 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               />
             </div>
             <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
+            <TextField
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description…"
+            />
             {/* Matches the reference's own "BOM ITEMS* / New" nested-list bar — DRAWINGS OR
                 VIDEO removed from this form per explicit instruction (BOM ITEMS only). New
                 opens Assemble RM FG Form right away, pre-filled from this form's own
-                in-progress fields (a "virtual" preview, nothing saved yet) — the real FG SKU
-                save only happens if that form's own Save button is clicked, see
-                `doSave()`/`ensureFgSaved`'s own doc comments. */}
-            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave() && !createdRow} />
-            {!canSave() && !createdRow && (
+                in-progress fields (a "virtual" preview, nothing saved yet) — clicking that
+                form's own "Add to BOM" only queues the picked lines locally in `bomQueue`;
+                nothing is written to the backend until THIS form's own Save button runs,
+                see handleSave()'s own doc comment. */}
+            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave()} />
+            {bomQueue.length > 0 && (
+              <div style={{ marginTop: -14, marginBottom: 10 }}>
+                {bomQueue.map((line, i) => (
+                  <div
+                    key={`${line.rmId}-${i}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      border: "1px solid #E5E7EB",
+                      borderTop: i === 0 ? "1px solid #E5E7EB" : "none",
+                      fontSize: 13,
+                    }}
+                  >
+                    <span>
+                      {line.partNo} — Qty {line.qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBomQueue((prev) => prev.filter((_, idx) => idx !== i))}
+                      style={{ border: "none", background: "none", color: "#DC2626", cursor: "pointer", fontSize: 13 }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!canSave() && (
               <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
                 Fill in Category, Sub Category, Brand, Standard Part and Name above to add BOM Items.
               </p>
@@ -394,7 +433,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           }}
         >
           <button
-            onClick={() => (createdRow ? onSaved(createdRow["FG ID"]) : onClose())}
+            onClick={onClose}
             disabled={saving}
             style={{
               padding: "8px 20px",
@@ -407,24 +446,24 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               cursor: "pointer",
             }}
           >
-            {createdRow ? "Close" : "Cancel"}
+            Cancel
           </button>
           <button
             onClick={handleSave}
-            disabled={!canSave() || !!createdRow}
+            disabled={!canSave()}
             style={{
               padding: "8px 20px",
               borderRadius: 6,
               border: "none",
-              background: createdRow ? "#16A34A" : "#C0392B",
+              background: "#C0392B",
               color: "#fff",
               fontSize: 14,
               fontWeight: 600,
-              cursor: !canSave() || createdRow ? "default" : "pointer",
-              opacity: !canSave() && !createdRow ? 0.6 : 1,
+              cursor: canSave() ? "pointer" : "default",
+              opacity: canSave() ? 1 : 0.6,
             }}
           >
-            {createdRow ? "Saved ✓" : saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -484,13 +523,9 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
       )}
       {showBomForm && (
         <AssembleRmFgForm
-          fgRow={createdRow ?? virtualFgRow}
-          ensureFgSaved={doSave}
+          fgRow={virtualFgRow}
           onClose={() => setShowBomForm(false)}
-          onSaved={() => {
-            setShowBomForm(false);
-            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"] });
-          }}
+          onQueue={(lines: QueuedBomLine[]) => setBomQueue((prev) => [...prev, ...lines])}
         />
       )}
     </div>

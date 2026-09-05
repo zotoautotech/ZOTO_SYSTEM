@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { listTaxonomyRows, listBomLines } from "./lib/npdApi";
+import { listTaxonomyRows, listBomLines, createTaxonomyRow } from "./lib/npdApi";
 import { QuickAction } from "../components/FloatingActionButton";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { DrawingFgForm } from "./DrawingFgForm";
-import { AssembleRmFgForm } from "./AssembleRmFgForm";
+import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
 
 /** FG SKU detail — rebuilt on the same real pattern `RmSkuDetail.tsx` now uses (itself copied
  * from `TripDetail.tsx`, Sales CRR's own working detail page), per the user's own screenshot
@@ -189,7 +189,19 @@ export function FgSkuDetail() {
         <AssembleRmFgForm
           fgRow={row}
           onClose={() => setShowAssembleForm(false)}
-          onSaved={() => {
+          // This FG SKU is already saved for real (this is its own detail page) — no parent
+          // form's Save to defer to here, unlike FgSkuForm.tsx's own nested BOM flow, so this
+          // is the one place that DOES write immediately when the doer queues lines.
+          onQueue={async (lines: QueuedBomLine[]) => {
+            for (const line of lines) {
+              await createTaxonomyRow("assemble-rm-fg", {
+                "FG ID": row["FG ID"] ?? "",
+                Category: line.category,
+                "Sub Category": line.subCategory,
+                "RM ID": line.rmId,
+                "No. Of Qty Use": line.qty,
+              });
+            }
             setShowAssembleForm(false);
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"] });
           }}
