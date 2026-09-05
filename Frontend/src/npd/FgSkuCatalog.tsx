@@ -2,10 +2,12 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
+import { CsvExportButton } from "../components/CsvExportButton";
 import { useIsMobile } from "../lib/responsive";
 import { useSearch } from "../lib/search";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+import type { CsvColumn } from "./lib/csv";
 import { FgSkuForm } from "./FgSkuForm";
 
 /** FG SKU Catalog — same rebuild as RmSkuCatalog.tsx, matching the real legacy reference
@@ -82,8 +84,22 @@ export function FgSkuCatalog() {
     [filterWidth, onDividerMouseMove, onDividerMouseUp]
   );
 
+  // Matches the reference's own "Export Data" icon — exports exactly the currently
+  // filtered/searched rows (same set the grid below is showing), not the whole table.
+  const csvColumns: CsvColumn<TaxonomyRow>[] = [
+    { header: "FG ID", get: (r) => r["FG ID"] ?? "" },
+    { header: "Timestamp", get: (r) => (r.TIMESTAMP ? new Date(r.TIMESTAMP).toLocaleString() : "") },
+    { header: "Part No.", get: (r) => r["PART NO."] ?? "" },
+    { header: "Name", get: (r) => r.Name ?? "" },
+    { header: "Category", get: (r) => r.CATEGORY ?? "" },
+    { header: "Sub Category", get: (r) => r["SUB CATEGORY"] ?? "" },
+    { header: "Brand", get: (r) => r.Brand ?? "" },
+    { header: "Standard Part", get: (r) => r["STANDARD PART"] ?? "" },
+  ];
+
   useSetHeaderActions(
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <CsvExportButton filename="fg-sku.csv" columns={csvColumns} rows={filtered} />
       {!isMobile && (
         <button
           aria-label="New"

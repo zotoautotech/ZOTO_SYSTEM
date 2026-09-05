@@ -2481,6 +2481,24 @@ rather than being hidden:
 - CREATE mode's own local-queue-until-Save behavior (added earlier the same day, per the
   "PERMANET SAVE ONLY WHEN I CLICK SAVE" instruction) is unchanged — this only affects EDIT.
 
+## CSV export added to RM SKU / FG SKU catalogs too (5 Sep 2026)
+
+Per explicit "create export data in RM SKU, also add in FG SKU" follow-up — matches the
+reference's own "Export Data" icon on its list views. Factored the CSV logic out of
+`AssembleData.tsx`'s own original inline version into shared pieces (three list views now
+need the identical behavior):
+- `Frontend/src/npd/lib/csv.ts` — `downloadCsv(filename, columns, rows)`, a pure client-side
+  `Blob` download (no new backend route).
+- `Frontend/src/components/CsvExportButton.tsx` — the shared icon button (same visual shape
+  as `RmSkuCatalog.tsx`/`FgSkuCatalog.tsx`'s own "+"/filter header-action icons).
+
+`RmSkuCatalog.tsx`/`FgSkuCatalog.tsx` each get one in their header-actions row, exporting
+exactly the currently filtered/searched rows (same set the grid below is showing) with real
+live-column CSVs (RM: ID'S/Timestamp/Part No./Category/Sub Category/Brand/Make By/Vendor
+Name/Quantity; FG: FG ID/Timestamp/Part No./Name/Category/Sub Category/Brand/Standard Part).
+`AssembleData.tsx` now imports the same shared helper/component instead of its own
+now-removed inline copy.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

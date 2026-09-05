@@ -2,10 +2,12 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomerFilterPanel } from "../components/CustomerFilterPanel";
+import { CsvExportButton } from "../components/CsvExportButton";
 import { useIsMobile } from "../lib/responsive";
 import { useSearch } from "../lib/search";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+import type { CsvColumn } from "./lib/csv";
 import { RmSkuForm } from "./RmSkuForm";
 
 /** RM SKU Catalog — same list-screen chrome as every Sales CRR queue (`OrderPunchList.tsx`
@@ -86,8 +88,23 @@ export function RmSkuCatalog() {
     [filterWidth, onDividerMouseMove, onDividerMouseUp]
   );
 
+  // Matches the reference's own "Export Data" icon — exports exactly the currently
+  // filtered/searched rows (same set the grid below is showing), not the whole table.
+  const csvColumns: CsvColumn<TaxonomyRow>[] = [
+    { header: "ID'S", get: (r) => r["ID'S"] ?? "" },
+    { header: "Timestamp", get: (r) => (r.TIMESTAMP ? new Date(r.TIMESTAMP).toLocaleString() : "") },
+    { header: "Part No.", get: (r) => r["PART NO."] ?? "" },
+    { header: "Category", get: (r) => r.Category ?? "" },
+    { header: "Sub Category", get: (r) => r["Sub Category"] ?? "" },
+    { header: "Brand", get: (r) => r.Brand ?? "" },
+    { header: "Make By", get: (r) => r["MAKE BY"] ?? "" },
+    { header: "Vendor Name", get: (r) => r["VENDOR NAME"] ?? "" },
+    { header: "Quantity", get: (r) => r.QUANTITY ?? "" },
+  ];
+
   useSetHeaderActions(
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <CsvExportButton filename="rm-sku.csv" columns={csvColumns} rows={filtered} />
       {!isMobile && (
         <button
           aria-label="New"

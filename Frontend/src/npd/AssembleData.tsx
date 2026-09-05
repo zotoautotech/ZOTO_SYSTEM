@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DataTable, type Column } from "../components/DataTable";
+import { CsvExportButton } from "../components/CsvExportButton";
 import { listTaxonomyRows, type TaxonomyRow } from "./lib/npdApi";
+import type { CsvColumn } from "./lib/csv";
 
 /** "ASSEMBLE DATA" — matches the AppSheet reference's own flat table view: every
  * `assemble-rm-fg` row across every FG SKU (not scoped to one FG SKU, unlike
@@ -45,7 +47,7 @@ export function AssembleData() {
 
   // CSV_COLUMNS mirrors the visible table columns exactly (same order/labels) so the export
   // matches what a doer is actually looking at, including the current search filter.
-  const CSV_COLUMNS: { header: string; get: (r: TaxonomyRow) => string }[] = [
+  const CSV_COLUMNS: CsvColumn<TaxonomyRow>[] = [
     { header: "Sr. No.", get: (r) => r.__sr ?? "" },
     { header: "FG CODE", get: (r) => r["FG CODE"] ?? "" },
     { header: "FG ID", get: (r) => r["FG ID"] ?? "" },
@@ -57,26 +59,6 @@ export function AssembleData() {
     { header: "Category", get: (r) => r.Category ?? "" },
     { header: "No. Of Qty Use", get: (r) => r["No. Of Qty Use"] ?? "" },
   ];
-
-  function escapeCsvCell(value: string): string {
-    return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-  }
-
-  function downloadCsv() {
-    const lines = [
-      CSV_COLUMNS.map((c) => escapeCsvCell(c.header)).join(","),
-      ...filtered.map((r) => CSV_COLUMNS.map((c) => escapeCsvCell(c.get(r))).join(",")),
-    ];
-    const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "assemble-data.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
 
   const columns: Column<TaxonomyRow>[] = [
     { key: "sr", header: "Sr. No.", render: (r) => r.__sr },
@@ -114,38 +96,7 @@ export function AssembleData() {
                 color: "var(--color-text)",
               }}
             />
-            {/* Matches the reference's own CSV icon button — exports exactly what's currently
-                filtered/visible below. */}
-            <button
-              type="button"
-              onClick={downloadCsv}
-              disabled={filtered.length === 0}
-              title="Export CSV"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                height: 38,
-                padding: "0 14px",
-                borderRadius: 6,
-                border: "1px solid var(--color-border)",
-                background: "var(--color-bg)",
-                color: "var(--color-text)",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: filtered.length === 0 ? "default" : "pointer",
-                opacity: filtered.length === 0 ? 0.5 : 1,
-                flexShrink: 0,
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6" />
-                <path d="M9 15h1" />
-                <path d="M13 15h2" />
-              </svg>
-              CSV
-            </button>
+            <CsvExportButton filename="assemble-data.csv" columns={CSV_COLUMNS} rows={filtered} />
           </div>
         </div>
         {isLoading ? (
