@@ -2100,6 +2100,30 @@ write, `npdApi.ts`'s `previewAssembleRmFg()` return type (`fgPaint` → `fgBrand
 screenshot's field label" discipline as everywhere else in this project — the AppSheet field
 LABEL and the underlying sheet COLUMN header aren't always identical.
 
+## Live sheet fix: `FINAL GOOD SKU` had lost its `Brand` column entirely (5 Sep 2026)
+
+A doer reported FG BRAND never showing on the Assemble RM FG Form even after picking a real
+Brand ("zoto") on the FINAL GOOD SKU Form. Dumped the live `FINAL GOOD SKU` tab's real headers
+directly (not assumed) and found the column genuinely didn't exist any more — the live tab had
+also picked up a new `CUSTOMER NAME` column (between `SUB CATEGORY` and `Name`) at some point,
+and was capped at exactly 20 columns/grid width, so every FG SKU save since then had `Brand`
+silently dropped by `appendRow` (matches this app's own "field mapped in code but missing on
+the live sheet gets silently dropped" convention — same as `Client Classification`/`ZOTO
+Vehicle *` on `ORDER_PUNCH`, per CLAUDE.md). **No code was wrong** — `taxonomy.ts`'s `fg-sku`
+table already listed `Brand` correctly; the live sheet just didn't have anywhere to put it.
+
+Fixed by widening the live sheet's grid (20 → 21 columns, `spreadsheets.batchUpdate`'s
+`updateSheetProperties`/`gridProperties.columnCount` — the same "grid limit" class of error
+`Transport_Products` hit once before, see CLAUDE.md's Known Gotchas) and writing a new `Brand`
+header into column U, via a one-off throwaway script (run once, deleted immediately after —
+not committed, matching this project's own "temp scripts get written to a file, run, then
+deleted" convention). FG SKU row 89 (created just before this fix, during testing) still has
+no `Brand` value — expected, the column didn't exist yet when it was saved — but every FG SKU
+saved from now on will correctly persist Brand, and Assemble RM FG Form's FG BRAND preview will
+resolve for real going forward. **If FG BRAND ever looks blank again, dump `FINAL GOOD SKU`'s
+live headers directly before assuming the code is wrong** — this exact column has now
+disappeared from the live sheet once already with zero warning.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
