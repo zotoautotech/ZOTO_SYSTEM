@@ -2056,6 +2056,17 @@ special-cases (mirroring `fg-sub-sub-parts`'s own shape). Typechecked clean both
 yet verified against the live sheet (per the user's own stated token-budget preference, no
 live create-and-verify round trip run this pass — worth doing once deployed).
 
+## Small follow-ups (5 Sep 2026)
+
+- **Removed the "Unit" field from `FgSkuForm.tsx`** ("FINAL GOOD SKU Form") per explicit
+  instruction — was a plain optional free-text field, not on the reference form at all.
+- **"BOM Items" card's Expand button (`FgSkuDetail.tsx`) now opens `AssembleRmFgForm` directly**
+  instead of navigating to `BomBuilder.tsx`'s separate page — matches the reference's own
+  nested "BOM ITEMS* → New" flow (the FG SKU form's own BOM Items section opens the ASSEMBLE
+  RM FG Form, not a separate BOM builder screen). `BomBuilder.tsx`/`bom.ts` (the *other*
+  `ASSEMBLE RM FG (BOM)` tab) are unchanged and still reachable at `/npd/bom/:id` directly —
+  just no longer the click target from this one card.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

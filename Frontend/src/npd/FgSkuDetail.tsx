@@ -155,12 +155,15 @@ export function FgSkuDetail() {
           <TableCard title="Fitment Details" count={0} rows={[]} columns={[{ header: "Customer Name" }, { header: "Timestamp" }]} />
 
           {/* The only genuinely real card here — same ASSEMBLE RM FG (BOM) data
-              BomBuilder.tsx already reads/writes, not an empty placeholder. */}
+              BomBuilder.tsx already reads/writes, not an empty placeholder.
+              "Expand" opens the ASSEMBLE RM FG Form directly (matching the reference's own
+              nested "BOM ITEMS* -> New" flow, see FgSkuForm.tsx's screenshot) instead of
+              navigating away to BomBuilder.tsx's separate page. */}
           <TableCard
             title="BOM Items"
             count={bomLines.length}
             rows={bomLines}
-            onExpand={() => navigate(`/npd/bom/${encodeURIComponent(id!)}`)}
+            onExpand={() => setShowAssembleForm(true)}
             columns={[
               { header: "RM Code", render: (r: (typeof bomLines)[number]) => r["RM Code"] || "—" },
               { header: "Qty", render: (r: (typeof bomLines)[number]) => r.Quantity || "—" },

@@ -56,7 +56,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const [brand, setBrand] = useState("");
   const [standardPart, setStandardPart] = useState("");
   const [name, setName] = useState("");
-  const [unit, setUnit] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -167,7 +166,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
         Name: name.trim(),
         "STANDARD PART": standardPart,
         Brand: brand,
-        ...(unit.trim() ? { UNIT: unit.trim() } : {}),
       });
       onSaved(result.id);
     } catch (err) {
@@ -317,7 +315,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               />
             </div>
             <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
-            <TextField label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. SET" />
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
           </div>
         </div>
