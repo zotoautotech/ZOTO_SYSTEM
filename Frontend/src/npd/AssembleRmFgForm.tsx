@@ -74,6 +74,10 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   // no key isn't ticked), so unticking just deletes its key rather than tracking a separate
   // boolean set alongside it.
   const [selectedQty, setSelectedQty] = useState<Record<string, string>>({});
+  // Filters the RM checkbox list by PART NO./ID'S text, on top of the Category/Sub Category
+  // dropdowns above it — a doer picking many RMs at once shouldn't have to scroll/hunt through
+  // every match, per explicit "make this easier" follow-up.
+  const [rmSearch, setRmSearch] = useState("");
   const [units, setUnits] = useState<"PCS" | "KG" | "SET" | "">("");
   const [level, setLevel] = useState<"L1" | "L2" | "L3" | "L4" | "">("");
   const [partSpecs, setPartSpecs] = useState("");
@@ -127,8 +131,10 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   const rmIdRows = rmSkuRows.filter(
     (r) =>
       (!category || (r.Category ?? "").trim() === category.trim()) &&
-      (!subCategory || (r["Sub Category"] ?? "").trim() === subCategory.trim())
+      (!subCategory || (r["Sub Category"] ?? "").trim() === subCategory.trim()) &&
+      (!rmSearch.trim() || (r["PART NO."] || r["ID'S"]).toLowerCase().includes(rmSearch.trim().toLowerCase()))
   );
+  const allVisibleTicked = rmIdRows.length > 0 && rmIdRows.every((r) => r["ID'S"] in selectedQty);
 
   const hasRealFgId = !!fgRow["FG ID"];
   const selectedIds = Object.keys(selectedQty);
@@ -153,6 +159,20 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
       const next = { ...prev };
       if (id in next) delete next[id];
       else next[id] = (row.QUANTITY ?? "").trim();
+      return next;
+    });
+  }
+
+  // Select-all/none acts only on the currently VISIBLE (filtered) rows — never silently
+  // ticks/unticks something scrolled out of view by a Category/Sub Category/search filter.
+  function toggleAllVisible() {
+    setSelectedQty((prev) => {
+      const next = { ...prev };
+      if (allVisibleTicked) {
+        for (const r of rmIdRows) delete next[r["ID'S"]];
+      } else {
+        for (const r of rmIdRows) if (!(r["ID'S"] in next)) next[r["ID'S"]] = (r.QUANTITY ?? "").trim();
+      }
       return next;
     });
   }
@@ -315,6 +335,38 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
               RM ID<span style={{ color: "#DC2626" }}> *</span>
             </label>
+            <input
+              type="text"
+              value={rmSearch}
+              onChange={(e) => setRmSearch(e.target.value)}
+              placeholder="Search by RM code…"
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 6,
+                border: "1px solid #D1D5DB",
+                padding: "8px 12px",
+                fontSize: 14,
+                marginBottom: 8,
+                boxSizing: "border-box",
+              }}
+            />
+            {rmIdRows.length > 0 && (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
+                  color: "#374151",
+                  marginBottom: 6,
+                  cursor: "pointer",
+                }}
+              >
+                <input type="checkbox" checked={allVisibleTicked} onChange={toggleAllVisible} style={{ width: 14, height: 14 }} />
+                Select all {rmSearch.trim() || category ? "shown" : ""} ({rmIdRows.length})
+              </label>
+            )}
             <div
               style={{
                 border: "1px solid #D1D5DB",
@@ -325,7 +377,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             >
               {rmIdRows.length === 0 && (
                 <p style={{ margin: 0, padding: 16, fontSize: 13, color: "#6B7280" }}>
-                  {category ? "No RM SKUs match this Category/Sub Category." : "Pick a Category to narrow the list, or scroll to browse everything."}
+                  {rmSearch.trim() || category ? "No RM SKUs match this search/Category." : "Pick a Category to narrow the list, or scroll to browse everything."}
                 </p>
               )}
               {rmIdRows.map((r) => {

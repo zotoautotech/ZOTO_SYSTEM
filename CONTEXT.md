@@ -2270,6 +2270,16 @@ now starts its qty input pre-filled from that RM SKU's own `QUANTITY` column (`R
 SKU` tab, already auto-picked there from its Sub Category — see `RmSkuForm.tsx`'s own
 history), instead of blank. Still freely editable afterward, just no longer starts empty.
 
+## Assemble RM FG's bulk RM checklist gets search + select-all (5 Sep 2026)
+
+Per explicit "make this easier" follow-up. `AssembleRmFgForm.tsx`'s RM checkbox list now has:
+- A search box (`rmSearch`) filtering by PART NO./ID'S, stacked on top of the existing
+  Category/Sub Category dropdown filters.
+- A "Select all shown (N)" checkbox (`toggleAllVisible()`) that ticks/unticks every currently
+  VISIBLE (filtered) row only — never touches a row hidden by the current filters, so
+  select-all can't silently sweep in RMs the doer can't even see right now. Each newly-ticked
+  row still gets its qty auto-filled from its own QUANTITY, same as ticking one at a time.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
