@@ -2442,6 +2442,20 @@ Category-checkbox-box + right live-filtered-table shape, filtering `FINAL GOOD S
 of `Raw Material SKU`. Row click navigates to the FG SKU's own detail page. `NpdHome.tsx`'s
 FG SEARCH tile now points here instead of reusing the FG SKU catalog as a placeholder.
 
+## ASSEMBLE DATA built the same way (5 Sep 2026)
+
+Per explicit "do the same for ASSEMBLE DATA" follow-up. New `AssembleData.tsx` (route
+`/npd/assemble-data`): a flat, searchable `DataTable` over EVERY `assemble-rm-fg` row across
+every FG SKU (not scoped to one, unlike `AssembleRmFgForm.tsx`'s bulk picker or
+`FgSkuDetail.tsx`'s own per-SKU BOM Items card) — matches the reference's own flat table
+view. Columns confirmed directly against the live `ASSEMBLE RM FG` tab's real headers
+(Sr. No./FG CODE/FG ID/FG CATEGORY/FG SUB CATEGORY/RM ID/RM CODE/Sub Category/Category/
+No. Of Qty Use) — the reference screenshot's own "Weight 1 Pcs Gm" column has no live
+equivalent on this tab, so it's not shown (not fabricated). No Add/CSV-export icons — this is
+a pure read-only browse/search view, matching `RmSearch.tsx`/`FgSearch.tsx`'s own shape; a
+doer still adds BOM lines via "Give Assemble RM FG Form" on the relevant FG SKU's own detail
+page. `NpdHome.tsx`'s ASSEMBLE DATA tile now points here instead of reusing `BomBuilder.tsx`.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

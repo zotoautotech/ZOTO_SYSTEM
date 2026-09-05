@@ -17,9 +17,12 @@ interface TileDef {
  * Dashboard, Notifications) was removed on explicit user instruction (31 Aug 2026) along with
  * its dedicated page component — don't re-add a card/route here without being asked.
  *
- * **RM SEARCH / FG SEARCH now link to real pages** (`RmSearch.tsx`/`FgSearch.tsx`) instead of
- * reusing the RM/FG SKU catalog routes as placeholders — matches the reference's own
- * dedicated search screens (Category multi-select + live-filtered SKU table). */
+ * **RM SEARCH / FG SEARCH / ASSEMBLE DATA now link to real pages** (`RmSearch.tsx`/
+ * `FgSearch.tsx`/`AssembleData.tsx`) instead of reusing other catalog/builder routes as
+ * placeholders — matches the reference's own dedicated screens (Category multi-select +
+ * live-filtered SKU table for the two searches; a flat, all-FG-SKUs BOM line browser for
+ * ASSEMBLE DATA — see AssembleData.tsx's own doc comment for why it's not just BomBuilder.tsx
+ * reused). */
 const TILES: TileDef[] = [
   {
     to: "/npd/rm-sku",
@@ -42,7 +45,7 @@ const TILES: TileDef[] = [
     image: "https://cdn-icons-png.freepik.com/256/17764/17764891.png?ga=GA1.1.715346516.1729860160",
   },
   {
-    to: "/npd/bom",
+    to: "/npd/assemble-data",
     name: "ASSEMBLE DATA",
     image: "https://cdn-icons-png.freepik.com/256/10839/10839319.png?ga=GA1.1.2018887696.1729159453",
   },
