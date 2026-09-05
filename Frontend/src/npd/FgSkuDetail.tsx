@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { listTaxonomyRows, listBomLines, createTaxonomyRow } from "./lib/npdApi";
+import { listTaxonomyRows, createTaxonomyRow } from "./lib/npdApi";
 import { QuickAction } from "../components/FloatingActionButton";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { DrawingFgForm } from "./DrawingFgForm";
@@ -23,11 +23,15 @@ import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
  * 2-wheeler ADC schema that never made it to ZOTO's live sheet. Showing them would be
  * fabricating fields that don't exist; only real columns are shown.
  *
- * Two NEW cards match the reference's shape honestly-empty (no backing feature exists yet,
- * same "flag it, don't fake it" convention as RmSkuDetail.tsx's Dimensions/Drawing & Photos):
+ * Two cards match the reference's shape honestly-empty (no backing feature exists yet, same
+ * "flag it, don't fake it" convention as RmSkuDetail.tsx's Dimensions/Drawing & Photos):
  * "Drawing Videos" (no upload feature) and "Fitment Details" (no customer-fitment tracking
- * table exists). A THIRD card, "BOM Items", is genuinely real — it's `listBomLines(fgId)`,
- * the same data `BomBuilder.tsx` already reads/writes, not an empty placeholder. */
+ * table exists). "BOM Items" is genuinely real — it reads the "assemble-rm-fg" taxonomy
+ * table (the live `ASSEMBLE RM FG` tab, same one this page's own "Give Assemble RM FG Form"
+ * action writes to), filtered to this FG ID. **Was `listBomLines()`
+ * (`BomBuilder.tsx`'s own DIFFERENT `ASSEMBLE RM FG (BOM)` tab) until a real bug was caught
+ * live** — that read the wrong tab entirely, so this card always showed "0" even right after
+ * adding real BOM lines through this same page. */
 export function FgSkuDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,11 +49,18 @@ export function FgSkuDetail() {
   const nextRow = rowIndex >= 0 && rowIndex < rows.length - 1 ? rows[rowIndex + 1] : undefined;
   const row = rows.find((r) => r["FG ID"] === id);
 
-  const { data: bomLines = [] } = useQuery({
-    queryKey: ["npd", "bom", id],
-    queryFn: () => listBomLines(id!),
-    enabled: !!id,
+  // Real BOM data this FG SKU actually has, as of the "Give Assemble RM FG Form"/BOM ITEMS
+  // work — reads the SAME "assemble-rm-fg" taxonomy table that form writes to (`ASSEMBLE RM
+  // FG` tab). A real bug caught live: this card used to read `listBomLines()`
+  // (`BomBuilder.tsx`'s own DIFFERENT `ASSEMBLE RM FG (BOM)` tab — see taxonomy.ts's own
+  // comment on why those two tabs aren't the same table), so it always showed "0" even right
+  // after adding real BOM lines through this exact page's own "Give Assemble RM FG Form"
+  // action — confirmed against a live AppSheet-reference comparison screenshot.
+  const { data: assembleRows = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"],
+    queryFn: () => listTaxonomyRows("assemble-rm-fg"),
   });
+  const bomLines = assembleRows.filter((r) => r["FG ID"] === id);
 
   // Registered unconditionally, before the loading/not-found early returns below — a hook
   // call can never be conditional on those. Edit is disabled/visual-only (title="Coming soon")
@@ -135,6 +146,8 @@ export function FgSkuDetail() {
             <Field label="Category" value={row.CATEGORY} />
             <Field label="SEGMENT" value={row.SEGMENT} />
             <Field label="Standard Part" value={row["STANDARD PART"]} />
+            <Field label="Brand" value={row.Brand} />
+            <Field label="Description" value={row.Description} />
             <Field label="Unit" value={row.UNIT} />
           </Section>
 
@@ -165,11 +178,10 @@ export function FgSkuDetail() {
             rows={bomLines}
             onExpand={() => setShowAssembleForm(true)}
             columns={[
-              { header: "RM Code", render: (r: (typeof bomLines)[number]) => r["RM Code"] || "—" },
-              { header: "Qty", render: (r: (typeof bomLines)[number]) => r.Quantity || "—" },
-              { header: "Units", render: (r: (typeof bomLines)[number]) => r.Units || "—" },
-              { header: "Rate", render: (r: (typeof bomLines)[number]) => (r.Rate ? `₹${r.Rate}` : "—") },
-              { header: "Status", render: (r: (typeof bomLines)[number]) => r.Status || "—" },
+              { header: "RM ID", render: (r: (typeof bomLines)[number]) => r["RM ID"] || "—" },
+              { header: "Category", render: (r: (typeof bomLines)[number]) => r.Category || "—" },
+              { header: "Sub Category", render: (r: (typeof bomLines)[number]) => r["Sub Category"] || "—" },
+              { header: "Qty", render: (r: (typeof bomLines)[number]) => r["No. Of Qty Use"] || "—" },
             ]}
           />
         </div>

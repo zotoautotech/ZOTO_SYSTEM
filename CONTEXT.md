@@ -2383,6 +2383,19 @@ differing only by Brand/color. `AssembleRmFgForm.tsx`'s RM checklist now appends
 suffix is baked into `QueuedBomLine.partNo` so the FINAL GOOD SKU Form's own queued-lines list
 shows it too.
 
+## FG SKU Detail: fixed wrong BOM Items tab, added Brand/Description (5 Sep 2026)
+
+Per explicit "improve the Detail View like AppSheet" follow-up, comparing against a live
+AppSheet-reference screenshot. Found and fixed a real bug in `FgSkuDetail.tsx`: its "BOM
+Items" card read `listBomLines()` (`BomBuilder.tsx`'s own `ASSEMBLE RM FG (BOM)` tab) instead
+of the `assemble-rm-fg` taxonomy table (`ASSEMBLE RM FG`) that this same page's own "Give
+Assemble RM FG Form" action actually writes to — so the card always showed "0" even
+immediately after adding real BOM lines through this page. Now reads `listTaxonomyRows
+("assemble-rm-fg")` filtered to this FG ID, columns changed to RM ID/Category/Sub Category/
+Qty (matching what that tab actually holds, not the unrelated BomBuilder tab's own Rate/
+Units/Status shape). Also added Brand and Description fields to the FG Details card (both
+real live columns, previously shown on the create form but not the detail page).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
