@@ -2163,6 +2163,13 @@ pointed at `"Copy of FINAL GOOD SKU"` (matching `masters.ts`'s own tab); switche
 plain `"FINAL GOOD SKU"` tab. `masters.ts` (Sales CRR) keeps `"Copy of FINAL GOOD SKU"`
 untouched — that tab is Sales CRR's alone, NPD must never read/write it.
 
+## DRAWINGS OR VIDEO removed from FINAL GOOD SKU Form, BOM ITEMS only (5 Sep 2026)
+
+Per explicit instruction — `FgSkuForm.tsx` no longer has the DRAWINGS OR VIDEO nested-list
+section; only BOM ITEMS remains (still gated the same way: disabled until an explicit Save
+click sets `createdRow`, then opens `AssembleRmFgForm`). `DrawingFgForm` itself is untouched
+(still reachable — just not from this form's own nested flow).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

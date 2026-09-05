@@ -6,7 +6,6 @@ import { SearchableSelect, type SelectOption } from "../components/form/Searchab
 import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 import { FgQuickCreateForm } from "./FgQuickCreateForm";
-import { DrawingFgForm } from "./DrawingFgForm";
 import { AssembleRmFgForm } from "./AssembleRmFgForm";
 
 interface Props {
@@ -60,15 +59,9 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Set once the FG SKU row has actually been saved (either via the "New" button under
-  // DRAWINGS OR VIDEO/BOM ITEMS below auto-saving it first, or via the form's own Save button)
-  // — the reference form lets a doer add child Drawing/BOM rows against an in-progress unsaved
-  // row (an AppSheet-only "virtual row" mechanism); this app's stateless REST backend has no
-  // equivalent, so the FG SKU is saved for real the first time either child section is opened,
-  // then reused for every subsequent child add and for the form's own Save button (never
-  // double-creates the row).
+  // Set only by an explicit Save click (see handleSave()'s own doc comment) — never auto-saved
+  // by the BOM ITEMS "New" button below, which stays disabled until this is set.
   const [createdRow, setCreatedRow] = useState<TaxonomyRow | null>(null);
-  const [showDrawingForm, setShowDrawingForm] = useState(false);
   const [showBomForm, setShowBomForm] = useState(false);
 
   useEffect(() => {
@@ -201,10 +194,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
 
   // "New" only ever works once `createdRow` is set by an actual Save click above — never
   // triggers a save of its own. Disabled entirely beforehand (see NestedListField's own
-  // `disabled` prop below), so these two are just guards against a stray call.
-  function handleAddDrawing() {
-    if (createdRow) setShowDrawingForm(true);
-  }
+  // `disabled` prop below), so this is just a guard against a stray call.
   function handleAddBom() {
     if (createdRow) setShowBomForm(true);
   }
@@ -349,16 +339,16 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               />
             </div>
             <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
-            {/* Matches the reference's own "DRAWINGS OR VIDEO* / New" and "BOM ITEMS* / New"
-                nested-list bars. Disabled until this FG SKU has actually been saved (an
-                explicit Save click, never implicit) — see handleSave()'s own doc comment. */}
-            <NestedListField label="DRAWINGS OR VIDEO" onAddNew={handleAddDrawing} disabled={!createdRow} />
+            {/* Matches the reference's own "BOM ITEMS* / New" nested-list bar — DRAWINGS OR
+                VIDEO removed from this form per explicit instruction (BOM ITEMS only).
+                Disabled until this FG SKU has actually been saved (an explicit Save click,
+                never implicit) — see handleSave()'s own doc comment. */}
             <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!createdRow} />
             {!createdRow && (
               <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
                 {canSave()
-                  ? 'Click Save below first — Drawings/BOM Items can only be added once this FG SKU is actually saved.'
-                  : "Fill in Category, Sub Category, Brand, Standard Part and Name above, then Save, to add Drawings/BOM Items."}
+                  ? "Click Save below first — BOM Items can only be added once this FG SKU is actually saved."
+                  : "Fill in Category, Sub Category, Brand, Standard Part and Name above, then Save, to add BOM Items."}
               </p>
             )}
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
@@ -463,16 +453,6 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
             setCreatingStandardPart(false);
             queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-sub-sub-parts"] });
             setStandardPart(v);
-          }}
-        />
-      )}
-      {showDrawingForm && createdRow && (
-        <DrawingFgForm
-          fgRow={createdRow}
-          onClose={() => setShowDrawingForm(false)}
-          onSaved={() => {
-            setShowDrawingForm(false);
-            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "drawing-fg"] });
           }}
         />
       )}
