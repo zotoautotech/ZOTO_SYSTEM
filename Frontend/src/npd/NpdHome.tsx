@@ -17,9 +17,9 @@ interface TileDef {
  * Dashboard, Notifications) was removed on explicit user instruction (31 Aug 2026) along with
  * its dedicated page component — don't re-add a card/route here without being asked.
  *
- * **RM SEARCH now links to a real page** (`RmSearch.tsx`) instead of reusing the RM SKU
- * catalog route as a placeholder — matches the reference's own dedicated search screen
- * (Category multi-select + live-filtered RM SKU table). */
+ * **RM SEARCH / FG SEARCH now link to real pages** (`RmSearch.tsx`/`FgSearch.tsx`) instead of
+ * reusing the RM/FG SKU catalog routes as placeholders — matches the reference's own
+ * dedicated search screens (Category multi-select + live-filtered SKU table). */
 const TILES: TileDef[] = [
   {
     to: "/npd/rm-sku",
@@ -37,7 +37,7 @@ const TILES: TileDef[] = [
     image: "https://cdn-icons-png.freepik.com/256/18389/18389987.png?ga=GA1.1.715346516.1729860160",
   },
   {
-    to: "/npd/fg-sku",
+    to: "/npd/fg-search",
     name: "FG SEARCH",
     image: "https://cdn-icons-png.freepik.com/256/17764/17764891.png?ga=GA1.1.715346516.1729860160",
   },

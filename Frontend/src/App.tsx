@@ -51,6 +51,7 @@ import { RmSkuDetail } from "./npd/RmSkuDetail";
 import { FgSkuCatalog } from "./npd/FgSkuCatalog";
 import { FgSkuDetail } from "./npd/FgSkuDetail";
 import { RmSearch } from "./npd/RmSearch";
+import { FgSearch } from "./npd/FgSearch";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -93,6 +94,7 @@ export default function App() {
         <Route path="npd/fg-sku" element={<FgSkuCatalog />} />
         <Route path="npd/fg-sku/:id" element={<FgSkuDetail />} />
         <Route path="npd/rm-search" element={<RmSearch />} />
+        <Route path="npd/fg-search" element={<FgSearch />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/dashboard" element={<Dashboard />} />

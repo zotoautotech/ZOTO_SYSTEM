@@ -2435,6 +2435,13 @@ AGAINST ID/PAINT pair belong to a DIFFERENT table (`RM ref Category`, not `Raw M
 itself) and aren't fabricated here. `NpdHome.tsx`'s RM SEARCH tile now points at this real
 route instead of reusing the RM SKU catalog as a placeholder.
 
+## FG SEARCH built the same way (5 Sep 2026)
+
+FG-side mirror of `RmSearch.tsx` — new `FgSearch.tsx` (route `/npd/fg-search`), same left
+Category-checkbox-box + right live-filtered-table shape, filtering `FINAL GOOD SKU` instead
+of `Raw Material SKU`. Row click navigates to the FG SKU's own detail page. `NpdHome.tsx`'s
+FG SEARCH tile now points here instead of reusing the FG SKU catalog as a placeholder.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
