@@ -58,8 +58,9 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
     ? subCategoryRows.filter((r) => (r["SUB CATEGORY"] ?? "").trim() === subCategory.trim()).length
     : 0;
 
+  // QUANTITY/UNIT are now required, per explicit instruction — matches RmCategoryForm.tsx.
   function canSave() {
-    return !!subCategory.trim() && !saving;
+    return !!subCategory.trim() && !!quantity.trim() && !!unit && !saving;
   }
 
   async function handleSave() {
@@ -70,8 +71,8 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
       await createTaxonomyRow("rm-category-dd", {
         Category: category,
         "SUB CATEGORY": subCategory.trim(),
-        ...(quantity.trim() ? { QUANTITY: quantity.trim() } : {}),
-        ...(unit ? { UNIT: unit } : {}),
+        QUANTITY: quantity.trim(),
+        UNIT: unit,
       });
       onSaved(subCategory.trim());
     } catch (err) {
@@ -145,6 +146,7 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
           />
           <TextField
             label="QUANTITY"
+            required
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -152,6 +154,7 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
           />
           <ToggleGroup
             label="UNIT"
+            required
             value={unit}
             onChange={setUnit}
             options={[

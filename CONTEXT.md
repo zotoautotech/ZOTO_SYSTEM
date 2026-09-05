@@ -2221,6 +2221,14 @@ Per explicit instruction:
   displayed label changes, the saved `value` stays the bare trimmed name, so PART NO.
   lookups/filters elsewhere are unaffected.
 
+## QUANTITY/UNIT are now required on RM ref Category/Category DD (5 Sep 2026)
+
+Per explicit instruction — both fields (added earlier the same day) were optional, now
+required on both `RmCategoryForm.tsx`/`RmSubCategoryForm.tsx` (`canSave()` + red asterisk) and
+backend `taxonomy.ts` (`requiredFields`). Side effect noted in-code: since `requiredFields`
+doubles as this app's duplicate-check key set, a duplicate CATEGORY name with a genuinely
+different QUANTITY/UNIT is no longer flagged a dup — accepted, not a bug.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

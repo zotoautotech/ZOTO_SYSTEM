@@ -121,10 +121,13 @@ const TABLES: TaxonomyTableDef[] = [
     // already implemented for `RM ref Category DD` (see nextAgainstId()'s doc comment;
     // reused here verbatim, not table-specific), and `DUPLICACY` is a live count of existing
     // rows whose trimmed CATEGORY matches this one's — see countCategoryDuplicates() below.
-    // `QUANTITY` — plain optional doer-typed number, live column confirmed directly (no App
-    // Formula behind it, just a bare cell like every ordinary input field elsewhere in this
-    // file), added per explicit instruction.
-    requiredFields: ["CATEGORY"],
+    // `QUANTITY`/`UNIT` — plain doer-typed number + SET/PIC/MTR toggle, live columns
+    // confirmed directly (no App Formula behind either, just bare cells like every ordinary
+    // input field elsewhere in this file) — both now REQUIRED per explicit instruction (was
+    // optional in an earlier pass). Note `requiredFields` doubles as the duplicate-check key
+    // set below, so a duplicate CATEGORY with a genuinely different QUANTITY/UNIT is no
+    // longer flagged a dup — an accepted side effect of making them real required fields.
+    requiredFields: ["CATEGORY", "QUANTITY", "UNIT"],
     fields: ["CATEGORY", "QUANTITY", "UNIT", "CODE", "Against id", "DUPLICACY"],
     computedFields: ["CODE", "Against id", "DUPLICACY"],
     timestampField: "TIMESTAMP",
@@ -154,9 +157,9 @@ const TABLES: TaxonomyTableDef[] = [
     // show `DUPLICACY`) — a live trimmed-name duplicate count, same shape as `RM ref
     // Category.DUPLICACY` (see countCategoryDuplicates()'s doc comment) but scoped to `SUB
     // CATEGORY` instead — see countSubCategoryDuplicates()'s own doc comment.
-    // `QUANTITY` — same shape/reasoning as `rm-category`'s own (plain optional doer-typed
-    // number, live column confirmed directly), added per explicit instruction.
-    requiredFields: ["Category", "SUB CATEGORY"],
+    // `QUANTITY`/`UNIT` — same shape/reasoning as `rm-category`'s own, both required per
+    // explicit instruction (see that table's own comment for the duplicate-check side effect).
+    requiredFields: ["Category", "SUB CATEGORY", "QUANTITY", "UNIT"],
     fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "QUANTITY", "UNIT", "DUPLICACY"],
     computedFields: ["CODE", "AGAINST ID", "DUPLICACY"],
     timestampField: "TIMESTAMP",
