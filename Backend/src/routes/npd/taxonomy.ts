@@ -625,7 +625,11 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "ASSEMBLE RM FG",
     idColumn: "Unique id",
     idPrefix: "ARMFG",
-    requiredFields: ["FG ID", "RM ID", "Part Specs."],
+    // Units/Levels/Part Specs. removed from the frontend form entirely (per explicit
+    // instruction) — Part Specs. dropped from requiredFields to match; still listed in
+    // `fields` (still writable, still exist as live columns) but no longer enforced, since
+    // the form no longer shows any way to fill it in.
+    requiredFields: ["FG ID", "RM ID"],
     fields: [
       "FG ID",
       "FG CODE",

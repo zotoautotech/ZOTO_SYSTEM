@@ -2313,6 +2313,13 @@ applied to every created line). The live `ASSEMBLE RM FG` tab still has these co
 just aren't written to any more from this form. Part Specs. is no longer required either —
 `canSave()` now only needs at least one ticked RM with its qty filled in.
 
+## Fix: backend still required Part Specs. after it was removed from the form (5 Sep 2026)
+
+Real bug caught live — `AssembleRmFgForm.tsx` stopped showing/sending Part Specs., but
+`taxonomy.ts`'s `assemble-rm-fg` table still had it in `requiredFields`, so every Save 400'd
+with "Part Specs.: Required" no matter what. Dropped `"Part Specs."` from `requiredFields` —
+still in `fields` (still writable/still a live column), just no longer enforced.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
