@@ -2403,6 +2403,25 @@ checklist is no longer an editable `<input>`, just a plain read-only box mirrori
 own QUANTITY (Raw Material SKU). A doer who needs a different quantity now corrects it at the
 source (that RM SKU's own QUANTITY field), not per-BOM-line here.
 
+## FG SKU Detail's Edit button is now real (5 Sep 2026)
+
+Per explicit "Edit is not working" report — `FgSkuDetail.tsx`'s Edit button was a disabled
+"Coming soon" placeholder since `FgSkuForm.tsx` had no edit-mode support at all. Fixed by
+giving `FgSkuForm.tsx` an optional `editRow` prop (matching `RmSkuForm.tsx`'s own real Edit):
+- Every field prefills from `editRow` (Category/Sub Category/Brand/Standard Part/Name/
+  Description).
+- `handleSave()` calls `updateTaxonomyRow("fg-sku", ...)` instead of `createTaxonomyRow` when
+  `editRow` is set, and returns immediately (skips the create-only BOM-queue-creation loop).
+- PART NO. keeps its real saved value verbatim in edit mode (not recomputed — that formula's
+  running-count is a create-only server computation, see taxonomy.ts).
+- **BOM ITEMS is hidden entirely in edit mode** — this row already has its own real BOM lines
+  managed from its own detail page (via "Give Assemble RM FG Form"); editing basic fields here
+  has no business also silently attaching new BOM lines in the same action.
+- Header title reads "Edit FINAL GOOD SKU" instead of "FINAL GOOD SKU Form" when editing.
+
+`FgSkuDetail.tsx`'s Edit button now opens `FgSkuForm.tsx` with `editRow={row}`, same
+wiring/styling as `RmSkuDetail.tsx`'s own real Edit button.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

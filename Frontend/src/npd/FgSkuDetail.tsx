@@ -6,6 +6,7 @@ import { QuickAction } from "../components/FloatingActionButton";
 import { useSetHeaderActions } from "../lib/headerActions";
 import { DrawingFgForm } from "./DrawingFgForm";
 import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
+import { FgSkuForm } from "./FgSkuForm";
 
 /** FG SKU detail — rebuilt on the same real pattern `RmSkuDetail.tsx` now uses (itself copied
  * from `TripDetail.tsx`, Sales CRR's own working detail page), per the user's own screenshot
@@ -23,6 +24,10 @@ import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
  * 2-wheeler ADC schema that never made it to ZOTO's live sheet. Showing them would be
  * fabricating fields that don't exist; only real columns are shown.
  *
+ * **Edit is now real**, not visual-only — clicking it opens `FgSkuForm.tsx` with an
+ * `editRow` prop (matching `RmSkuDetail.tsx`'s own real Edit), instead of the old disabled
+ * "Coming soon" button.
+ *
  * Two cards match the reference's shape honestly-empty (no backing feature exists yet, same
  * "flag it, don't fake it" convention as RmSkuDetail.tsx's Dimensions/Drawing & Photos):
  * "Drawing Videos" (no upload feature) and "Fitment Details" (no customer-fitment tracking
@@ -38,6 +43,7 @@ export function FgSkuDetail() {
   const queryClient = useQueryClient();
   const [showDrawingForm, setShowDrawingForm] = useState(false);
   const [showAssembleForm, setShowAssembleForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["npd", "taxonomy", "rows", "fg-sku"],
@@ -63,13 +69,13 @@ export function FgSkuDetail() {
   const bomLines = assembleRows.filter((r) => r["FG ID"] === id);
 
   // Registered unconditionally, before the loading/not-found early returns below — a hook
-  // call can never be conditional on those. Edit is disabled/visual-only (title="Coming soon")
-  // — no dedicated FgSkuForm.tsx exists yet to open, unlike RmSkuDetail.tsx's real Edit.
+  // call can never be conditional on those.
   useSetHeaderActions(
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
-        title="Coming soon"
+        onClick={() => row && setShowEditForm(true)}
+        disabled={!row}
         style={{
           display: "flex",
           alignItems: "center",
@@ -82,8 +88,8 @@ export function FgSkuDetail() {
           color: "#fff",
           fontSize: 13,
           fontWeight: 600,
-          cursor: "default",
-          opacity: 0.6,
+          cursor: row ? "pointer" : "default",
+          opacity: row ? 1 : 0.5,
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -187,6 +193,16 @@ export function FgSkuDetail() {
         </div>
       </div>
 
+      {showEditForm && row && (
+        <FgSkuForm
+          editRow={row}
+          onClose={() => setShowEditForm(false)}
+          onSaved={() => {
+            setShowEditForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "fg-sku"] });
+          }}
+        />
+      )}
       {showDrawingForm && (
         <DrawingFgForm
           fgRow={row}

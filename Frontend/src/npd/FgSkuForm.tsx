@@ -4,13 +4,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
 import { useIsMobile } from "../lib/responsive";
-import { listTaxonomyRows, createTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
+import { listTaxonomyRows, createTaxonomyRow, updateTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 import { FgQuickCreateForm } from "./FgQuickCreateForm";
 import { AssembleRmFgForm, type QueuedBomLine } from "./AssembleRmFgForm";
 
 interface Props {
   onClose: () => void;
   onSaved: (id: string) => void;
+  /** Present only when opened from FgSkuDetail.tsx's "Edit" action — the existing row to
+   * prefill from and PUT back to on Save, matching RmSkuForm.tsx's own real Edit flow (this
+   * form had none until now — Edit was a disabled "Coming soon" button). BOM ITEMS is hidden
+   * entirely in edit mode: this row already has real BOM lines of its own (visible on its own
+   * detail page), and editing basic fields here has no business also silently attaching new
+   * BOM lines in the same action. */
+  editRow?: TaxonomyRow;
 }
 
 /** "FINAL GOOD SKU Form" — the reference screenshot's create form. Built on the EXACT same
@@ -44,7 +51,7 @@ interface Props {
  * only ever meant to be this one segment. */
 const FIXED_SEGMENT = "Car Accessories";
 
-export function FgSkuForm({ onClose, onSaved }: Props) {
+export function FgSkuForm({ onClose, onSaved, editRow }: Props) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -52,14 +59,14 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const [creatingBrand, setCreatingBrand] = useState(false);
   const [creatingStandardPart, setCreatingStandardPart] = useState(false);
   const [segment] = useState(FIXED_SEGMENT);
-  const [category, setCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
-  const [brand, setBrand] = useState("");
-  const [standardPart, setStandardPart] = useState("");
-  const [name, setName] = useState("");
+  const [category, setCategory] = useState(editRow?.CATEGORY ?? "");
+  const [subCategory, setSubCategory] = useState(editRow?.["SUB CATEGORY"] ?? "");
+  const [brand, setBrand] = useState(editRow?.Brand ?? "");
+  const [standardPart, setStandardPart] = useState(editRow?.["STANDARD PART"] ?? "");
+  const [name, setName] = useState(editRow?.Name ?? "");
   // Live column confirmed directly ("Description", column L on FINAL GOOD SKU) — plain
   // optional doer-typed text, added per explicit instruction.
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(editRow?.Description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // Local-only queue of BOM lines — nothing about this SKU or its BOM is written to the
@@ -188,6 +195,15 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
         Brand: brand,
         ...(description.trim() ? { Description: description.trim() } : {}),
       };
+      if (editRow) {
+        // Edit mode — plain field update, no PART NO./BOM ITEMS involved (this row already
+        // has its own real BOM lines, edited from its own detail page, not silently
+        // re-attached here — see this file's own Props doc comment on `editRow`).
+        const id = editRow["FG ID"];
+        await updateTaxonomyRow("fg-sku", id, body);
+        onSaved(id);
+        return;
+      }
       const result = await createTaxonomyRow("fg-sku", body);
       // Sequential (not Promise.all) — matches AssembleRmFgForm's own bulk-save reasoning:
       // each line's random Unique ID is minted against an up-to-date read of the tab rather
@@ -304,13 +320,23 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
             ✕
           </button>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
-            FINAL GOOD SKU Form
+            {editRow ? "Edit FINAL GOOD SKU" : "FINAL GOOD SKU Form"}
           </h2>
         </div>
 
         <div style={{ padding: isMobile ? "24px var(--space)" : "32px 40px 40px", overflowY: "auto", flex: 1 }}>
           <div className="fg-sku-fields" style={{ width: "100%" }}>
-            <TextField label="PART NO." required value={livePartNo} disabled placeholder="000" />
+            {/* In edit mode, PART NO. keeps its real saved value verbatim — this form doesn't
+                recompute the running-count part-code formula on edit (that's a create-only
+                computed field server-side, see taxonomy.ts), matching RmSkuForm.tsx's own
+                "unchanged fields keep the real saved PART NO." convention. */}
+            <TextField
+              label="PART NO."
+              required
+              value={editRow ? editRow["PART NO."] ?? "" : livePartNo}
+              disabled
+              placeholder="000"
+            />
             {/* Fixed, not a dropdown — see this file's own module doc comment for why. */}
             <TextField label="SEGMENT" required value={segment} disabled />
             <SearchableSelect
@@ -374,47 +400,52 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description…"
             />
-            {/* Matches the reference's own "BOM ITEMS* / New" nested-list bar — DRAWINGS OR
-                VIDEO removed from this form per explicit instruction (BOM ITEMS only). New
-                opens Assemble RM FG Form right away, pre-filled from this form's own
-                in-progress fields (a "virtual" preview, nothing saved yet) — clicking that
-                form's own "Add to BOM" only queues the picked lines locally in `bomQueue`;
-                nothing is written to the backend until THIS form's own Save button runs,
-                see handleSave()'s own doc comment. */}
-            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave()} />
-            {bomQueue.length > 0 && (
-              <div style={{ marginTop: -14, marginBottom: 10 }}>
-                {bomQueue.map((line, i) => (
-                  <div
-                    key={`${line.rmId}-${i}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 12px",
-                      border: "1px solid #E5E7EB",
-                      borderTop: i === 0 ? "1px solid #E5E7EB" : "none",
-                      fontSize: 13,
-                    }}
-                  >
-                    <span>
-                      {line.partNo} — Qty {line.qty}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setBomQueue((prev) => prev.filter((_, idx) => idx !== i))}
-                      style={{ border: "none", background: "none", color: "#DC2626", cursor: "pointer", fontSize: 13 }}
-                    >
-                      Remove
-                    </button>
+            {/* Hidden entirely in edit mode — this row already has its own real BOM lines,
+                managed from its own detail page, not silently re-attached from here (see this
+                file's own Props doc comment on `editRow`). Matches the reference's own
+                "BOM ITEMS* / New" nested-list bar for CREATE: New opens Assemble RM FG Form
+                right away, pre-filled from this form's own in-progress fields (a "virtual"
+                preview, nothing saved yet) — clicking that form's own "Add to BOM" only queues
+                the picked lines locally in `bomQueue`; nothing is written to the backend until
+                THIS form's own Save button runs, see handleSave()'s own doc comment. */}
+            {!editRow && (
+              <>
+                <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave()} />
+                {bomQueue.length > 0 && (
+                  <div style={{ marginTop: -14, marginBottom: 10 }}>
+                    {bomQueue.map((line, i) => (
+                      <div
+                        key={`${line.rmId}-${i}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 12px",
+                          border: "1px solid #E5E7EB",
+                          borderTop: i === 0 ? "1px solid #E5E7EB" : "none",
+                          fontSize: 13,
+                        }}
+                      >
+                        <span>
+                          {line.partNo} — Qty {line.qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setBomQueue((prev) => prev.filter((_, idx) => idx !== i))}
+                          style={{ border: "none", background: "none", color: "#DC2626", cursor: "pointer", fontSize: 13 }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            {!canSave() && (
-              <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
-                Fill in Category, Sub Category, Brand, Standard Part and Name above to add BOM Items.
-              </p>
+                )}
+                {!canSave() && (
+                  <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
+                    Fill in Category, Sub Category, Brand, Standard Part and Name above to add BOM Items.
+                  </p>
+                )}
+              </>
             )}
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
           </div>
