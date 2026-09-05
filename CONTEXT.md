@@ -2456,6 +2456,13 @@ a pure read-only browse/search view, matching `RmSearch.tsx`/`FgSearch.tsx`'s ow
 doer still adds BOM lines via "Give Assemble RM FG Form" on the relevant FG SKU's own detail
 page. `NpdHome.tsx`'s ASSEMBLE DATA tile now points here instead of reusing `BomBuilder.tsx`.
 
+## ASSEMBLE DATA gets a real CSV export button (5 Sep 2026)
+
+Per explicit follow-up ("add the CSV button like this", matching the reference's own CSV
+icon) — `AssembleData.tsx` now has a CSV button next to the search box, exporting exactly the
+currently-filtered/visible rows (client-side `Blob` download, `assemble-data.csv`, no new
+backend route). Same column set/order as the on-screen table.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
