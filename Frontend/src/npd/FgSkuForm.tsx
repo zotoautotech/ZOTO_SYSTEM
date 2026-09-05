@@ -6,6 +6,8 @@ import { SearchableSelect, type SelectOption } from "../components/form/Searchab
 import { useIsMobile } from "../lib/responsive";
 import { listTaxonomyRows, createTaxonomyRow, type TaxonomyRow } from "./lib/npdApi";
 import { FgQuickCreateForm } from "./FgQuickCreateForm";
+import { DrawingFgForm } from "./DrawingFgForm";
+import { AssembleRmFgForm } from "./AssembleRmFgForm";
 
 interface Props {
   onClose: () => void;
@@ -58,6 +60,16 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Set once the FG SKU row has actually been saved (either via the "New" button under
+  // DRAWINGS OR VIDEO/BOM ITEMS below auto-saving it first, or via the form's own Save button)
+  // — the reference form lets a doer add child Drawing/BOM rows against an in-progress unsaved
+  // row (an AppSheet-only "virtual row" mechanism); this app's stateless REST backend has no
+  // equivalent, so the FG SKU is saved for real the first time either child section is opened,
+  // then reused for every subsequent child add and for the form's own Save button (never
+  // double-creates the row).
+  const [createdRow, setCreatedRow] = useState<TaxonomyRow | null>(null);
+  const [showDrawingForm, setShowDrawingForm] = useState(false);
+  const [showBomForm, setShowBomForm] = useState(false);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -154,24 +166,61 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     return !!segment && !!category && !!subCategory && !!brand && !!standardPart && !!name.trim() && !saving;
   }
 
+  /** Saves the FG SKU row for real if it hasn't been already, returning it either way — shared
+   * by the form's own Save button and by the DRAWINGS OR VIDEO/BOM ITEMS "New" buttons below
+   * (see `createdRow`'s own doc comment for why a real save happens the first time either is
+   * opened, not just on the form's own Save). */
+  async function ensureSaved(): Promise<TaxonomyRow> {
+    if (createdRow) return createdRow;
+    const body = {
+      SEGMENT: segment,
+      CATEGORY: category,
+      "SUB CATEGORY": subCategory,
+      Name: name.trim(),
+      "STANDARD PART": standardPart,
+      Brand: brand,
+    };
+    const result = await createTaxonomyRow("fg-sku", body);
+    const row: TaxonomyRow = { ...body, "FG ID": result.id };
+    setCreatedRow(row);
+    return row;
+  }
+
   async function handleSave() {
     if (!canSave()) return;
     setSaving(true);
     setError("");
     try {
-      const result = await createTaxonomyRow("fg-sku", {
-        SEGMENT: segment,
-        CATEGORY: category,
-        "SUB CATEGORY": subCategory,
-        Name: name.trim(),
-        "STANDARD PART": standardPart,
-        Brand: brand,
-      });
-      onSaved(result.id);
+      const row = await ensureSaved();
+      onSaved(row["FG ID"]);
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ?? "Could not save — please try again.");
       setSaving(false);
+    }
+  }
+
+  async function handleAddDrawing() {
+    if (!canSave() && !createdRow) return;
+    setError("");
+    try {
+      await ensureSaved();
+      setShowDrawingForm(true);
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ?? "Could not save — please try again.");
+    }
+  }
+
+  async function handleAddBom() {
+    if (!canSave() && !createdRow) return;
+    setError("");
+    try {
+      await ensureSaved();
+      setShowBomForm(true);
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
+      setError(detail ?? "Could not save — please try again.");
     }
   }
 
@@ -315,6 +364,12 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               />
             </div>
             <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
+            {/* Matches the reference's own "DRAWINGS OR VIDEO* / New" and "BOM ITEMS* / New"
+                nested-list bars — clicking New saves this FG SKU first if it hasn't been saved
+                yet (see ensureSaved()'s own doc comment), then opens Drawing FG Form / Assemble
+                RM FG Form for the resulting row. */}
+            <NestedListField label="DRAWINGS OR VIDEO" onAddNew={handleAddDrawing} />
+            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} />
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
           </div>
         </div>
@@ -420,6 +475,57 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           }}
         />
       )}
+      {showDrawingForm && createdRow && (
+        <DrawingFgForm
+          fgRow={createdRow}
+          onClose={() => setShowDrawingForm(false)}
+          onSaved={() => {
+            setShowDrawingForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "drawing-fg"] });
+          }}
+        />
+      )}
+      {showBomForm && createdRow && (
+        <AssembleRmFgForm
+          fgRow={createdRow}
+          onClose={() => setShowBomForm(false)}
+          onSaved={() => {
+            setShowBomForm(false);
+            queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Matches the reference's own grey "SECTION* / New" nested-list bar — a static count (this
+ * form doesn't track how many child rows exist yet, since the parent FG SKU row itself may
+ * not even be saved) plus a "New" button. */
+function NestedListField({ label, onAddNew }: { label: string; onAddNew: () => void }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+        {label}
+        <span style={{ color: "var(--color-error)" }}> *</span>
+      </label>
+      <button
+        type="button"
+        onClick={onAddNew}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          borderRadius: 6,
+          border: "1px solid #D1D5DB",
+          background: "#F3F4F6",
+          color: "#2563EB",
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        New
+      </button>
     </div>
   );
 }

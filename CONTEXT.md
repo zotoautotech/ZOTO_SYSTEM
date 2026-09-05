@@ -2067,6 +2067,28 @@ live create-and-verify round trip run this pass — worth doing once deployed).
   `ASSEMBLE RM FG (BOM)` tab) are unchanged and still reachable at `/npd/bom/:id` directly —
   just no longer the click target from this one card.
 
+## FINAL GOOD SKU Form gets its own DRAWINGS OR VIDEO / BOM ITEMS nested-list bars (5 Sep 2026)
+
+Matches the reference screenshot's own grey "DRAWINGS OR VIDEO* / New" and "BOM ITEMS* / New"
+bars at the bottom of the create form — these were entirely missing before (the form only had
+Category through Name), so a doer had no way to add a drawing/BOM line until *after* saving and
+opening the FG SKU's own detail page.
+
+The reference's AppSheet client lets a doer add these child rows against an in-progress
+**unsaved** parent row (a client-side "virtual row" mechanism) — this app's stateless REST
+backend has no equivalent, so `FgSkuForm.tsx` now saves the FG SKU **for real** the first time
+either "New" button is clicked (`ensureSaved()`, guarded by the same `canSave()` the form's own
+Save button uses), then opens `DrawingFgForm`/`AssembleRmFgForm` against the resulting row.
+The saved row is cached in local state (`createdRow`) so a second "New" click (either section)
+and the form's own eventual Save button all reuse the same row instead of creating duplicates.
+`NestedListField` is a small local helper matching the reference's own visual bar (static
+label + "New" button — no live child-row count, since there's no meaningful count to show for
+a parent row that may not even exist yet).
+
+Also removed this session: the "Unit" field on this same form (was a plain optional free-text
+field never on the reference form), and `FgSkuDetail.tsx`'s own "BOM Items" card Expand button
+now opens `AssembleRmFgForm` directly instead of navigating to `BomBuilder.tsx`'s page.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
