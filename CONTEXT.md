@@ -2280,16 +2280,18 @@ Per explicit "make this easier" follow-up. `AssembleRmFgForm.tsx`'s RM checkbox 
   select-all can't silently sweep in RMs the doer can't even see right now. Each newly-ticked
   row still gets its qty auto-filled from its own QUANTITY, same as ticking one at a time.
 
-## Assemble RM FG's Category is now a bulk checkbox box too (5 Sep 2026)
+## Correction: the bulk checkbox box belongs on Sub Category, not Category (5 Sep 2026)
 
-Per explicit follow-up — matches the RM ID list's own left-side box + Select-all pattern
-added earlier the same day. `AssembleRmFgForm.tsx`: `selectedCategories: Record<string, true>`
-replaces the single `category` string; ticking several Categories widens the Sub Category
-dropdown and RM ID checklist below to match ANY of them (empty selection = no filter, same
-convention `selectedQty` already uses). **Save now reads each ticked RM's own real
-Category/Sub Category off its `rm-sku` row** instead of one shared filter value — necessary
-since multiple Categories can be ticked at once, so there's no longer one single "the"
-Category to stamp onto every created line.
+The previous entry (Category becoming a bulk checkbox box) was itself corrected minutes
+later — the user actually wanted that treatment on **Sub Category**, not Category. Reverted:
+`AssembleRmFgForm.tsx`'s Category is back to a single `SearchableSelect` (`category: string`);
+`selectedSubCategories: Record<string, true>` is the bulk checkbox box now, filtered to
+whichever single Category is picked, with its own "Select all (N)" toggle — same pattern the
+RM ID list already has. Picking a different Category clears `selectedSubCategories`. The RM
+ID list filters on Category (exact) AND any ticked Sub Category (empty = no Sub Category
+filter). `handleSave()`'s per-line "use each ticked RM's own real Category/Sub Category off
+its `rm-sku` row" behavior (added for the Category-bulk attempt) is kept as-is — still
+correct now that Sub Category, not Category, can be multi-ticked.
 
 ## Known gotchas (add to as they're found)
 
