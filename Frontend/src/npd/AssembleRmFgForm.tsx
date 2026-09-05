@@ -144,11 +144,15 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
     retry: 1,
   });
 
-  function toggleRm(id: string) {
+  // Ticking a row auto-fills its qty from that RM SKU's own QUANTITY column (Raw Material
+  // SKU tab — already auto-picked there from its Sub Category, see RmSkuForm.tsx's own
+  // history) instead of starting blank, per explicit instruction. Still editable afterward —
+  // this is just the starting value, not a locked one.
+  function toggleRm(id: string, row: TaxonomyRow) {
     setSelectedQty((prev) => {
       const next = { ...prev };
       if (id in next) delete next[id];
-      else next[id] = "";
+      else next[id] = (row.QUANTITY ?? "").trim();
       return next;
     });
   }
@@ -341,7 +345,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={() => toggleRm(id)}
+                      onChange={() => toggleRm(id, r)}
                       style={{ width: 16, height: 16, flexShrink: 0 }}
                     />
                     <span style={{ flex: 1, fontSize: 14, color: "#1A1A1A" }}>{r["PART NO."] || id}</span>

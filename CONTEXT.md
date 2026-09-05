@@ -2263,6 +2263,13 @@ many RM lines, not one at a time.
   `rmId` now (the backend tolerates that, per an earlier fix — see the "virtual preview" note
   above).
 
+## Assemble RM FG's bulk RM checklist auto-fills qty from Raw Material SKU (5 Sep 2026)
+
+Per explicit instruction — ticking an RM row in `AssembleRmFgForm.tsx`'s bulk checkbox list
+now starts its qty input pre-filled from that RM SKU's own `QUANTITY` column (`Raw Material
+SKU` tab, already auto-picked there from its Sub Category — see `RmSkuForm.tsx`'s own
+history), instead of blank. Still freely editable afterward, just no longer starts empty.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
