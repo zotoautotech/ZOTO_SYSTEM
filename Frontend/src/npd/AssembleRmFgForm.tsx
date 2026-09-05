@@ -147,6 +147,32 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
       (!rmSearch.trim() || (r["PART NO."] || r["ID'S"]).toLowerCase().includes(rmSearch.trim().toLowerCase()))
   );
   const allVisibleTicked = rmIdRows.length > 0 && rmIdRows.every((r) => r["ID'S"] in selectedQty);
+
+  // Auto-ticks every RM that matches the current Category/Sub Category filter, instead of
+  // making the doer also click "Select all shown" by hand after narrowing the list — per
+  // explicit "why isn't RM ID auto-selected, make this better" follow-up. Only fires once a
+  // Category is actually picked (an empty filter matches every RM SKU in the sheet; auto-
+  // ticking hundreds of unrelated rows the moment the form opens would be actively wrong, not
+  // helpful). Additive only — never un-ticks a row the doer has manually unticked, since this
+  // effect only adds rows that aren't already a key in `selectedQty` yet; it re-runs whenever
+  // the filter (Category/Sub Category/search) actually changes, or once real RM SKU data
+  // first loads in.
+  useEffect(() => {
+    if (!category) return;
+    setSelectedQty((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const r of rmIdRows) {
+        const id = r["ID'S"];
+        if (!(id in next)) {
+          next[id] = (r.QUANTITY ?? "").trim();
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, subCategoryNames.join(","), rmSearch, rmSkuRows.length]);
   const allSubCategoriesTicked =
     subCategoryRowsForCategory.length > 0 &&
     subCategoryRowsForCategory.every((r) => r["SUB CATEGORY"].trim() in selectedSubCategories);

@@ -2293,6 +2293,18 @@ filter). `handleSave()`'s per-line "use each ticked RM's own real Category/Sub C
 its `rm-sku` row" behavior (added for the Category-bulk attempt) is kept as-is — still
 correct now that Sub Category, not Category, can be multi-ticked.
 
+## Assemble RM FG's RM ID list now auto-selects on filter (5 Sep 2026)
+
+Per explicit "why isn't RM ID auto-selected, make this better" follow-up — picking a Category
+(and optionally narrowing by Sub Category/search) now auto-ticks every matching RM row
+immediately, instead of requiring an extra manual "Select all shown" click. Implemented as a
+`useEffect` keyed on `[category, subCategoryNames.join(","), rmSearch, rmSkuRows.length]` that
+adds (never removes) every currently-matching RM SKU not already a key in `selectedQty` — so
+a doer who manually unticks one specific row stays unticked until the filter itself changes
+again, this doesn't fight that. Only fires once a Category is actually picked (an empty
+filter matches every RM SKU in the sheet — auto-ticking all of them the instant the form
+opens would be wrong, not helpful).
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
