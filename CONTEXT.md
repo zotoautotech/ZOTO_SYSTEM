@@ -2305,6 +2305,14 @@ again, this doesn't fight that. Only fires once a Category is actually picked (a
 filter matches every RM SKU in the sheet — auto-ticking all of them the instant the form
 opens would be wrong, not helpful).
 
+## Units, Levels, Part Specs. removed from Assemble RM FG Form (5 Sep 2026)
+
+Per explicit instruction — `AssembleRmFgForm.tsx` no longer shows or saves these three
+fields (were a shared Units toggle, Levels toggle, and a required Part Specs. text field
+applied to every created line). The live `ASSEMBLE RM FG` tab still has these columns; they
+just aren't written to any more from this form. Part Specs. is no longer required either —
+`canSave()` now only needs at least one ticked RM with its qty filled in.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

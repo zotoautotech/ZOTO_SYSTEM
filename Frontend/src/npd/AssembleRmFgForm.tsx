@@ -3,7 +3,6 @@ import { isAxiosError } from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
 import { SearchableSelect, type SelectOption } from "../components/form/SearchableSelect";
-import { ToggleGroup } from "../components/form/ToggleGroup";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
 import {
@@ -31,22 +30,12 @@ interface Props {
   onSaved: () => void;
 }
 
-const UNIT_OPTIONS: SelectOption[] = [
-  { value: "PCS", label: "PCS" },
-  { value: "KG", label: "KG" },
-  { value: "SET", label: "SET" },
-];
-const LEVEL_OPTIONS: SelectOption[] = [
-  { value: "L1", label: "L1" },
-  { value: "L2", label: "L2" },
-  { value: "L3", label: "L3" },
-  { value: "L4", label: "L4" },
-];
-
 /** "ASSEMBLE RM FG Form" — matching the AppSheet reference screenshot field-for-field
  * (USEREMAIL/TIMESTAMP/Unique id/FG ID/FG CODE/FG CATEGORY/FG SUB CATEGORY/FG BRAND/
- * FG STANDARD/Category/Sub Category/RM ID/RM CODE/DUPLICATE/No. Of Qty Use/Units/Levels/
- * Part Specs.). Live on the real "ASSEMBLE RM FG" tab (FG_SHEET_ID) — a different tab from
+ * FG STANDARD/Category/Sub Category/RM ID/RM CODE/DUPLICATE/No. Of Qty Use — **Units/Levels/
+ * Part Specs. removed from this form entirely per explicit instruction**, not written on
+ * save any more even though the live tab still has those columns). Live on the real
+ * "ASSEMBLE RM FG" tab (FG_SHEET_ID) — a different tab from
  * `BomBuilder.tsx`'s own "ASSEMBLE RM FG (BOM)" (see taxonomy.ts's own comment on why these
  * aren't the same table).
  *
@@ -86,9 +75,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   // dropdowns above it — a doer picking many RMs at once shouldn't have to scroll/hunt through
   // every match, per explicit "make this easier" follow-up.
   const [rmSearch, setRmSearch] = useState("");
-  const [units, setUnits] = useState<"PCS" | "KG" | "SET" | "">("");
-  const [level, setLevel] = useState<"L1" | "L2" | "L3" | "L4" | "">("");
-  const [partSpecs, setPartSpecs] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -237,7 +223,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
   }
 
   function canSave() {
-    return selectedIds.length > 0 && selectedIds.every((id) => selectedQty[id].trim()) && !!partSpecs.trim() && !saving;
+    return selectedIds.length > 0 && selectedIds.every((id) => selectedQty[id].trim()) && !saving;
   }
 
   async function handleSave() {
@@ -264,9 +250,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
           "Sub Category": rmRow?.["Sub Category"] ?? "",
           "RM ID": id,
           "No. Of Qty Use": selectedQty[id].trim(),
-          Units: units,
-          Levels: level,
-          "Part Specs.": partSpecs.trim(),
         });
       }
       onSaved();
@@ -527,15 +510,6 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             </div>
           </div>
 
-          <ToggleGroup label="Units" value={units} onChange={setUnits} options={UNIT_OPTIONS as { value: "PCS" | "KG" | "SET"; label: string }[]} />
-          <ToggleGroup label="Levels" value={level} onChange={setLevel} options={LEVEL_OPTIONS as { value: "L1" | "L2" | "L3" | "L4"; label: string }[]} />
-          <TextField
-            label="Part Specs."
-            required
-            value={partSpecs}
-            onChange={(e) => setPartSpecs(e.target.value)}
-            placeholder="e.g. Additional Part"
-          />
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
 
