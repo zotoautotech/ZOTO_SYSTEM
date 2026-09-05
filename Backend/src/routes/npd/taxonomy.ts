@@ -125,7 +125,7 @@ const TABLES: TaxonomyTableDef[] = [
     // Formula behind it, just a bare cell like every ordinary input field elsewhere in this
     // file), added per explicit instruction.
     requiredFields: ["CATEGORY"],
-    fields: ["CATEGORY", "QUANTITY", "CODE", "Against id", "DUPLICACY"],
+    fields: ["CATEGORY", "QUANTITY", "UNIT", "CODE", "Against id", "DUPLICACY"],
     computedFields: ["CODE", "Against id", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
@@ -157,7 +157,7 @@ const TABLES: TaxonomyTableDef[] = [
     // `QUANTITY` — same shape/reasoning as `rm-category`'s own (plain optional doer-typed
     // number, live column confirmed directly), added per explicit instruction.
     requiredFields: ["Category", "SUB CATEGORY"],
-    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "QUANTITY", "DUPLICACY"],
+    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "QUANTITY", "UNIT", "DUPLICACY"],
     computedFields: ["CODE", "AGAINST ID", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",

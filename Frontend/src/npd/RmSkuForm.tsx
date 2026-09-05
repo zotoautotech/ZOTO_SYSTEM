@@ -111,9 +111,18 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // "WHITE LABLE" couldn't strict-match this dropdown's "WHITE LABLE " with a trailing space).
   // Trimming here — not just on the taxonomy tabs' own data — means this dropdown keeps working
   // even if a similar stray space shows up on Category/Sub Category/Vendor Name later too.
+  // Label suffixed with "- <QUANTITY> <UNIT>" when the ref row has both (e.g.
+  // "CONTROLLER SET - 1 SET") per explicit instruction — `value` stays the bare trimmed name,
+  // only the displayed label changes, so nothing downstream (PART NO. lookups, filters) needs
+  // to change.
+  function withQuantity(name: string, r: TaxonomyRow): string {
+    const qty = (r.QUANTITY ?? "").trim();
+    const unit = (r.UNIT ?? "").trim();
+    return qty ? `${name} - ${qty}${unit ? ` ${unit}` : ""}` : name;
+  }
   const categoryOptions: SelectOption[] = categoryRows.map((r) => ({
     value: r.CATEGORY.trim(),
-    label: r.CATEGORY.trim(),
+    label: withQuantity(r.CATEGORY.trim(), r),
   }));
   // Filtered by "r.Category === category" — matches the real live app's own Sub Category
   // ref field Valid If: SELECT(RM ref Category DD[SUB CATEGORY],
@@ -127,7 +136,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // holding the real value, this filter is correct again and was restored.
   const subCategoryOptions: SelectOption[] = subCategoryRows
     .filter((r) => !category || (r.Category ?? "").trim() === category.trim())
-    .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: r["SUB CATEGORY"].trim() }));
+    .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: withQuantity(r["SUB CATEGORY"].trim(), r) }));
   // Live tab/column renamed "RM ref Paint"."Paint Description" → "RM ref Brand"."Brand
   // Description" (2 Sep 2026, confirmed live) — see npdPartCode.ts's own
   // RM_PAINT_DESCRIPTION_FIELD comment for the full story of catching this.

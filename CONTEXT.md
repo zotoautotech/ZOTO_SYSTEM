@@ -2210,6 +2210,17 @@ wasn't exposed on any form. Added:
 Backend (`taxonomy.ts`): `QUANTITY` added to `rm-category`/`rm-category-dd`/`rm-sku`'s
 `fields` — no App Formula behind any of the three, just a bare optional numeric cell.
 
+## UNIT added (RM Category/Sub Category), Category/Sub Category dropdowns show quantity (5 Sep 2026)
+
+Per explicit instruction:
+- **UNIT** (SET/PIC/MTR toggle, matching the live sheet's own new column on both `RM ref
+  Category`/`RM ref Category DD`) added right below QUANTITY on `RmCategoryForm.tsx`/
+  `RmSubCategoryForm.tsx`. Backend `taxonomy.ts`: `UNIT` added to both tables' `fields`.
+- **`RmSkuForm.tsx`'s Category and Sub Category dropdowns now show quantity+unit in their
+  label** (e.g. "CONTROLLER SET - 1 SET") via a shared `withQuantity()` helper — only the
+  displayed label changes, the saved `value` stays the bare trimmed name, so PART NO.
+  lookups/filters elsewhere are unaffected.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

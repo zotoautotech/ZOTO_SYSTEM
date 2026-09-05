@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { TextField } from "../components/form/TextField";
+import { ToggleGroup } from "../components/form/ToggleGroup";
 import { useIsMobile } from "../lib/responsive";
 import { useAuth } from "../lib/auth";
 import { createTaxonomyRow, previewRmCategoryDdCode, previewPlainRandomId, type TaxonomyRow } from "./lib/npdApi";
@@ -33,6 +34,7 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
   const { user } = useAuth();
   const [subCategory, setSubCategory] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState<"SET" | "PIC" | "MTR" | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -69,6 +71,7 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
         Category: category,
         "SUB CATEGORY": subCategory.trim(),
         ...(quantity.trim() ? { QUANTITY: quantity.trim() } : {}),
+        ...(unit ? { UNIT: unit } : {}),
       });
       onSaved(subCategory.trim());
     } catch (err) {
@@ -146,6 +149,16 @@ export function RmSubCategoryForm({ category, subCategoryRows, onClose, onSaved 
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="0"
+          />
+          <ToggleGroup
+            label="UNIT"
+            value={unit}
+            onChange={setUnit}
+            options={[
+              { value: "SET", label: "SET" },
+              { value: "PIC", label: "PIC" },
+              { value: "MTR", label: "MTR" },
+            ]}
           />
           <TextField label="DUPLICACY" value={String(duplicacy)} disabled />
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
