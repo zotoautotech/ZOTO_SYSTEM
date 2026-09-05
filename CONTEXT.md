@@ -2156,6 +2156,13 @@ SKU's own `ID'S` and the reference "Copy of ADC/PRODUCT MASTER-FG" sheet. Remove
 `idStrategy: "sequential"` override. Existing sequential-integer FG ID rows (1–88) are left
 as-is; only new rows get the hex format.
 
+## `"Copy of FINAL GOOD SKU"` is Sales CRR's tab only, NPD uses `"FINAL GOOD SKU"` (5 Sep 2026)
+
+Per explicit instruction — NPD's `fg-sku` taxonomy table, `bom.ts`, and `dashboard.ts` were
+pointed at `"Copy of FINAL GOOD SKU"` (matching `masters.ts`'s own tab); switched back to the
+plain `"FINAL GOOD SKU"` tab. `masters.ts` (Sales CRR) keeps `"Copy of FINAL GOOD SKU"`
+untouched — that tab is Sales CRR's alone, NPD must never read/write it.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

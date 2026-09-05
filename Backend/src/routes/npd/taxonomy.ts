@@ -357,7 +357,7 @@ const TABLES: TaxonomyTableDef[] = [
     key: "fg-sku",
     label: "FG SKU Catalog",
     spreadsheetId: env.sheets.fg,
-    tab: "Copy of FINAL GOOD SKU",
+    tab: "FINAL GOOD SKU",
     idColumn: "FG ID",
     idPrefix: "FG",
     requiredFields: ["SEGMENT", "CATEGORY", "SUB CATEGORY", "Name", "Brand", "STANDARD PART"],
@@ -776,7 +776,7 @@ taxonomyRouter.get("/assemble-rm-fg/preview", async (req, res, next) => {
     const fgId = typeof req.query.fgId === "string" ? req.query.fgId : "";
     const rmId = typeof req.query.rmId === "string" ? req.query.rmId : "";
     const [fgRows, rmRows, existingRows] = await Promise.all([
-      readTable(env.sheets.fg, "Copy of FINAL GOOD SKU"),
+      readTable(env.sheets.fg, "FINAL GOOD SKU"),
       readTable(env.sheets.npd, "Raw Material SKU"),
       readTable(env.sheets.fg, "ASSEMBLE RM FG"),
     ]);
@@ -977,7 +977,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
     // existing rows already pairing this exact FG ID + RM ID.
     if (table.key === "assemble-rm-fg") {
       const [fgRows, rmRows, existingRows] = await Promise.all([
-        readTable(env.sheets.fg, "Copy of FINAL GOOD SKU"),
+        readTable(env.sheets.fg, "FINAL GOOD SKU"),
         readTable(env.sheets.npd, "Raw Material SKU"),
         readTable(env.sheets.fg, "ASSEMBLE RM FG", { refresh: true }),
       ]);
