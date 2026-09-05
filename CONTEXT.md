@@ -2463,6 +2463,24 @@ icon) — `AssembleData.tsx` now has a CSV button next to the search box, export
 currently-filtered/visible rows (client-side `Blob` download, `assemble-data.csv`, no new
 backend route). Same column set/order as the on-screen table.
 
+## Correction: BOM ITEMS now shows in Edit mode too (5 Sep 2026)
+
+Per explicit "BOM is not show in Edit" report — the earlier pass hid BOM ITEMS entirely when
+`FgSkuForm.tsx` opened in edit mode. Since an edited row already exists for real (no "Save
+writes everything at once" moment to defer to), it now works differently from CREATE mode
+rather than being hidden:
+- Shows `existingBomLines` — the row's own real `assemble-rm-fg` rows, read live
+  (`listTaxonomyRows("assemble-rm-fg")` filtered to this FG ID) — instead of a local
+  `bomQueue`.
+- "New" opens `AssembleRmFgForm` against the REAL `editRow` (not a virtual not-yet-saved row)
+  and its `onQueue` writes each picked line immediately via `createTaxonomyRow`, then
+  invalidates the query — same "no parent Save to defer to" pattern `FgSkuDetail.tsx`'s own
+  BOM Items card already uses.
+- `alreadyQueuedRmIds` (dedup guard) sources from `existingBomLines` in edit mode instead of
+  `bomQueue`.
+- CREATE mode's own local-queue-until-Save behavior (added earlier the same day, per the
+  "PERMANET SAVE ONLY WHEN I CLICK SAVE" instruction) is unchanged — this only affects EDIT.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

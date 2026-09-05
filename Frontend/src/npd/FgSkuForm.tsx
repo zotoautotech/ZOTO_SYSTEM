@@ -78,6 +78,17 @@ export function FgSkuForm({ onClose, onSaved, editRow }: Props) {
   const [bomQueue, setBomQueue] = useState<QueuedBomLine[]>([]);
   const [showBomForm, setShowBomForm] = useState(false);
 
+  // In edit mode there's no "Save writes it all at once" moment to defer to — this FG SKU is
+  // already real, so BOM ITEMS shows its own ACTUAL saved lines (not a local queue) and "New"
+  // writes immediately, same as FgSkuDetail.tsx's own BOM Items card. Per explicit follow-up
+  // ("BOM is not show in Edit") — an earlier pass hid BOM ITEMS entirely in edit mode.
+  const { data: assembleRows = [] } = useQuery({
+    queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"],
+    queryFn: () => listTaxonomyRows("assemble-rm-fg"),
+    enabled: !!editRow,
+  });
+  const existingBomLines = editRow ? assembleRows.filter((r) => r["FG ID"] === editRow["FG ID"]) : [];
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -226,7 +237,10 @@ export function FgSkuForm({ onClose, onSaved, editRow }: Props) {
   }
 
   function handleAddBom() {
-    if (canSave()) setShowBomForm(true);
+    // In edit mode the FG SKU already exists for real, so there's nothing to gate on —
+    // canSave()'s "all required fields filled" check only matters for the not-yet-saved
+    // create flow below.
+    if (editRow || canSave()) setShowBomForm(true);
   }
 
   // The virtual (not-yet-saved, and — with this form's local-queue-only BOM flow — NEVER
@@ -400,17 +414,37 @@ export function FgSkuForm({ onClose, onSaved, editRow }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description…"
             />
-            {/* Hidden entirely in edit mode — this row already has its own real BOM lines,
-                managed from its own detail page, not silently re-attached from here (see this
-                file's own Props doc comment on `editRow`). Matches the reference's own
-                "BOM ITEMS* / New" nested-list bar for CREATE: New opens Assemble RM FG Form
-                right away, pre-filled from this form's own in-progress fields (a "virtual"
-                preview, nothing saved yet) — clicking that form's own "Add to BOM" only queues
-                the picked lines locally in `bomQueue`; nothing is written to the backend until
-                THIS form's own Save button runs, see handleSave()'s own doc comment. */}
-            {!editRow && (
+            {/* In CREATE mode: New opens Assemble RM FG Form right away, pre-filled from this
+                form's own in-progress fields (a "virtual" preview, nothing saved yet) —
+                clicking that form's own "Add to BOM" only queues the picked lines locally in
+                `bomQueue`; nothing is written to the backend until THIS form's own Save button
+                runs, see handleSave()'s own doc comment.
+                In EDIT mode (per explicit "BOM is not show in Edit" follow-up — an earlier
+                pass hid this section entirely then): shows the row's own ACTUAL saved BOM
+                lines (`existingBomLines`, read live), and New writes immediately, same as
+                FgSkuDetail.tsx's own BOM Items card — there's no "Save writes it all at once"
+                moment to defer to for a row that already exists. */}
+            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!editRow && !canSave()} />
+            {editRow ? (
+              existingBomLines.length > 0 && (
+                <div style={{ marginTop: -14, marginBottom: 10 }}>
+                  {existingBomLines.map((line, i) => (
+                    <div
+                      key={line["Unique id"] ?? i}
+                      style={{
+                        padding: "8px 12px",
+                        border: "1px solid #E5E7EB",
+                        borderTop: i === 0 ? "1px solid #E5E7EB" : "none",
+                        fontSize: 13,
+                      }}
+                    >
+                      {line["RM CODE"] || line["RM ID"]} — Qty {line["No. Of Qty Use"] || "—"}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
               <>
-                <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave()} />
                 {bomQueue.length > 0 && (
                   <div style={{ marginTop: -14, marginBottom: 10 }}>
                     {bomQueue.map((line, i) => (
@@ -554,10 +588,29 @@ export function FgSkuForm({ onClose, onSaved, editRow }: Props) {
       )}
       {showBomForm && (
         <AssembleRmFgForm
-          fgRow={virtualFgRow}
+          fgRow={editRow ?? virtualFgRow}
           onClose={() => setShowBomForm(false)}
-          onQueue={(lines: QueuedBomLine[]) => setBomQueue((prev) => [...prev, ...lines])}
-          alreadyQueuedRmIds={bomQueue.map((l) => l.rmId)}
+          onQueue={
+            editRow
+              ? // Edit mode: this FG SKU already exists for real, so New writes immediately —
+                // same "no parent Save to defer to" reasoning as FgSkuDetail.tsx's own
+                // onQueue.
+                async (lines: QueuedBomLine[]) => {
+                  for (const line of lines) {
+                    await createTaxonomyRow("assemble-rm-fg", {
+                      "FG ID": editRow["FG ID"] ?? "",
+                      Category: line.category,
+                      "Sub Category": line.subCategory,
+                      "RM ID": line.rmId,
+                      "No. Of Qty Use": line.qty,
+                    });
+                  }
+                  setShowBomForm(false);
+                  queryClient.invalidateQueries({ queryKey: ["npd", "taxonomy", "rows", "assemble-rm-fg"] });
+                }
+              : (lines: QueuedBomLine[]) => setBomQueue((prev) => [...prev, ...lines])
+          }
+          alreadyQueuedRmIds={editRow ? existingBomLines.map((l) => l["RM ID"]) : bomQueue.map((l) => l.rmId)}
         />
       )}
     </div>
