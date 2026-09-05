@@ -251,9 +251,10 @@ export function AssembleRmFgForm({ fgRow, onClose, onQueue, alreadyQueuedRmIds =
     if (!canSave()) return;
     const lines: QueuedBomLine[] = selectedIds.map((id) => {
       const rmRow = rmSkuRows.find((r) => r["ID'S"] === id);
+      const brand = rmRow?.Brand || rmRow?.["MAKE BY"];
       return {
         rmId: id,
-        partNo: rmRow?.["PART NO."] || id,
+        partNo: (rmRow?.["PART NO."] || id) + (brand ? ` - ${brand}` : ""),
         category: rmRow?.Category ?? "",
         subCategory: rmRow?.["Sub Category"] ?? "",
         qty: selectedQty[id].trim(),
@@ -490,7 +491,16 @@ export function AssembleRmFgForm({ fgRow, onClose, onQueue, alreadyQueuedRmIds =
                       onChange={() => toggleRm(id, r)}
                       style={{ width: 16, height: 16, flexShrink: 0 }}
                     />
-                    <span style={{ flex: 1, fontSize: 14, color: "#1A1A1A" }}>{r["PART NO."] || id}</span>
+                    <span style={{ flex: 1, fontSize: 14, color: "#1A1A1A" }}>
+                      {r["PART NO."] || id}
+                      {/* Brand suffix so otherwise-identical-looking RM codes under the same
+                          Sub Category (e.g. several "90CM STRIP" rows differing only by
+                          color/brand) are actually distinguishable — per explicit instruction
+                          ("ABAC000B1 - BLACK"). Falls back to MAKE BY when Brand is blank. */}
+                      {(r.Brand || r["MAKE BY"]) && (
+                        <span style={{ color: "#6B7280" }}> - {r.Brand || r["MAKE BY"]}</span>
+                      )}
+                    </span>
                     {checked && (
                       <input
                         type="number"

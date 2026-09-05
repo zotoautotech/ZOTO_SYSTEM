@@ -2374,6 +2374,15 @@ comment on why those two tabs aren't the same table), so there's no existing que
 source the exclusion list from there without a new backend read; left as a follow-up if that
 same duplicate-add gap is ever reported on the detail-page path too.
 
+## RM ID checklist now shows Brand alongside the code (5 Sep 2026)
+
+Per explicit instruction ("show me the difference like ABAC000B1 - BLACK") — several RM SKU
+rows under the same Sub Category can share an otherwise-identical-looking PART NO. prefix,
+differing only by Brand/color. `AssembleRmFgForm.tsx`'s RM checklist now appends
+`" - <Brand>"` (falling back to MAKE BY if Brand is blank) to each row's label, and the same
+suffix is baked into `QueuedBomLine.partNo` so the FINAL GOOD SKU Form's own queued-lines list
+shows it too.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
