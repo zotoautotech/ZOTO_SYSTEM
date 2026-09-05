@@ -168,12 +168,12 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
     (r) => (r.Category ?? "").trim() === category.trim() && r["SUB CATEGORY"].trim() === subCategory.trim()
   );
   const subCategoryCode = matchedSubCategoryRow?.CODE ?? "";
-  // QUANTITY is no longer a doer-typed field on this form — auto-picked from the selected Sub
-  // Category's own QUANTITY (RM ref Category DD, matched by Category+SUB CATEGORY the same
-  // way subCategoryCode above is), per explicit instruction. Shown read-only, sent verbatim
-  // on save — nothing left for a doer to type here.
+  // QUANTITY is no longer shown on this form at all (removed per explicit instruction, after
+  // an earlier pass made it read-only/auto-picked but still visible) — still auto-picked from
+  // the selected Sub Category's own QUANTITY (RM ref Category DD, matched by Category+SUB
+  // CATEGORY the same way subCategoryCode above is) and sent silently on save, just with no
+  // field shown for it.
   const quantity = matchedSubCategoryRow?.QUANTITY ?? "";
-  const unit = matchedSubCategoryRow?.UNIT ?? "";
   const paintCode = paintRows.find((r) => (r["Brand Description"] ?? "").trim() === paint.trim())?.Code ?? "";
   // Matches the live `Alphabet` tab's own MAKED BY/MAKED CODE rows (ZOTO -> "0",
   // SUPPLIER -> "1") — see this file's module doc comment for how that was confirmed.
@@ -371,9 +371,6 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
               onAddNew={category ? () => setCreatingSubCategory(true) : undefined}
             />
           </div>
-          {/* Auto-picked from the selected Sub Category's own QUANTITY (RM ref Category DD) —
-              no longer a doer-typed field, see `quantity`'s own doc comment above. */}
-          <TextField label="QUANTITY" disabled value={quantity ? `${quantity}${unit ? ` ${unit}` : ""}` : "—"} />
           {/* Real connected dropdown off the live "ZOTO/MASTER-VENDOR" spreadsheet's `Vendor
               Firm Name` column (`vendor-master` taxonomy table — see taxonomy.ts's own comment
               on that entry), matching the Category/Sub Category/Paint fields' own SearchableSelect

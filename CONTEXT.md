@@ -2229,13 +2229,14 @@ backend `taxonomy.ts` (`requiredFields`). Side effect noted in-code: since `requ
 doubles as this app's duplicate-check key set, a duplicate CATEGORY name with a genuinely
 different QUANTITY/UNIT is no longer flagged a dup — accepted, not a bug.
 
-## RM SKU Form's QUANTITY is now auto-picked, not doer-typed (5 Sep 2026)
+## RM SKU Form's QUANTITY is now auto-picked AND hidden (5 Sep 2026)
 
-Per explicit instruction — `RmSkuForm.tsx` no longer has an editable QUANTITY input.
-`quantity`/`unit` are now derived straight from the matched Sub Category row (`RM ref Category
-DD`, same Category+SUB CATEGORY lookup `subCategoryCode` already uses) and shown read-only
-(e.g. "1 SET"), sent verbatim on save. If the selected Sub Category has no QUANTITY set, the
-field shows "—" and nothing is sent.
+Two-step correction, per explicit instruction. First pass: `RmSkuForm.tsx`'s QUANTITY became
+read-only, auto-picked from the selected Sub Category's own QUANTITY (`RM ref Category DD`,
+same Category+SUB CATEGORY lookup `subCategoryCode` already uses). **Second, immediate
+follow-up: remove the field from the form entirely** — the doer doesn't want to see it at
+all, just have it silently carried through. `quantity` is still computed and still included
+in both the create/update payloads (unchanged), there's just no visible field for it anymore.
 
 ## Known gotchas (add to as they're found)
 
