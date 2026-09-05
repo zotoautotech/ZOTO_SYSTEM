@@ -2229,6 +2229,14 @@ backend `taxonomy.ts` (`requiredFields`). Side effect noted in-code: since `requ
 doubles as this app's duplicate-check key set, a duplicate CATEGORY name with a genuinely
 different QUANTITY/UNIT is no longer flagged a dup — accepted, not a bug.
 
+## RM SKU Form's QUANTITY is now auto-picked, not doer-typed (5 Sep 2026)
+
+Per explicit instruction — `RmSkuForm.tsx` no longer has an editable QUANTITY input.
+`quantity`/`unit` are now derived straight from the matched Sub Category row (`RM ref Category
+DD`, same Category+SUB CATEGORY lookup `subCategoryCode` already uses) and shown read-only
+(e.g. "1 SET"), sent verbatim on save. If the selected Sub Category has no QUANTITY set, the
+field shows "—" and nothing is sent.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

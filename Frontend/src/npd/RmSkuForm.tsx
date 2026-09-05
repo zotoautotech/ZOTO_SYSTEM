@@ -53,7 +53,6 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [category, setCategory] = useState(editRow?.Category ?? "");
   const [subCategory, setSubCategory] = useState(editRow?.["Sub Category"] ?? "");
-  const [quantity, setQuantity] = useState(editRow?.QUANTITY ?? "");
   const [vendorName, setVendorName] = useState(editRow?.["VENDOR NAME"] ?? "");
   // Live column renamed "Paint" → "Brand" (confirmed live, 3 Sep 2026) — state var/setter names
   // (paint/setPaint) are left as-is (internal naming only, no reason to churn every reference),
@@ -165,10 +164,16 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   // server; the actual create payload only ever carries the picked field values themselves
   // (see handleSave below), and the backend computes the real, final PART NO. independently.
   const categoryCode = categoryRows.find((r) => r.CATEGORY.trim() === category.trim())?.CODE ?? "";
-  const subCategoryCode =
-    subCategoryRows.find(
-      (r) => (r.Category ?? "").trim() === category.trim() && r["SUB CATEGORY"].trim() === subCategory.trim()
-    )?.CODE ?? "";
+  const matchedSubCategoryRow = subCategoryRows.find(
+    (r) => (r.Category ?? "").trim() === category.trim() && r["SUB CATEGORY"].trim() === subCategory.trim()
+  );
+  const subCategoryCode = matchedSubCategoryRow?.CODE ?? "";
+  // QUANTITY is no longer a doer-typed field on this form — auto-picked from the selected Sub
+  // Category's own QUANTITY (RM ref Category DD, matched by Category+SUB CATEGORY the same
+  // way subCategoryCode above is), per explicit instruction. Shown read-only, sent verbatim
+  // on save — nothing left for a doer to type here.
+  const quantity = matchedSubCategoryRow?.QUANTITY ?? "";
+  const unit = matchedSubCategoryRow?.UNIT ?? "";
   const paintCode = paintRows.find((r) => (r["Brand Description"] ?? "").trim() === paint.trim())?.Code ?? "";
   // Matches the live `Alphabet` tab's own MAKED BY/MAKED CODE rows (ZOTO -> "0",
   // SUPPLIER -> "1") — see this file's module doc comment for how that was confirmed.
@@ -213,7 +218,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
         await updateTaxonomyRow("rm-sku", id, {
           Category: category,
           "Sub Category": subCategory,
-          QUANTITY: quantity.trim(),
+          ...(quantity ? { QUANTITY: quantity } : {}),
           "VENDOR NAME": vendorName,
           Brand: paint,
           "MAKE BY": makeBy,
@@ -224,7 +229,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
         const result = await createTaxonomyRow("rm-sku", {
           Category: category,
           "Sub Category": subCategory,
-          ...(quantity.trim() ? { QUANTITY: quantity.trim() } : {}),
+          ...(quantity ? { QUANTITY: quantity } : {}),
           "VENDOR NAME": vendorName,
           Brand: paint,
           "MAKE BY": makeBy,
@@ -366,13 +371,9 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
               onAddNew={category ? () => setCreatingSubCategory(true) : undefined}
             />
           </div>
-          <TextField
-            label="QUANTITY"
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="0"
-          />
+          {/* Auto-picked from the selected Sub Category's own QUANTITY (RM ref Category DD) —
+              no longer a doer-typed field, see `quantity`'s own doc comment above. */}
+          <TextField label="QUANTITY" disabled value={quantity ? `${quantity}${unit ? ` ${unit}` : ""}` : "—"} />
           {/* Real connected dropdown off the live "ZOTO/MASTER-VENDOR" spreadsheet's `Vendor
               Firm Name` column (`vendor-master` taxonomy table — see taxonomy.ts's own comment
               on that entry), matching the Category/Sub Category/Paint fields' own SearchableSelect
