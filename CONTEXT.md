@@ -2396,6 +2396,13 @@ Qty (matching what that tab actually holds, not the unrelated BomBuilder tab's o
 Units/Status shape). Also added Brand and Description fields to the FG Details card (both
 real live columns, previously shown on the create form but not the detail page).
 
+## RM checklist's qty is now read-only (5 Sep 2026)
+
+Per explicit instruction — the per-row "No. Of Qty Use" in `AssembleRmFgForm.tsx`'s RM
+checklist is no longer an editable `<input>`, just a plain read-only box mirroring that RM's
+own QUANTITY (Raw Material SKU). A doer who needs a different quantity now corrects it at the
+source (that RM SKU's own QUANTITY field), not per-BOM-line here.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

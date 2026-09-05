@@ -501,21 +501,29 @@ export function AssembleRmFgForm({ fgRow, onClose, onQueue, alreadyQueuedRmIds =
                         <span style={{ color: "#6B7280" }}> - {r.Brand || r["MAKE BY"]}</span>
                       )}
                     </span>
+                    {/* Read-only — per explicit instruction ("show this but not editable").
+                        Always mirrors that RM's own QUANTITY (Raw Material SKU), no manual
+                        override; a doer who needs a different quantity corrects it at the
+                        source (the RM SKU's own QUANTITY), not per-BOM-line here. */}
                     {checked && (
-                      <input
-                        type="number"
-                        value={selectedQty[id]}
-                        onChange={(e) => setSelectedQty((prev) => ({ ...prev, [id]: e.target.value }))}
-                        placeholder="Qty"
+                      <div
                         style={{
                           width: 90,
                           height: 32,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           borderRadius: 6,
-                          border: "1px solid #D1D5DB",
+                          border: "1px solid #E5E7EB",
+                          background: "#F9FAFB",
                           padding: "4px 8px",
                           fontSize: 13,
+                          color: "#374151",
+                          boxSizing: "border-box",
                         }}
-                      />
+                      >
+                        {selectedQty[id] || "—"}
+                      </div>
                     )}
                   </div>
                 );
