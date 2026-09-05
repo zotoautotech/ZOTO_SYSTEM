@@ -368,8 +368,17 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
                 nested-list bars — clicking New saves this FG SKU first if it hasn't been saved
                 yet (see ensureSaved()'s own doc comment), then opens Drawing FG Form / Assemble
                 RM FG Form for the resulting row. */}
-            <NestedListField label="DRAWINGS OR VIDEO" onAddNew={handleAddDrawing} />
-            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} />
+            <NestedListField
+              label="DRAWINGS OR VIDEO"
+              onAddNew={handleAddDrawing}
+              disabled={!canSave() && !createdRow}
+            />
+            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave() && !createdRow} />
+            {!canSave() && !createdRow && (
+              <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
+                Fill in Category, Sub Category, Brand, Standard Part and Name above to add Drawings/BOM Items.
+              </p>
+            )}
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
           </div>
         </div>
@@ -502,7 +511,15 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
 /** Matches the reference's own grey "SECTION* / New" nested-list bar — a static count (this
  * form doesn't track how many child rows exist yet, since the parent FG SKU row itself may
  * not even be saved) plus a "New" button. */
-function NestedListField({ label, onAddNew }: { label: string; onAddNew: () => void }) {
+function NestedListField({
+  label,
+  onAddNew,
+  disabled,
+}: {
+  label: string;
+  onAddNew: () => void;
+  disabled?: boolean;
+}) {
   return (
     <div>
       <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
@@ -512,6 +529,8 @@ function NestedListField({ label, onAddNew }: { label: string; onAddNew: () => v
       <button
         type="button"
         onClick={onAddNew}
+        disabled={disabled}
+        title={disabled ? "Fill in the required fields above first" : undefined}
         style={{
           width: "100%",
           padding: "12px 16px",
@@ -521,7 +540,8 @@ function NestedListField({ label, onAddNew }: { label: string; onAddNew: () => v
           color: "#2563EB",
           fontSize: 14,
           fontWeight: 600,
-          cursor: "pointer",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.5 : 1,
         }}
       >
         New
