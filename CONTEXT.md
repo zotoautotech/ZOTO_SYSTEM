@@ -2100,6 +2100,30 @@ write, `npdApi.ts`'s `previewAssembleRmFg()` return type (`fgPaint` → `fgBrand
 screenshot's field label" discipline as everywhere else in this project — the AppSheet field
 LABEL and the underlying sheet COLUMN header aren't always identical.
 
+## Correction: FINAL GOOD SKU Form was silently auto-saving before Save was clicked (5 Sep 2026)
+
+**Real bug, caught by the user live**: the DRAWINGS OR VIDEO/BOM ITEMS "New" buttons added
+earlier the same day silently created the FG SKU row on the live sheet the first time either
+was clicked — an attempt to work around the reference AppSheet's own "add a child row against
+an unsaved parent" trick (a client-side virtual-row mechanism this stateless REST backend has
+no equivalent for), implemented via an `ensureSaved()` helper that both the New buttons and
+the form's own Save button shared. This meant a doer who opened the form, filled in fields,
+and clicked New to explore the Drawing/BOM flow — without ever clicking Save — got a real row
+written to `FINAL GOOD SKU` with zero confirmation. **Explicit, urgent instruction: nothing
+gets written to the backend except by an explicit Save click, full stop.**
+
+Fixed in `FgSkuForm.tsx`: `handleSave()` is now the ONLY code path that calls
+`createTaxonomyRow("fg-sku", ...)` — it no longer delegates through a shared "ensure saved"
+helper the New buttons could also trigger. The New buttons are disabled (with an explanatory
+line) until `createdRow` is set, which only happens via that one explicit Save click. Save no
+longer immediately closes the form either — clicking it saves the row, then the button turns
+into a green "Saved ✓" (disabled, matching the row already being saved) and Cancel becomes
+"Close", so the doer can then choose whether to also add Drawings/BOM Items against the now-
+genuinely-saved row, or just close. **Do not reintroduce any "auto-save on first interaction
+with a child section" shortcut for this or any future NPD form** — if a future form needs a
+child row against a not-yet-saved parent, ask the user how to handle that gap rather than
+silently writing the parent early.
+
 ## Live sheet fix: `FINAL GOOD SKU` had lost its `Brand` column entirely (5 Sep 2026)
 
 A doer reported FG BRAND never showing on the Assemble RM FG Form even after picking a real

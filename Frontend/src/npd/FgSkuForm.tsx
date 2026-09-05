@@ -166,62 +166,47 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
     return !!segment && !!category && !!subCategory && !!brand && !!standardPart && !!name.trim() && !saving;
   }
 
-  /** Saves the FG SKU row for real if it hasn't been already, returning it either way — shared
-   * by the form's own Save button and by the DRAWINGS OR VIDEO/BOM ITEMS "New" buttons below
-   * (see `createdRow`'s own doc comment for why a real save happens the first time either is
-   * opened, not just on the form's own Save). */
-  async function ensureSaved(): Promise<TaxonomyRow> {
-    if (createdRow) return createdRow;
-    const body = {
-      SEGMENT: segment,
-      CATEGORY: category,
-      "SUB CATEGORY": subCategory,
-      Name: name.trim(),
-      "STANDARD PART": standardPart,
-      Brand: brand,
-    };
-    const result = await createTaxonomyRow("fg-sku", body);
-    const row: TaxonomyRow = { ...body, "FG ID": result.id };
-    setCreatedRow(row);
-    return row;
-  }
-
+  /** The ONLY place that writes the FG SKU row to the live sheet — fires solely from the
+   * form's own Save button, never implicitly. An earlier version of this file had the
+   * DRAWINGS OR VIDEO/BOM ITEMS "New" buttons silently trigger this same save on first click
+   * (an attempt to work around the reference AppSheet's own "add a child row against an
+   * unsaved parent" trick, which this stateless REST backend has no equivalent for) — that
+   * meant clicking New wrote a real row to the customer's production sheet before they'd
+   * ever pressed Save, with zero confirmation. Corrected per explicit, urgent instruction:
+   * nothing gets saved to the backend except by an explicit Save click. Saving now keeps the
+   * form open afterward (not `onSaved()` immediately) so the doer can then choose to add
+   * Drawings/BOM Items against the row that's now genuinely saved — see `createdRow`. */
   async function handleSave() {
-    if (!canSave()) return;
+    if (!canSave() || createdRow) return;
     setSaving(true);
     setError("");
     try {
-      const row = await ensureSaved();
-      onSaved(row["FG ID"]);
+      const body = {
+        SEGMENT: segment,
+        CATEGORY: category,
+        "SUB CATEGORY": subCategory,
+        Name: name.trim(),
+        "STANDARD PART": standardPart,
+        Brand: brand,
+      };
+      const result = await createTaxonomyRow("fg-sku", body);
+      setCreatedRow({ ...body, "FG ID": result.id });
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
       setError(detail ?? "Could not save — please try again.");
+    } finally {
       setSaving(false);
     }
   }
 
-  async function handleAddDrawing() {
-    if (!canSave() && !createdRow) return;
-    setError("");
-    try {
-      await ensureSaved();
-      setShowDrawingForm(true);
-    } catch (err) {
-      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
-      setError(detail ?? "Could not save — please try again.");
-    }
+  // "New" only ever works once `createdRow` is set by an actual Save click above — never
+  // triggers a save of its own. Disabled entirely beforehand (see NestedListField's own
+  // `disabled` prop below), so these two are just guards against a stray call.
+  function handleAddDrawing() {
+    if (createdRow) setShowDrawingForm(true);
   }
-
-  async function handleAddBom() {
-    if (!canSave() && !createdRow) return;
-    setError("");
-    try {
-      await ensureSaved();
-      setShowBomForm(true);
-    } catch (err) {
-      const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
-      setError(detail ?? "Could not save — please try again.");
-    }
+  function handleAddBom() {
+    if (createdRow) setShowBomForm(true);
   }
 
   return (
@@ -365,18 +350,15 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
             </div>
             <TextField label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Part name…" />
             {/* Matches the reference's own "DRAWINGS OR VIDEO* / New" and "BOM ITEMS* / New"
-                nested-list bars — clicking New saves this FG SKU first if it hasn't been saved
-                yet (see ensureSaved()'s own doc comment), then opens Drawing FG Form / Assemble
-                RM FG Form for the resulting row. */}
-            <NestedListField
-              label="DRAWINGS OR VIDEO"
-              onAddNew={handleAddDrawing}
-              disabled={!canSave() && !createdRow}
-            />
-            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!canSave() && !createdRow} />
-            {!canSave() && !createdRow && (
+                nested-list bars. Disabled until this FG SKU has actually been saved (an
+                explicit Save click, never implicit) — see handleSave()'s own doc comment. */}
+            <NestedListField label="DRAWINGS OR VIDEO" onAddNew={handleAddDrawing} disabled={!createdRow} />
+            <NestedListField label="BOM ITEMS" onAddNew={handleAddBom} disabled={!createdRow} />
+            {!createdRow && (
               <p className="text-muted" style={{ fontSize: 12, marginTop: -20 }}>
-                Fill in Category, Sub Category, Brand, Standard Part and Name above to add Drawings/BOM Items.
+                {canSave()
+                  ? 'Click Save below first — Drawings/BOM Items can only be added once this FG SKU is actually saved.'
+                  : "Fill in Category, Sub Category, Brand, Standard Part and Name above, then Save, to add Drawings/BOM Items."}
               </p>
             )}
             {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}
@@ -396,7 +378,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           }}
         >
           <button
-            onClick={onClose}
+            onClick={() => (createdRow ? onSaved(createdRow["FG ID"]) : onClose())}
             disabled={saving}
             style={{
               padding: "8px 20px",
@@ -409,24 +391,24 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
               cursor: "pointer",
             }}
           >
-            Cancel
+            {createdRow ? "Close" : "Cancel"}
           </button>
           <button
             onClick={handleSave}
-            disabled={!canSave()}
+            disabled={!canSave() || !!createdRow}
             style={{
               padding: "8px 20px",
               borderRadius: 6,
               border: "none",
-              background: "#C0392B",
+              background: createdRow ? "#16A34A" : "#C0392B",
               color: "#fff",
               fontSize: 14,
               fontWeight: 600,
-              cursor: canSave() ? "pointer" : "default",
-              opacity: canSave() ? 1 : 0.6,
+              cursor: !canSave() || createdRow ? "default" : "pointer",
+              opacity: !canSave() && !createdRow ? 0.6 : 1,
             }}
           >
-            {saving ? "Saving…" : "Save"}
+            {createdRow ? "Saved ✓" : saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
