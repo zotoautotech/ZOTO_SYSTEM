@@ -2360,6 +2360,20 @@ click** — this has now been corrected three times; the only acceptable write p
 `FgSkuForm.tsx`'s own `handleSave()` and `FgSkuDetail.tsx`'s own already-saved-context
 `onQueue`.
 
+## Fix: reopening BOM ITEMS "New" showed already-queued RMs again (5 Sep 2026)
+
+Real bug caught live — a doer who added a Controller Set batch, then clicked "New" again for
+a second batch, still saw those same already-queued RM SKUs sitting in the RM ID checklist
+with no way to tell they'd already been picked, risking an accidental duplicate re-add.
+`AssembleRmFgForm.tsx` gained an `alreadyQueuedRmIds?: string[]` prop — `rmIdRows` now
+excludes any RM ID in that list entirely (not just greyed/disabled). `FgSkuForm.tsx` passes
+`bomQueue.map(l => l.rmId)`. `FgSkuDetail.tsx`'s own usage doesn't pass this yet — its
+"BOM Items" card reads a genuinely different tab (`listBomLines()` → `ASSEMBLE RM FG (BOM)`
+via `bom.ts`, not the `ASSEMBLE RM FG` tab this form writes to — see taxonomy.ts's own
+comment on why those two tabs aren't the same table), so there's no existing query result to
+source the exclusion list from there without a new backend read; left as a follow-up if that
+same duplicate-add gap is ever reported on the detail-page path too.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

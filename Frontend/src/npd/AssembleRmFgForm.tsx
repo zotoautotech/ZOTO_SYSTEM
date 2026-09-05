@@ -31,6 +31,12 @@ interface Props {
   /** Adds the ticked RM lines to the PARENT's local queue — this form never itself writes to
    * the backend any more (see `QueuedBomLine`'s own doc comment). Called once, on Save. */
   onQueue: (lines: QueuedBomLine[]) => void;
+  /** RM IDs already queued/saved for this FG SKU from an earlier round — hidden from the RM
+   * ID list entirely (not just greyed) so re-opening this form to add MORE lines can't
+   * accidentally re-add the same RM twice. Per explicit bug report: a doer who added
+   * Controller Set RMs, then reopened this form for a second batch, still saw those same RMs
+   * sitting in the list with no indication they were already picked. */
+  alreadyQueuedRmIds?: string[];
 }
 
 /** "ASSEMBLE RM FG Form" — matching the AppSheet reference screenshot field-for-field
@@ -69,7 +75,7 @@ interface Props {
  * writes `assemble-rm-fg` rows, and only when ITS OWN Save button is clicked. Matches the
  * reference AppSheet form's own behavior: its BOM ITEMS table (with a "New" link below it)
  * shows queued rows immediately but nothing is truly saved until the parent form's Save. */
-export function AssembleRmFgForm({ fgRow, onClose, onQueue }: Props) {
+export function AssembleRmFgForm({ fgRow, onClose, onQueue, alreadyQueuedRmIds = [] }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   // Category stays a single SearchableSelect (an earlier pass made it a bulk checkbox box —
@@ -138,6 +144,7 @@ export function AssembleRmFgForm({ fgRow, onClose, onQueue }: Props) {
   // `selectedQty` already uses for the RM list below.
   const rmIdRows = rmSkuRows.filter(
     (r) =>
+      !alreadyQueuedRmIds.includes(r["ID'S"]) &&
       (!category || (r.Category ?? "").trim() === category.trim()) &&
       (subCategoryNames.length === 0 || subCategoryNames.includes((r["Sub Category"] ?? "").trim())) &&
       (!rmSearch.trim() || (r["PART NO."] || r["ID'S"]).toLowerCase().includes(rmSearch.trim().toLowerCase()))

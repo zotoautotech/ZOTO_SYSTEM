@@ -526,6 +526,7 @@ export function FgSkuForm({ onClose, onSaved }: Props) {
           fgRow={virtualFgRow}
           onClose={() => setShowBomForm(false)}
           onQueue={(lines: QueuedBomLine[]) => setBomQueue((prev) => [...prev, ...lines])}
+          alreadyQueuedRmIds={bomQueue.map((l) => l.rmId)}
         />
       )}
     </div>
