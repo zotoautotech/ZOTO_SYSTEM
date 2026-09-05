@@ -46,6 +46,7 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const [category, setCategory] = useState("");
+  const [quantity, setQuantity] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -78,7 +79,10 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await createTaxonomyRow("rm-category", { CATEGORY: category.trim() });
+      await createTaxonomyRow("rm-category", {
+        CATEGORY: category.trim(),
+        ...(quantity.trim() ? { QUANTITY: quantity.trim() } : {}),
+      });
       onSaved(category.trim());
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.error?.message : undefined;
@@ -148,6 +152,13 @@ export function RmCategoryForm({ categoryRows, onClose, onSaved }: Props) {
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             placeholder="Type a category name…"
+          />
+          <TextField
+            label="QUANTITY"
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="0"
           />
           <TextField label="DUPLICACY" value={String(duplicacy)} disabled />
           {error && <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{error}</p>}

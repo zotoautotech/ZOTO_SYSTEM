@@ -121,8 +121,11 @@ const TABLES: TaxonomyTableDef[] = [
     // already implemented for `RM ref Category DD` (see nextAgainstId()'s doc comment;
     // reused here verbatim, not table-specific), and `DUPLICACY` is a live count of existing
     // rows whose trimmed CATEGORY matches this one's — see countCategoryDuplicates() below.
+    // `QUANTITY` — plain optional doer-typed number, live column confirmed directly (no App
+    // Formula behind it, just a bare cell like every ordinary input field elsewhere in this
+    // file), added per explicit instruction.
     requiredFields: ["CATEGORY"],
-    fields: ["CATEGORY", "CODE", "Against id", "DUPLICACY"],
+    fields: ["CATEGORY", "QUANTITY", "CODE", "Against id", "DUPLICACY"],
     computedFields: ["CODE", "Against id", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
@@ -151,8 +154,10 @@ const TABLES: TaxonomyTableDef[] = [
     // show `DUPLICACY`) — a live trimmed-name duplicate count, same shape as `RM ref
     // Category.DUPLICACY` (see countCategoryDuplicates()'s doc comment) but scoped to `SUB
     // CATEGORY` instead — see countSubCategoryDuplicates()'s own doc comment.
+    // `QUANTITY` — same shape/reasoning as `rm-category`'s own (plain optional doer-typed
+    // number, live column confirmed directly), added per explicit instruction.
     requiredFields: ["Category", "SUB CATEGORY"],
-    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "DUPLICACY"],
+    fields: ["AGAINST ID", "CODE", "SUB CATEGORY", "Category", "Category ID", "QUANTITY", "DUPLICACY"],
     computedFields: ["CODE", "AGAINST ID", "DUPLICACY"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
@@ -406,8 +411,20 @@ const TABLES: TaxonomyTableDef[] = [
     tab: "Raw Material SKU",
     idColumn: "ID'S",
     idPrefix: "RM",
+    // `QUANTITY` — plain optional doer-typed number (live column, column G, confirmed
+    // directly), added per explicit instruction alongside RM ref Category/Category DD's own.
     requiredFields: ["Category", "Sub Category", "VENDOR NAME", "Brand", "MAKE BY"],
-    fields: ["PART NO.", "Category", "Sub Category", "Brand", "MAKE BY", "VENDOR NAME", "IQC PDF UPDATE LAST", "TrF tO Master Rm"],
+    fields: [
+      "PART NO.",
+      "Category",
+      "Sub Category",
+      "QUANTITY",
+      "Brand",
+      "MAKE BY",
+      "VENDOR NAME",
+      "IQC PDF UPDATE LAST",
+      "TrF tO Master Rm",
+    ],
     computedFields: ["PART NO."],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",

@@ -53,6 +53,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
   const [creatingVendor, setCreatingVendor] = useState(false);
   const [category, setCategory] = useState(editRow?.Category ?? "");
   const [subCategory, setSubCategory] = useState(editRow?.["Sub Category"] ?? "");
+  const [quantity, setQuantity] = useState(editRow?.QUANTITY ?? "");
   const [vendorName, setVendorName] = useState(editRow?.["VENDOR NAME"] ?? "");
   // Live column renamed "Paint" → "Brand" (confirmed live, 3 Sep 2026) — state var/setter names
   // (paint/setPaint) are left as-is (internal naming only, no reason to churn every reference),
@@ -203,6 +204,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
         await updateTaxonomyRow("rm-sku", id, {
           Category: category,
           "Sub Category": subCategory,
+          QUANTITY: quantity.trim(),
           "VENDOR NAME": vendorName,
           Brand: paint,
           "MAKE BY": makeBy,
@@ -213,6 +215,7 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
         const result = await createTaxonomyRow("rm-sku", {
           Category: category,
           "Sub Category": subCategory,
+          ...(quantity.trim() ? { QUANTITY: quantity.trim() } : {}),
           "VENDOR NAME": vendorName,
           Brand: paint,
           "MAKE BY": makeBy,
@@ -354,6 +357,13 @@ export function RmSkuForm({ onClose, onSaved, editRow }: Props) {
               onAddNew={category ? () => setCreatingSubCategory(true) : undefined}
             />
           </div>
+          <TextField
+            label="QUANTITY"
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="0"
+          />
           {/* Real connected dropdown off the live "ZOTO/MASTER-VENDOR" spreadsheet's `Vendor
               Firm Name` column (`vendor-master` taxonomy table — see taxonomy.ts's own comment
               on that entry), matching the Category/Sub Category/Paint fields' own SearchableSelect

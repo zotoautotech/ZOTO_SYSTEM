@@ -2197,6 +2197,19 @@ the FG-half of its lookup). `handleSave()` resolves the real FG ID by calling
 Save click ever writes anything," just one level deeper than before. **Do not move this save
 back up to the New button** — that's the exact behavior corrected twice already this session.
 
+## QUANTITY field added to RM Category/Sub Category/SKU (5 Sep 2026)
+
+Per explicit instruction — a plain optional `QUANTITY` column exists on all three live RM
+tabs (`RM ref Category` col G, `RM ref Category DD` col H, `Raw Material SKU` col G) but
+wasn't exposed on any form. Added:
+- `RmCategoryForm.tsx` — right below the CATEGORY field, above DUPLICACY.
+- `RmSubCategoryForm.tsx` — right below the SUB CATEGORY field, above DUPLICACY.
+- `RmSkuForm.tsx` — right below Sub Category, above VENDOR NAME (matching the sheet's own
+  column order); included on both create and edit (`editRow?.QUANTITY` prefills it).
+
+Backend (`taxonomy.ts`): `QUANTITY` added to `rm-category`/`rm-category-dd`/`rm-sku`'s
+`fields` — no App Formula behind any of the three, just a bare optional numeric cell.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
