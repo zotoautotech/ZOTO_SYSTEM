@@ -127,7 +127,7 @@ export async function previewAssembleRmFg(fgId: string, rmId: string) {
     fgCode: string;
     fgCategory: string;
     fgSubCategory: string;
-    fgPaint: string;
+    fgBrand: string;
     fgStandard: string;
     rmCode: string;
     duplicate: number;

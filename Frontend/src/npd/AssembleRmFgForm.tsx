@@ -36,7 +36,7 @@ const LEVEL_OPTIONS: SelectOption[] = [
 ];
 
 /** "ASSEMBLE RM FG Form" — matching the AppSheet reference screenshot field-for-field
- * (USEREMAIL/TIMESTAMP/Unique id/FG ID/FG CODE/FG CATEGORY/FG SUB CATEGORY/FG PAINT/
+ * (USEREMAIL/TIMESTAMP/Unique id/FG ID/FG CODE/FG CATEGORY/FG SUB CATEGORY/FG BRAND/
  * FG STANDARD/Category/Sub Category/RM ID/RM CODE/DUPLICATE/No. Of Qty Use/Units/Levels/
  * Part Specs.). Live on the real "ASSEMBLE RM FG" tab (FG_SHEET_ID) — a different tab from
  * `BomBuilder.tsx`'s own "ASSEMBLE RM FG (BOM)" (see taxonomy.ts's own comment on why these
@@ -188,7 +188,7 @@ export function AssembleRmFgForm({ fgRow, onClose, onSaved }: Props) {
           <TextField label="FG CODE" value={preview ? preview.fgCode || "—" : previewFailed ? "—" : "Loading…"} disabled />
           <TextField label="FG CATEGORY" value={preview ? preview.fgCategory || "—" : previewFailed ? "—" : "Loading…"} disabled />
           <TextField label="FG SUB CATEGORY" value={preview ? preview.fgSubCategory || "—" : previewFailed ? "—" : "Loading…"} disabled />
-          <TextField label="FG PAINT" value={preview ? preview.fgPaint || "—" : previewFailed ? "—" : "Loading…"} disabled />
+          <TextField label="FG BRAND" value={preview ? preview.fgBrand || "—" : previewFailed ? "—" : "Loading…"} disabled />
           <TextField label="FG STANDARD" value={preview ? preview.fgStandard || "—" : previewFailed ? "—" : "Loading…"} disabled />
 
           <SearchableSelect

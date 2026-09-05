@@ -594,7 +594,7 @@ const TABLES: TaxonomyTableDef[] = [
   },
   // "Assemble RM FG Form" — one RM-to-FG BOM-style line, live on FG_SHEET_ID ("ASSEMBLE RM FG"
   // tab, confirmed live headers: TIMESTAMP / USEREMAIL / Unique id / FG ID / FG CODE /
-  // FG CATEGORY / FG SUB CATEGORY / FG PAINT / FG STANDARD / Category / Sub Category / RM ID /
+  // FG CATEGORY / FG SUB CATEGORY / FG BRAND / FG STANDARD / Category / Sub Category / RM ID /
   // RM CODE / DUPLICATE / No. Of Qty Use / Units / Levels / Part Specs.). This is a DIFFERENT,
   // real live tab from bom.ts's own "ASSEMBLE RM FG (BOM)" (note the "(BOM)" suffix) — the two
   // are not the same sheet/tab, don't conflate them. FG ID/RM ID are the only two fields a
@@ -614,7 +614,7 @@ const TABLES: TaxonomyTableDef[] = [
       "FG CODE",
       "FG CATEGORY",
       "FG SUB CATEGORY",
-      "FG PAINT",
+      "FG BRAND",
       "FG STANDARD",
       "Category",
       "Sub Category",
@@ -626,7 +626,7 @@ const TABLES: TaxonomyTableDef[] = [
       "Levels",
       "Part Specs.",
     ],
-    computedFields: ["FG CODE", "FG CATEGORY", "FG SUB CATEGORY", "FG PAINT", "FG STANDARD", "RM CODE", "DUPLICATE"],
+    computedFields: ["FG CODE", "FG CATEGORY", "FG SUB CATEGORY", "FG BRAND", "FG STANDARD", "RM CODE", "DUPLICATE"],
     timestampField: "TIMESTAMP",
     useremailField: "USEREMAIL",
     skipDuplicateCheck: true,
@@ -790,7 +790,7 @@ taxonomyRouter.get("/assemble-rm-fg/preview", async (req, res, next) => {
       fgCode: fg?.["PART NO."] ?? "",
       fgCategory: fg?.CATEGORY ?? "",
       fgSubCategory: fg?.["SUB CATEGORY"] ?? "",
-      fgPaint: fg?.Brand ?? "",
+      fgBrand: fg?.Brand ?? "",
       fgStandard: fg?.["STANDARD PART"] ?? "",
       rmCode: rm?.["PART NO."] ?? "",
       duplicate,
@@ -991,7 +991,7 @@ taxonomyRouter.post("/:key", async (req, res, next) => {
       body["FG CODE"] = fg["PART NO."] ?? "";
       body["FG CATEGORY"] = fg.CATEGORY ?? "";
       body["FG SUB CATEGORY"] = fg["SUB CATEGORY"] ?? "";
-      body["FG PAINT"] = fg.Brand ?? "";
+      body["FG BRAND"] = fg.Brand ?? "";
       body["FG STANDARD"] = fg["STANDARD PART"] ?? "";
       body["RM CODE"] = rm["PART NO."] ?? "";
       body.DUPLICATE = String(

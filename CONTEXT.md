@@ -2089,6 +2089,17 @@ Also removed this session: the "Unit" field on this same form (was a plain optio
 field never on the reference form), and `FgSkuDetail.tsx`'s own "BOM Items" card Expand button
 now opens `AssembleRmFgForm` directly instead of navigating to `BomBuilder.tsx`'s page.
 
+## Correction: ASSEMBLE RM FG's own column is "FG BRAND", not "FG PAINT" (5 Sep 2026)
+
+Confirmed live directly off a Google Sheets header dump (`ASSEMBLE RM FG` tab, column H) — the
+initial build guessed `FG PAINT` off the AppSheet screenshot's "FG PAINT" field label, but the
+live sheet's real header is `FG BRAND`. Renamed throughout: `taxonomy.ts`'s `assemble-rm-fg`
+table fields/computedFields, both the preview endpoint and the POST handler's snapshot-column
+write, `npdApi.ts`'s `previewAssembleRmFg()` return type (`fgPaint` → `fgBrand`), and
+`AssembleRmFgForm.tsx`'s own field label/preview. Same "dump live headers, don't trust a
+screenshot's field label" discipline as everywhere else in this project — the AppSheet field
+LABEL and the underlying sheet COLUMN header aren't always identical.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
