@@ -30,6 +30,9 @@ import { TripSubTableView } from "./modules/transport/TripSubTableView";
 import { TRIP_STAGES } from "./lib/tripStages";
 import { BulkReachedForm } from "./modules/transport/forms/BulkReachedForm";
 import { BulkStockReleaseForm } from "./modules/transport/forms/BulkStockReleaseForm";
+import { BulkDispatchForm } from "./modules/transport/forms/BulkDispatchForm";
+import { BulkLRForm } from "./modules/transport/forms/BulkLRForm";
+import { BulkDeliveryForm } from "./modules/transport/forms/BulkDeliveryForm";
 import { Dashboard } from "./modules/dashboard/Dashboard";
 import { MyTasksList } from "./checklist/MyTasksList";
 import { AssignedChecklistList } from "./checklist/AssignedChecklistList";
@@ -47,6 +50,7 @@ import { RmSkuCatalog } from "./npd/RmSkuCatalog";
 import { RmSkuDetail } from "./npd/RmSkuDetail";
 import { FgSkuCatalog } from "./npd/FgSkuCatalog";
 import { FgSkuDetail } from "./npd/FgSkuDetail";
+import { RmSearch } from "./npd/RmSearch";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -88,6 +92,7 @@ export default function App() {
         <Route path="npd/rm-sku/:id" element={<RmSkuDetail />} />
         <Route path="npd/fg-sku" element={<FgSkuCatalog />} />
         <Route path="npd/fg-sku/:id" element={<FgSkuDetail />} />
+        <Route path="npd/rm-search" element={<RmSearch />} />
         <Route path="checklist/dashboard/:doerId" element={<DoerPendingList />} />
         <Route path="modules" element={<ModuleHome />} />
         <Route path="modules/dashboard" element={<Dashboard />} />
@@ -145,6 +150,12 @@ export default function App() {
                   ? { bulkForm: BulkReachedForm, bulkFormLabel: "Bulk Transport Reached Form" }
                   : stage.key === "stock-release"
                   ? { bulkForm: BulkStockReleaseForm, bulkFormLabel: "Bulk Stock Release Form" }
+                  : stage.key === "dispatch"
+                  ? { bulkForm: BulkDispatchForm, bulkFormLabel: "Bulk Dispatch Form" }
+                  : stage.key === "collect-lr"
+                  ? { bulkForm: BulkLRForm, bulkFormLabel: "Bulk LR Form" }
+                  : stage.key === "delivery"
+                  ? { bulkForm: BulkDeliveryForm, bulkFormLabel: "Bulk Delivery Form" }
                   : {})}
               />
             }

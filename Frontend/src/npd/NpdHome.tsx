@@ -15,7 +15,11 @@ interface TileDef {
  * (Projects Board, Categories & Taxonomy, RM Part Code Generator, New Part Code Request, BOM
  * Builder card, Price & BOM Change Log, Customer Onboarding & KYC, Purchase, Stock & WIP
  * Dashboard, Notifications) was removed on explicit user instruction (31 Aug 2026) along with
- * its dedicated page component — don't re-add a card/route here without being asked. */
+ * its dedicated page component — don't re-add a card/route here without being asked.
+ *
+ * **RM SEARCH now links to a real page** (`RmSearch.tsx`) instead of reusing the RM SKU
+ * catalog route as a placeholder — matches the reference's own dedicated search screen
+ * (Category multi-select + live-filtered RM SKU table). */
 const TILES: TileDef[] = [
   {
     to: "/npd/rm-sku",
@@ -28,7 +32,7 @@ const TILES: TileDef[] = [
     image: "https://cdn-icons-png.freepik.com/256/9471/9471735.png?ga=GA1.1.715346516.1729860160",
   },
   {
-    to: "/npd/rm-sku",
+    to: "/npd/rm-search",
     name: "RM SEARCH",
     image: "https://cdn-icons-png.freepik.com/256/18389/18389987.png?ga=GA1.1.715346516.1729860160",
   },

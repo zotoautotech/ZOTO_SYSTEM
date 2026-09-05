@@ -2422,6 +2422,19 @@ giving `FgSkuForm.tsx` an optional `editRow` prop (matching `RmSkuForm.tsx`'s ow
 `FgSkuDetail.tsx`'s Edit button now opens `FgSkuForm.tsx` with `editRow={row}`, same
 wiring/styling as `RmSkuDetail.tsx`'s own real Edit button.
 
+## RM SEARCH is now a real page (5 Sep 2026)
+
+Per explicit "show me RM SEARCH like the reference" instruction — was previously a placeholder
+tile just linking to the RM SKU catalog. New `RmSearch.tsx` (route `/npd/rm-search`): left
+"RM SEARCH" card with a Category multi-select checkbox box (+ Select all + a RM-code search
+box), right card shows a live-filtered `Raw Material SKU` table titled "<Category> Data"
+(matching the reference's own naming) once exactly one Category is ticked, "RM SKU Data" for
+several, "All RM SKU Data" for none. Row click navigates to that RM SKU's own detail page.
+Columns are the real live `Raw Material SKU` fields only — the reference screenshot's own
+AGAINST ID/PAINT pair belong to a DIFFERENT table (`RM ref Category`, not `Raw Material SKU`
+itself) and aren't fabricated here. `NpdHome.tsx`'s RM SEARCH tile now points at this real
+route instead of reusing the RM SKU catalog as a placeholder.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's
