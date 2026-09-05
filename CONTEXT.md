@@ -2280,6 +2280,17 @@ Per explicit "make this easier" follow-up. `AssembleRmFgForm.tsx`'s RM checkbox 
   select-all can't silently sweep in RMs the doer can't even see right now. Each newly-ticked
   row still gets its qty auto-filled from its own QUANTITY, same as ticking one at a time.
 
+## Assemble RM FG's Category is now a bulk checkbox box too (5 Sep 2026)
+
+Per explicit follow-up — matches the RM ID list's own left-side box + Select-all pattern
+added earlier the same day. `AssembleRmFgForm.tsx`: `selectedCategories: Record<string, true>`
+replaces the single `category` string; ticking several Categories widens the Sub Category
+dropdown and RM ID checklist below to match ANY of them (empty selection = no filter, same
+convention `selectedQty` already uses). **Save now reads each ticked RM's own real
+Category/Sub Category off its `rm-sku` row** instead of one shared filter value — necessary
+since multiple Categories can be ticked at once, so there's no longer one single "the"
+Category to stamp onto every created line.
+
 ## Known gotchas (add to as they're found)
 
 - The `NPD` folder didn't exist on disk when this file was created (2026-08-29) despite the user's

@@ -68,7 +68,10 @@ const LEVEL_OPTIONS: SelectOption[] = [
 export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Props) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [category, setCategory] = useState("");
+  // Category is now a bulk checkbox box too, not a single SearchableSelect — matches the RM
+  // ID list's own left-side box + Select-all pattern, per explicit follow-up instruction.
+  // Presence as a key IS the "ticked" flag, same convention as `selectedQty` below.
+  const [selectedCategories, setSelectedCategories] = useState<Record<string, true>>({});
   const [subCategory, setSubCategory] = useState("");
   // One qty string per ticked RM ID — presence as a key IS the "selected" flag (an RM ID with
   // no key isn't ticked), so unticking just deletes its key rather than tracking a separate
@@ -121,20 +124,41 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
     const unit = (r.UNIT ?? "").trim();
     return qty ? `${name} - ${qty}${unit ? ` ${unit}` : ""}` : name;
   }
-  const categoryOptions: SelectOption[] = rmCategoryRows.map((r) => ({
-    value: r.CATEGORY.trim(),
-    label: withQuantity(r.CATEGORY.trim(), r),
-  }));
+  const categoryNames = Object.keys(selectedCategories);
+  // Sub Category/RM ID filters now match ANY ticked Category (or everything, if none ticked)
+  // instead of a single value — same "empty selection = no filter" convention `selectedQty`
+  // already uses for the RM list below.
   const subCategoryOptions: SelectOption[] = rmSubCategoryRows
-    .filter((r) => !category || (r.Category ?? "").trim() === category.trim())
+    .filter((r) => categoryNames.length === 0 || categoryNames.includes((r.Category ?? "").trim()))
     .map((r) => ({ value: r["SUB CATEGORY"].trim(), label: withQuantity(r["SUB CATEGORY"].trim(), r) }));
   const rmIdRows = rmSkuRows.filter(
     (r) =>
-      (!category || (r.Category ?? "").trim() === category.trim()) &&
+      (categoryNames.length === 0 || categoryNames.includes((r.Category ?? "").trim())) &&
       (!subCategory || (r["Sub Category"] ?? "").trim() === subCategory.trim()) &&
       (!rmSearch.trim() || (r["PART NO."] || r["ID'S"]).toLowerCase().includes(rmSearch.trim().toLowerCase()))
   );
   const allVisibleTicked = rmIdRows.length > 0 && rmIdRows.every((r) => r["ID'S"] in selectedQty);
+  const allCategoriesTicked = rmCategoryRows.length > 0 && rmCategoryRows.every((r) => r.CATEGORY.trim() in selectedCategories);
+
+  function toggleCategory(name: string) {
+    setSelectedCategories((prev) => {
+      const next = { ...prev };
+      if (name in next) delete next[name];
+      else next[name] = true;
+      return next;
+    });
+    setSubCategory("");
+  }
+
+  function toggleAllCategories() {
+    setSelectedCategories((prev) => {
+      if (allCategoriesTicked) return {};
+      const next: Record<string, true> = { ...prev };
+      for (const r of rmCategoryRows) next[r.CATEGORY.trim()] = true;
+      return next;
+    });
+    setSubCategory("");
+  }
 
   const hasRealFgId = !!fgRow["FG ID"];
   const selectedIds = Object.keys(selectedQty);
@@ -195,10 +219,14 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
       // up-to-date read of the tab rather than several requests racing off the same stale
       // snapshot.
       for (const id of selectedIds) {
+        // Category/Sub Category can now differ per ticked RM (multiple Categories can be
+        // ticked at once) — use each RM's own real Category/Sub Category off its row, not a
+        // single shared filter value that no longer means "the" category for every line.
+        const rmRow = rmSkuRows.find((r) => r["ID'S"] === id);
         await createTaxonomyRow("assemble-rm-fg", {
           "FG ID": resolvedFgRow["FG ID"] ?? "",
-          Category: category,
-          "Sub Category": subCategory,
+          Category: rmRow?.Category ?? "",
+          "Sub Category": rmRow?.["Sub Category"] ?? "",
           "RM ID": id,
           "No. Of Qty Use": selectedQty[id].trim(),
           Units: units,
@@ -308,23 +336,54 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             disabled
           />
 
-          <SearchableSelect
-            label="Category"
-            value={category}
-            onChange={(v) => {
-              setCategory(v);
-              setSubCategory("");
-            }}
-            options={categoryOptions}
-            placeholder="Select Category…"
-          />
-          <div style={{ opacity: category ? 1 : 0.6, pointerEvents: category ? "auto" : "none" }}>
+          {/* Bulk checkbox box, same pattern as the RM ID list below — replaces the old
+              single-value Category dropdown, per explicit follow-up instruction. Ticking
+              several Categories at once widens the Sub Category/RM ID filters below to match
+              ANY of them (not just one). */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>Category</label>
+            {rmCategoryRows.length > 0 && (
+              <label
+                style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#374151", marginBottom: 6, cursor: "pointer" }}
+              >
+                <input type="checkbox" checked={allCategoriesTicked} onChange={toggleAllCategories} style={{ width: 14, height: 14 }} />
+                Select all ({rmCategoryRows.length})
+              </label>
+            )}
+            <div style={{ border: "1px solid #D1D5DB", borderRadius: 6, maxHeight: 200, overflowY: "auto" }}>
+              {rmCategoryRows.map((r) => {
+                const name = r.CATEGORY.trim();
+                return (
+                  <label
+                    key={name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 14px",
+                      borderBottom: "1px solid #F3F4F6",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={name in selectedCategories}
+                      onChange={() => toggleCategory(name)}
+                      style={{ width: 16, height: 16, flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 14, color: "#1A1A1A" }}>{withQuantity(name, r)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ opacity: categoryNames.length ? 1 : 0.6, pointerEvents: categoryNames.length ? "auto" : "none" }}>
             <SearchableSelect
               label="Sub Category"
               value={subCategory}
               onChange={setSubCategory}
               options={subCategoryOptions}
-              placeholder={category ? "Select Sub Category…" : "Pick a Category first"}
+              placeholder={categoryNames.length ? "Select Sub Category…" : "Tick a Category first"}
             />
           </div>
 
@@ -364,7 +423,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
                 }}
               >
                 <input type="checkbox" checked={allVisibleTicked} onChange={toggleAllVisible} style={{ width: 14, height: 14 }} />
-                Select all {rmSearch.trim() || category ? "shown" : ""} ({rmIdRows.length})
+                Select all {rmSearch.trim() || categoryNames.length ? "shown" : ""} ({rmIdRows.length})
               </label>
             )}
             <div
@@ -377,7 +436,7 @@ export function AssembleRmFgForm({ fgRow, ensureFgSaved, onClose, onSaved }: Pro
             >
               {rmIdRows.length === 0 && (
                 <p style={{ margin: 0, padding: 16, fontSize: 13, color: "#6B7280" }}>
-                  {rmSearch.trim() || category ? "No RM SKUs match this search/Category." : "Pick a Category to narrow the list, or scroll to browse everything."}
+                  {rmSearch.trim() || categoryNames.length ? "No RM SKUs match this search/Category." : "Pick a Category to narrow the list, or scroll to browse everything."}
                 </p>
               )}
               {rmIdRows.map((r) => {
